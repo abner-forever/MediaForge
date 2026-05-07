@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List
 
-from config import QUEUE_CACHE_PATH
+from config import DATA_DIR, QUEUE_CACHE_PATH
 from utils.file import read_json, write_json
+
+OPLOG_CACHE_PATH = DATA_DIR / "state" / "operations.json"
 
 
 class AppState:
@@ -19,6 +22,7 @@ class AppState:
         self.run_log: str = ""
         self.publish_logs: List[str] = []
         self.publish_active: bool = False
+        self._operations: List[Dict[str, Any]] = self._load_operations()
 
     # ── 队列持久化 ─────────────────────────────────────
     @staticmethod
@@ -65,6 +69,25 @@ class AppState:
             self._save_queue()
             return True
         return False
+
+    # ── 操作记录 ──────────────────────────────────────
+    @staticmethod
+    def _load_operations() -> List[Dict[str, Any]]:
+        return read_json(OPLOG_CACHE_PATH, default=[])
+
+    def _save_operations(self) -> None:
+        write_json(OPLOG_CACHE_PATH, self._operations[-50:])
+
+    def add_operation(self, action: str, detail: str = "") -> None:
+        self._operations.append({
+            "time": datetime.now().isoformat(),
+            "action": action,
+            "detail": detail,
+        })
+        self._save_operations()
+
+    def get_operations(self, limit: int = 20) -> List[Dict[str, Any]]:
+        return list(self._operations[-limit:])
 
     # ── 发布日志 ──────────────────────────────────────
     def clear_publish_logs(self) -> None:

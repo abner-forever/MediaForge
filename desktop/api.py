@@ -230,6 +230,11 @@ async def recent_runs():
     return results
 
 
+@app.get("/api/dashboard/operations")
+async def recent_operations():
+    return app_state.get_operations()
+
+
 # ── Discovery API ──────────────────────────────────────
 
 
@@ -283,6 +288,7 @@ async def discovery_search(req: SearchRequest):
         posts = posts[: req.post_limit]
         app_state.set_discovery_results(posts)
         total_images = sum(len(p.get("images", [])) for p in posts)
+        app_state.add_operation("搜索", f"模式={req.mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
         return {
             "success": True,
             "posts": posts,
@@ -339,6 +345,7 @@ async def discovery_download(req: Optional[DownloadRequest] = None):
 
     app_state.set_discovery_results(posts)
     all_images = [img for p in posts for img in p.get("local_images", [])]
+    app_state.add_operation("下载图片", f"共下载 {len(all_images)} 张图片")
     return {
         "success": True,
         "posts": posts,
@@ -464,9 +471,16 @@ async def generate_queue_content(index: int):
         raise HTTPException(404, "队列项不存在")
     item = queue[index]
     sample_text = item.get("desc", "") or "明星美图分享"
-    title, desc = generate_content(sample_text)
+    from services.ai import generate_content
+    _, desc = generate_content(sample_text)
+    celebrity = item.get("celebrity", "")
+    title = f"{celebrity} | {desc}" if celebrity else desc
     app_state.update_queue_item(index, {"title": title, "desc": desc})
-    return {"success": True, "title": title, "desc": desc}
+    message = ""
+    if desc == "精选高清美图，欢迎查看":
+        message = "AI 生成失败，已使用默认文案"
+    app_state.add_operation("AI 生成", f"为「{celebrity or '未知'}」生成文案")
+    return {"success": True, "title": title, "desc": desc, "message": message}
 
 
 @app.post("/api/queue/{index}/publish")
@@ -505,6 +519,9 @@ async def publish_from_queue(index: int, req: PublishRequest):
         on_log=_on_log,
     )
     app_state.finish_publish()
+    if result.get("success"):
+        action = "保存草稿" if req.save_draft else "发布"
+        app_state.add_operation(action, f"「{title}」")
     # 保存草稿不移除队列项，发布成功才移除
     if result.get("success") and not req.save_draft:
         app_state.remove_from_queue(index)
@@ -512,23 +529,14 @@ async def publish_from_queue(index: int, req: PublishRequest):
 
 
 @app.get("/api/publish-logs")
-async def publish_log_stream():
-    """SSE 端点，实时推送发布日志到前端。"""
-    import asyncio
-
-    async def event_generator():
-        sent = 0
-        while True:
-            logs = app_state.get_publish_logs()
-            for msg in logs[sent:]:
-                yield f"data: {json.dumps({'msg': msg})}\n\n"
-                sent += 1
-            if not app_state.publish_active and sent >= len(logs):
-                yield f"data: {json.dumps({'done': True})}\n\n"
-                break
-            await asyncio.sleep(0.3)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+async def get_publish_logs(after: int = 0):
+    """获取发布日志，支持增量拉取。after 为已获取的日志条数。"""
+    logs = app_state.get_publish_logs()
+    return {
+        "logs": logs[after:],
+        "total": len(logs),
+        "active": app_state.publish_active,
+    }
 
 
 @app.post("/api/queue/enqueue-selected")
@@ -538,12 +546,16 @@ async def enqueue_selected():
         raise HTTPException(400, "没有选中的图片")
 
     sample_text = ""
+    celebrity = ""
     for post in app_state.get_discovery_results():
         if any(img in selected for img in post.get("local_images", [])):
             sample_text = post.get("text", "")
+            celebrity = post.get("celebrity", "") or post.get("screen_name", "")
             break
 
     title, desc = generate_content(sample_text or "明星美图分享")
+    if celebrity and not title.startswith(celebrity):
+        title = f"{celebrity} | {desc}"
     cover = select_cover(selected)
 
     app_state.add_to_queue({
@@ -551,8 +563,10 @@ async def enqueue_selected():
         "desc": desc,
         "images": list(selected),
         "cover": cover,
+        "celebrity": celebrity,
     })
     app_state.clear_selected_images()
+    app_state.add_operation("加入队列", f"「{title}」共 {len(selected)} 张图")
     return {"success": True, "title": title, "desc": desc}
 
 

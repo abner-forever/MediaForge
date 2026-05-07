@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../stores';
-import { queueApi, publishLogStream, type QueueItem } from '../api/client';
+import { queueApi, publishLogsApi, type QueueItem } from '../api/client';
 import Select from '../components/Select';
 
 export default function Queue() {
@@ -57,14 +57,41 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   }
 
   async function generateContent() {
-    addToast('AI 正在生成标题和文案...', 'info');
+    addToast('AI 正在生成文案...', 'info');
     try {
       const res = await queueApi.generate(index);
       setTitle(res.title); setDesc(res.desc);
       setQueue((await queueApi.get()).queue);
-      addToast(`已生成：《${res.title}》`, 'success');
+      if (res.message) {
+        addToast(res.message, 'error');
+      } else {
+        addToast(`已生成文案`, 'success');
+      }
     } catch (err: any) { addToast(err.message, 'error'); }
   }
+
+  // 轮询发布日志：只在发布中（active=true）时记录日志
+  const pollLogs = useCallback(async () => {
+    // 等待后端发布开始（最多等 3 秒）
+    for (let i = 0; i < 6; i++) {
+      const data = await publishLogsApi.get(0);
+      if (data.active) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    let offset = 0;
+    while (true) {
+      try {
+        const data = await publishLogsApi.get(offset);
+        if (data.logs.length > 0) {
+          setLogs((prev) => [...prev, ...data.logs]);
+          offset = data.total;
+        }
+        if (!data.active && offset > 0) break;
+      } catch { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    setPublishing(false);
+  }, []);
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
@@ -72,17 +99,16 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
     setLogs([]);
     setPublishing(true);
 
-    // 启动 SSE 日志流
-    publishLogStream(
-      (msg) => setLogs((prev) => [...prev, msg]),
-      () => setPublishing(false),
-    );
+    // 先发请求，等后端清空日志后再轮询
+    const pubPromise = queueApi.publish(index, opts);
+    // 延迟一小段时间确保后端已调用 clear_publish_logs
+    await new Promise((r) => setTimeout(r, 300));
+    pollLogs();
 
     try {
-      const res = await queueApi.publish(index, opts);
+      const res = await pubPromise;
       addToast(res.success ? `${action}成功：${res.message}` : `${action}失败：${res.message}`, res.success ? 'success' : 'error');
     } catch (err: any) { addToast(err.message, 'error'); }
-    setPublishing(false);
     setQueue((await queueApi.get()).queue);
   }
 
@@ -100,6 +126,12 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
           </div>
         </div>
         <div className="flex-1 p-4 space-y-3">
+          {item.celebrity && (
+            <div className="flex items-center gap-2 text-[13px] text-text-muted">
+              <span className="text-base">👤</span>
+              <span>{item.celebrity}</span>
+            </div>
+          )}
           <label>标题
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} />
           </label>
@@ -113,7 +145,7 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
             <button className="btn btn-primary" onClick={() => publish({ save_draft: true })} disabled={publishing}>保存草稿</button>
             <button className="btn" onClick={() => publish({ save_draft: false })} disabled={publishing}>直接发布</button>
             <button className="btn" onClick={() => publish({ dry_run: true })} disabled={publishing}>预览</button>
-            <button className="btn" onClick={generateContent} disabled={publishing}>AI 生成</button>
+            <button className="btn" onClick={generateContent} disabled={publishing}>AI 生成文案</button>
             <button className="btn btn-danger" onClick={deleteItem} disabled={publishing}>删除</button>
           </div>
 

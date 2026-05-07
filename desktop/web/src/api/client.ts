@@ -70,6 +70,7 @@ export interface QueueItem {
   desc: string;
   images: string[];
   cover: string;
+  celebrity?: string;
 }
 
 export interface MaterialsGroup {
@@ -114,6 +115,12 @@ export interface SettingsData {
   allow_watermark_fallback: boolean;
 }
 
+export interface OperationItem {
+  time: string;
+  action: string;
+  detail: string;
+}
+
 export interface DownloadStreamEvent {
   type: 'start' | 'progress' | 'done';
   total?: number;
@@ -130,6 +137,7 @@ export const dashboardApi = {
   health: () => get<HealthStatus>('/api/dashboard/health'),
   stats: () => get<DashboardStats>('/api/dashboard/stats'),
   runs: () => get<RunInfo[]>('/api/dashboard/runs'),
+  operations: () => get<OperationItem[]>('/api/dashboard/operations'),
 };
 
 /* ── Settings API ─────────────────────────────── */
@@ -208,34 +216,17 @@ export const materialsApi = {
   delete: (paths: string[]) => del<{ success: boolean; deleted: number }>('/api/materials', { paths }),
 };
 
-/* ── Publish Log SSE ──────────────────────────── */
+/* ── Publish Log Polling ──────────────────────── */
 
-export async function publishLogStream(
-  onLog: (msg: string) => void,
-  onDone: () => void,
-): Promise<void> {
-  const res = await fetch('/api/publish-logs');
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      try {
-        const data = JSON.parse(line.slice(6));
-        if (data.done) { onDone(); return; }
-        if (data.msg) onLog(data.msg);
-      } catch { /* ignore */ }
-    }
-  }
-  onDone();
+export interface PublishLogsResponse {
+  logs: string[];
+  total: number;
+  active: boolean;
 }
+
+export const publishLogsApi = {
+  get: (after = 0) => get<PublishLogsResponse>(`/api/publish-logs?after=${after}`),
+};
 
 /* ── Queue API ────────────────────────────────── */
 
@@ -244,7 +235,7 @@ export const queueApi = {
   add: (item: Partial<QueueItem>) => post<{ success: boolean; queue: QueueItem[] }>('/api/queue', item),
   update: (index: number, data: Partial<QueueItem>) => put(`/api/queue/${index}`, data),
   remove: (index: number) => del(`/api/queue/${index}`),
-  generate: (index: number) => post<{ success: boolean; title: string; desc: string }>(`/api/queue/${index}/generate`),
+  generate: (index: number) => post<{ success: boolean; title: string; desc: string; message?: string }>(`/api/queue/${index}/generate`),
   publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean }) =>
     post<{ success: boolean; message: string }>(`/api/queue/${index}/publish`, opts),
   enqueueSelected: () => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected'),

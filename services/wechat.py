@@ -158,92 +158,110 @@ def _find_content_editor(page, editor_frame):
 
 
 def _select_cover(page, editor_frame, on_log=None) -> None:
-    """自动选择封面：选择封面 → 从正文选择 → 选图 → 编辑封面弹窗确认。"""
-    # 1. 点击"选择封面"按钮
+    """自动选择封面：选择封面 → 菜单从正文选择 → 选图弹窗确认 → 裁剪弹窗确认。"""
+    # 1. 点击"选择封面"按钮（等待右侧边栏加载完成）
+    _human_sleep(1.0, 0.5)
     cover_selectors = [
         "text=选择封面",
+        "text=点击选择封面",
+        "text=设置封面",
         "a:has-text('选择封面')",
         "button:has-text('选择封面')",
         ".js_cover_area",
+        "#js_cover_area",
+        "[class*='cover_set']",
     ]
-    clicked = False
     for sel in cover_selectors:
         try:
             loc = page.locator(sel).first
-            loc.wait_for(state="visible", timeout=3000)
+            loc.wait_for(state="visible", timeout=4000)
             loc.click()
-            clicked = True
             _emit("已点击选择封面", on_log)
             break
         except Exception:
             continue
-    if not clicked:
+    else:
         _emit("未找到选择封面按钮，跳过", on_log)
         return
-    _human_sleep(1.0, 0.5)
 
-    # 2. 点击"从正文选择"
+    # 2. 菜单中点击"从正文选择"
     from_body_selectors = [
         "text=从正文选择",
         "a:has-text('从正文选择')",
-        "button:has-text('从正文选择')",
-        "text=正文选择",
+        "li:has-text('从正文选择')",
+        "div:has-text('从正文选择')",
+        ".weui-desktop-dropdown__menu >> text=从正文选择",
     ]
     for sel in from_body_selectors:
         try:
             loc = page.locator(sel).first
-            loc.wait_for(state="visible", timeout=3000)
+            loc.wait_for(state="visible", timeout=2000)
             loc.click()
             _emit("已点击从正文选择", on_log)
             break
         except Exception:
             continue
-    _human_sleep(1.0, 0.5)
+    else:
+        _emit("未找到从正文选择菜单项，跳过", on_log)
+        return
 
-    # 3. 在弹窗中选择第一张图片
+    # 3. 选择图片弹窗 → 勾选第一张图
     img_selectors = [
-        ".weui-desktop-img-picker__img-item img",
-        ".img_item img",
-        ".pic_list img",
-        ".image_list img",
-        "[class*='cover'] img",
-        "[class*='picker'] img",
-        "img[src*='mmbiz']",
+        ".weui-desktop-img-picker__img-item",
+        ".img_item",
+        ".pic_list li",
+        ".image_list li",
+        "[class*='img-picker'] li",
+        "[class*='upload'] li",
+        ".weui-desktop-dialog img",
     ]
-    img_clicked = False
     for sel in img_selectors:
         try:
             loc = page.locator(sel).first
             loc.wait_for(state="visible", timeout=3000)
             loc.click()
-            img_clicked = True
-            _emit("已选择封面图片", on_log)
+            _emit("已勾选第一张封面图片", on_log)
             break
         except Exception:
             continue
-    if not img_clicked:
+    else:
         _emit("未找到可选图片，跳过封面设置", on_log)
         return
-    _human_sleep(0.8, 0.3)
 
-    # 4. 编辑封面弹窗 → 点击确认/完成
-    confirm_selectors = [
-        "button:has-text('完成')",
-        "button:has-text('确定')",
-        "button:has-text('确认')",
-        ".weui-desktop-btn_primary:has-text('完成')",
-        ".weui-desktop-btn_primary:has-text('确定')",
-    ]
-    for sel in confirm_selectors:
+    # 4. 点击"下一步"
+    for sel in ["button:has-text('下一步')", "a:has-text('下一步')"]:
         try:
             loc = page.locator(sel).first
-            loc.wait_for(state="visible", timeout=3000)
+            loc.wait_for(state="visible", timeout=2000)
             loc.click()
-            _emit("封面设置完成", on_log)
-            return
+            _emit("已点击下一步", on_log)
+            break
         except Exception:
             continue
-    _emit("未找到封面确认按钮", on_log)
+
+    # 5. 编辑封面弹窗 → 确认
+    for sel in ["button:has-text('确定')", "button:has-text('确认')"]:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=2000)
+            loc.click()
+            _emit("编辑封面已确认", on_log)
+            break
+        except Exception:
+            continue
+
+    # 6. 裁剪封面弹窗 → 完成
+    for sel in ["button:has-text('完成')", "button:has-text('确定')"]:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=2000)
+            loc.click()
+            break
+        except Exception:
+            continue
+    _emit("封面设置完成", on_log)
+
+
 
 
 def publish_article(
@@ -282,23 +300,24 @@ def publish_article(
             )
             page = context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
+            _emit("正在登录微信公众号...", on_log)
             _ensure_login(page, on_scan_needed=on_scan_needed)
+            _emit("登录成功", on_log)
 
             # 直接用 token 跳转新建图文页，避免逐个点击导航链接的等待
             if not _goto_new_article_direct(page):
                 raise RuntimeError("无法从当前页面提取 token 进入编辑器")
-            _emit("已通过直达链接进入新建图文页", on_log)
+            _emit("已通过直达链接进入新建图文页，等待编辑器加载...", on_log)
             try:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 pass
             _human_sleep(1.5, 0.5)
+            _emit("编辑器加载完成", on_log)
 
             editor_frame = _resolve_editor_frame(page)
-            logger.info("编辑器 frame url=%s", editor_frame.url[:120] if editor_frame.url else "(empty)")
             _log_frames(page)
 
-            # 编辑器打开后可能定位在正文区域，先滚动到顶部找到标题
             page.evaluate("window.scrollTo(0, 0)")
             _human_sleep(0.5, 0.3)
 
@@ -307,35 +326,39 @@ def publish_article(
                 editor_frame,
                 [
                     "#js_title",
-                    "input[id='js_title']",
-                    "textarea[id='js_title']",
-                    "input[placeholder*='请在这里输入标题']",
                     "input[placeholder*='标题']",
-                    "textarea[placeholder*='请在这里输入标题']",
+                    "textarea[placeholder*='标题']",
                     "input.js_title",
                     ".title_editor input",
-                    ".title_editor textarea",
                 ],
                 title,
-                wait_ms=8000,
+                wait_ms=5000,
             ):
-                # 最后尝试点击标题区域再输入
                 try:
                     page.locator("text=请在这里输入标题").first.click(timeout=3000)
                     _human_sleep(0.3, 0.2)
                     page.keyboard.type(title, delay=30)
                 except Exception:
                     raise RuntimeError("未找到标题输入框")
-            _emit("正在填写正文内容...", on_log)
-            content_loc, content_frame = _find_content_editor(page, editor_frame)
-            if not content_loc:
-                raise RuntimeError("未找到正文输入区域")
-            content_loc.click()
-            _human_sleep(0.3, 0.2)
-            try:
-                content_loc.evaluate("el => { el.focus(); el.innerHTML = arguments[0]; el.dispatchEvent(new Event('input', {bubbles:true})); }", content)
-            except Exception:
-                page.keyboard.type(content, delay=10)
+            _emit("标题填写完成", on_log)
+            content_frame = None
+
+            # 有正文内容时才填写
+            if content and content.strip():
+                _emit("正在填写正文内容...", on_log)
+                content_loc, content_frame = _find_content_editor(page, editor_frame)
+                if content_loc:
+                    content_loc.click()
+                    _human_sleep(0.3, 0.2)
+                    try:
+                        content_loc.evaluate("el => { el.focus(); el.innerHTML = arguments[0]; el.dispatchEvent(new Event('input', {bubbles:true})); }", content)
+                    except Exception:
+                        page.keyboard.type(content, delay=10)
+                    _emit("正文内容填写完成", on_log)
+                else:
+                    _emit("未找到正文区域，跳过", on_log)
+            else:
+                _emit("无正文内容，跳过", on_log)
 
             # 文件上传可能在编辑器 frame 或内容 frame 中
             upload = None

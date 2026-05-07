@@ -75,11 +75,13 @@ settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
 
 
 def reload_settings() -> None:
-    """重新从 .env 文件加载配置到全局 settings 单例。"""
-    global settings, CELEBRITY_NAMES
+    """重新从 .env 文件加载配置到全局 settings 单例（原地更新字段，保留已有引用）。"""
+    global CELEBRITY_NAMES
     load_dotenv(override=True)
     CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))
-    settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
+    new_settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
+    for field in new_settings.__dataclass_fields__:
+        setattr(settings, field, getattr(new_settings, field))
 
 
 def resolve_weibo_fetch_mode() -> str:

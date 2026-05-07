@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { path: '/', icon: '📊', label: '仪表盘' },
+  { path: '/', icon: '🏠', label: '首页' },
   { path: '/discovery', icon: '🔍', label: '图片发现' },
   { path: '/queue', icon: '📝', label: '发布队列' },
   { path: '/materials', icon: '🖼️', label: '本地素材' },
