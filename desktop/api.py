@@ -1,0 +1,672 @@
+"""FastAPI 路由定义。"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+# 确保项目根目录在 sys.path 中
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from config import DATA_DIR, DOWNLOAD_DIR, LOG_DIR, settings
+from desktop.app_state import app_state
+from services.ai import generate_content
+from services.downloader import download_images
+from services.extensions import build_html, score_images_batch, select_cover
+from services.weibo import (
+    fetch_celebrity_discovery_posts,
+    fetch_own_timeline_paginated,
+    finalize_posts,
+)
+from utils.env_manager import read_env, update_env
+from utils.audit import create_run_log_path, append_audit
+from utils.file import read_json
+
+app = FastAPI(title="weibo2wechat Desktop")
+
+# 静态文件
+STATIC_DIR = Path(__file__).parent / "static"
+DIST_DIR = Path(__file__).parent / "static_dist"
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# React 构建产物（如果存在）
+if DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="dist-assets")
+
+
+# ── Pydantic 模型 ──────────────────────────────────────
+
+
+class SearchRequest(BaseModel):
+    mode: str = "celebrities"
+    celebrities: List[str] = []
+    search_tags: List[str] = ["美图", "日常"]
+    max_pages: int = 2
+    post_limit: int = 5
+
+
+class DownloadRequest(BaseModel):
+    post_indices: List[int] = []
+
+
+class ScoreRequest(BaseModel):
+    image_paths: List[str] = []
+    use_vision: bool = True
+
+
+class QueueAddRequest(BaseModel):
+    title: str = ""
+    desc: str = ""
+    images: List[str] = []
+    cover: str = ""
+
+
+class QueueUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    desc: Optional[str] = None
+    images: Optional[List[str]] = None
+    cover: Optional[str] = None
+
+
+class PublishRequest(BaseModel):
+    dry_run: bool = False
+    save_draft: bool = True
+
+
+# ── 首页 ──────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    # 优先使用 React 构建产物
+    dist_index = DIST_DIR / "index.html"
+    if dist_index.exists():
+        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
+    html_path = STATIC_DIR / "index.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+# ── Settings API ──────────────────────────────────────
+
+
+@app.get("/api/settings")
+async def get_settings():
+    env = read_env()
+    return {
+        "ai_provider": env.get("AI_PROVIDER", "mimo"),
+        "ai_model": env.get("AI_MODEL", "mimo-chat"),
+        "ai_base_url": env.get("AI_BASE_URL", ""),
+        "ai_api_key_set": bool(
+            env.get("AI_API_KEY")
+            or env.get("MIMO_API_KEY")
+            or env.get("GLM_API_KEY")
+            or env.get("DEEPSEEK_API_KEY")
+            or env.get("OPENAI_API_KEY")
+        ),
+        "weibo_cookie_set": bool(env.get("WEIBO_COOKIE")),
+        "weibo_uid": env.get("WEIBO_UID", ""),
+        "weibo_fetch_mode": env.get("WEIBO_FETCH_MODE", "celebrities"),
+        "weibo_celebrities": env.get("WEIBO_CELEBRITIES", ""),
+        "weibo_search_tags": env.get("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"),
+        "weibo_scene_extra_tags": env.get("WEIBO_SCENE_EXTRA_TAGS", ""),
+        "post_limit": int(env.get("POST_LIMIT", "3")),
+        "weibo_pages": int(env.get("WEIBO_PAGES", "2")),
+        "publish_interval": int(env.get("PUBLISH_INTERVAL_SECONDS", "10")),
+        "request_timeout": int(env.get("REQUEST_TIMEOUT", "20")),
+        "retry_times": int(env.get("RETRY_TIMES", "3")),
+        "require_confirm": env.get("REQUIRE_CONFIRM", "true").lower() == "true",
+        "watermark_filter": env.get("WATERMARK_FILTER", "true").lower() == "true",
+        "watermark_strict_mode": env.get("WATERMARK_STRICT_MODE", "true").lower() == "true",
+        "min_clean_images": int(env.get("MIN_CLEAN_IMAGES", "3")),
+        "watermark_corner_ratio": float(env.get("WATERMARK_CORNER_RATIO", "1.38")),
+        "watermark_bottom_ratio": float(env.get("WATERMARK_BOTTOM_RATIO", "1.48")),
+        "allow_watermark_fallback": env.get("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true",
+    }
+
+
+@app.post("/api/settings")
+async def save_settings(data: Dict[str, Any]):
+    updates = {}
+    for k, v in data.items():
+        if isinstance(v, bool):
+            updates[k] = "true" if v else "false"
+        else:
+            updates[k] = str(v)
+    update_env(updates)
+    return {"success": True, "message": "配置已保存"}
+
+
+# ── Dashboard API ──────────────────────────────────────
+
+
+@app.get("/api/dashboard/health")
+async def health_check():
+    return {
+        "weibo_cookie": bool(settings.weibo_cookie),
+        "weibo_uid_or_celebrities": bool(settings.weibo_uid or settings.weibo_celebrities),
+        "ai_api_key": bool(settings.ai_api_key),
+        "ai_base_url": bool(settings.ai_base_url),
+    }
+
+
+@app.get("/api/dashboard/stats")
+async def stats():
+    img_count = sum(1 for _ in DOWNLOAD_DIR.rglob("*.jpg")) + sum(
+        1 for _ in DOWNLOAD_DIR.rglob("*.png")
+    )
+    return {
+        "local_images": img_count,
+        "queue_size": len(app_state.publish_queue),
+        "selected_count": len(app_state.selected_images),
+        "discovery_count": len(app_state.discovery_results),
+    }
+
+
+@app.get("/api/dashboard/runs")
+async def recent_runs():
+    runs_dir = LOG_DIR / "runs"
+    if not runs_dir.exists():
+        return []
+    run_files = sorted(runs_dir.glob("*.jsonl"), reverse=True)[:5]
+    results = []
+    for run_file in run_files:
+        try:
+            lines = run_file.read_text(encoding="utf-8").strip().splitlines()
+            events = [json.loads(line) for line in lines if line.strip()]
+        except Exception:
+            continue
+        start = next((e for e in events if e.get("event") == "run_started"), None)
+        finish = next((e for e in events if e.get("event") == "run_finished"), None)
+        processed = sum(1 for e in events if e.get("event") == "post_processed")
+        failed = sum(1 for e in events if e.get("event") == "post_failed")
+        results.append({
+            "run_id": run_file.stem,
+            "status": "completed" if finish else "running",
+            "processed": processed,
+            "failed": failed,
+            "payload": start.get("payload", {}) if start else {},
+        })
+    return results
+
+
+# ── Discovery API ──────────────────────────────────────
+
+
+@app.get("/api/discovery")
+async def get_discovery():
+    """返回当前搜索结果。"""
+    return {"posts": app_state.get_discovery_results()}
+
+
+@app.post("/api/discovery/search")
+async def discovery_search(req: SearchRequest):
+    try:
+        # 临时更新配置
+        settings.weibo_celebrities = tuple(req.celebrities)
+        settings.weibo_search_tags = tuple(req.search_tags)
+
+        if req.mode == "own":
+            posts = finalize_posts(fetch_own_timeline_paginated(max_pages=req.max_pages))
+        elif req.mode == "celebrities":
+            if not req.celebrities:
+                raise HTTPException(400, "请至少指定一位明星")
+            posts = finalize_posts(fetch_celebrity_discovery_posts(max_pages_per_uid=req.max_pages))
+        else:
+            parts = []
+            if req.celebrities:
+                parts.append(fetch_celebrity_discovery_posts(max_pages_per_uid=req.max_pages))
+            parts.append(fetch_own_timeline_paginated(max_pages=req.max_pages))
+            seen = set()
+            merged = []
+            for grp in parts:
+                for p in grp:
+                    pid = str(p.get("id") or "")
+                    if pid and pid not in seen:
+                        seen.add(pid)
+                        merged.append(p)
+            posts = finalize_posts(merged)
+
+        posts = posts[: req.post_limit]
+        app_state.set_discovery_results(posts)
+        total_images = sum(len(p.get("images", [])) for p in posts)
+        return {
+            "success": True,
+            "posts": posts,
+            "total_posts": len(posts),
+            "total_images": total_images,
+        }
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(500, f"搜索失败: {err}")
+
+
+@app.post("/api/discovery/download")
+async def discovery_download(req: Optional[DownloadRequest] = None):
+    posts = app_state.get_discovery_results()
+    if not posts:
+        raise HTTPException(400, "没有搜索结果，请先搜索")
+
+    # 筛选要下载的帖子索引
+    indices = req.post_indices if req and req.post_indices else list(range(len(posts)))
+    valid_indices = [i for i in indices if 0 <= i < len(posts)]
+
+    results = []
+    for i in valid_indices:
+        post = posts[i]
+        celebrity = post.get("celebrity", "未命名")
+        scene = post.get("scene", "日常")
+        post_id = str(post.get("id") or "")[:12]
+        try:
+            images, dropped = download_images(
+                post["images"],
+                celebrity=celebrity,
+                scene=scene,
+                post_slug=post_id,
+                prefix=post_id[:8],
+                overwrite=False,
+            )
+            post["local_images"] = images
+            post["dropped_count"] = dropped
+            results.append({
+                "celebrity": celebrity,
+                "scene": scene,
+                "downloaded": len(images),
+                "dropped": dropped,
+            })
+        except Exception as err:
+            post["local_images"] = []
+            post["dropped_count"] = 0
+            results.append({
+                "celebrity": celebrity,
+                "scene": scene,
+                "error": str(err),
+            })
+
+    app_state.set_discovery_results(posts)
+    all_images = [img for p in posts for img in p.get("local_images", [])]
+    return {
+        "success": True,
+        "posts": posts,
+        "results": results,
+        "total_downloaded": len(all_images),
+    }
+
+
+@app.delete("/api/discovery/post/{index}")
+async def remove_discovery_post(index: int):
+    posts = app_state.get_discovery_results()
+    if index < 0 or index >= len(posts):
+        raise HTTPException(404, "帖子不存在")
+    removed = posts.pop(index)
+    app_state.set_discovery_results(posts)
+    return {"success": True, "removed": removed.get("celebrity", ""), "remaining": len(posts)}
+
+
+@app.post("/api/discovery/score")
+async def discovery_score(req: ScoreRequest):
+    paths = req.image_paths
+    if not paths:
+        # 自动从 discovery results 收集
+        posts = app_state.get_discovery_results()
+        paths = [img for p in posts for img in p.get("local_images", [])]
+    if not paths:
+        raise HTTPException(400, "没有可评分的图片")
+
+    scores = score_images_batch(paths, use_vision=req.use_vision)
+    app_state.set_image_scores(scores)
+
+    vision_count = sum(1 for v in scores.values() if v["method"] == "vision")
+    heuristic_count = sum(1 for v in scores.values() if v["method"] == "heuristic")
+
+    return {
+        "success": True,
+        "scores": scores,
+        "vision_count": vision_count,
+        "heuristic_count": heuristic_count,
+    }
+
+
+# ── Selection API ──────────────────────────────────────
+
+
+@app.get("/api/selection")
+async def get_selection():
+    return {
+        "selected": app_state.get_selected_images(),
+        "scores": app_state.get_image_scores(),
+    }
+
+
+@app.post("/api/selection/add")
+async def add_selection(data: Dict[str, str]):
+    path = data.get("path", "")
+    if path:
+        app_state.add_selected_image(path)
+    return {"selected": app_state.get_selected_images()}
+
+
+@app.post("/api/selection/remove")
+async def remove_selection(data: Dict[str, str]):
+    path = data.get("path", "")
+    if path:
+        app_state.remove_selected_image(path)
+    return {"selected": app_state.get_selected_images()}
+
+
+@app.post("/api/selection/clear")
+async def clear_selection():
+    app_state.clear_selected_images()
+    return {"selected": []}
+
+
+# ── Publish Queue API ──────────────────────────────────
+
+
+@app.get("/api/queue")
+async def get_queue():
+    return {"queue": app_state.get_queue()}
+
+
+@app.post("/api/queue")
+async def add_to_queue(req: QueueAddRequest):
+    item = {
+        "title": req.title,
+        "desc": req.desc,
+        "images": list(req.images),
+        "cover": req.cover or (req.images[0] if req.images else ""),
+    }
+    app_state.add_to_queue(item)
+    return {"success": True, "queue": app_state.get_queue()}
+
+
+@app.put("/api/queue/{index}")
+async def update_queue_item(index: int, req: QueueUpdateRequest):
+    updates = {}
+    if req.title is not None:
+        updates["title"] = req.title
+    if req.desc is not None:
+        updates["desc"] = req.desc
+    if req.images is not None:
+        updates["images"] = req.images
+    if req.cover is not None:
+        updates["cover"] = req.cover
+    if app_state.update_queue_item(index, updates):
+        return {"success": True, "queue": app_state.get_queue()}
+    raise HTTPException(404, "队列项不存在")
+
+
+@app.delete("/api/queue/{index}")
+async def remove_from_queue(index: int):
+    if app_state.remove_from_queue(index):
+        return {"success": True, "queue": app_state.get_queue()}
+    raise HTTPException(404, "队列项不存在")
+
+
+@app.post("/api/queue/{index}/generate")
+async def generate_queue_content(index: int):
+    queue = app_state.get_queue()
+    if index >= len(queue):
+        raise HTTPException(404, "队列项不存在")
+    item = queue[index]
+    sample_text = item.get("desc", "") or "明星美图分享"
+    title, desc = generate_content(sample_text)
+    app_state.update_queue_item(index, {"title": title, "desc": desc})
+    return {"success": True, "title": title, "desc": desc}
+
+
+@app.post("/api/queue/{index}/publish")
+async def publish_from_queue(index: int, req: PublishRequest):
+    queue = app_state.get_queue()
+    if index >= len(queue):
+        raise HTTPException(404, "队列项不存在")
+    item = queue[index]
+    title = item.get("title", "")
+    desc = item.get("desc", "")
+    images = item.get("images", [])
+    if not images:
+        raise HTTPException(400, "没有图片")
+    if not title:
+        raise HTTPException(400, "标题为空")
+
+    content = build_html(desc, images)
+    from services.wechat import publish_article
+    from utils.logger import get_logger
+
+    _pub_logger = get_logger("desktop.publish")
+
+    # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
+    import asyncio
+    result = await asyncio.to_thread(
+        publish_article,
+        title=title,
+        content=content,
+        images=images,
+        dry_run=req.dry_run,
+        save_draft=req.save_draft,
+        on_scan_needed=lambda: _pub_logger.info("请在弹出的浏览器窗口中扫码登录"),
+        on_confirm_needed=lambda t: True,  # 桌面模式自动确认，用户可在浏览器中观察
+    )
+    # 保存草稿不移除队列项，发布成功才移除
+    if result.get("success") and not req.save_draft:
+        app_state.remove_from_queue(index)
+    return result
+
+
+@app.post("/api/queue/enqueue-selected")
+async def enqueue_selected():
+    selected = app_state.get_selected_images()
+    if not selected:
+        raise HTTPException(400, "没有选中的图片")
+
+    sample_text = ""
+    for post in app_state.get_discovery_results():
+        if any(img in selected for img in post.get("local_images", [])):
+            sample_text = post.get("text", "")
+            break
+
+    title, desc = generate_content(sample_text or "明星美图分享")
+    cover = select_cover(selected)
+
+    app_state.add_to_queue({
+        "title": title,
+        "desc": desc,
+        "images": list(selected),
+        "cover": cover,
+    })
+    app_state.clear_selected_images()
+    return {"success": True, "title": title, "desc": desc}
+
+
+# ── 图片服务 ──────────────────────────────────────────
+
+
+@app.get("/images/{path:path}")
+async def serve_image(path: str):
+    file_path = DOWNLOAD_DIR / path
+    if not file_path.exists():
+        raise HTTPException(404, "图片不存在")
+    return FileResponse(str(file_path))
+
+
+@app.get("/proxy")
+async def proxy_image(url: str):
+    """代理远程图片，解决 CORS 问题。"""
+    import requests as req_lib
+    from fastapi.responses import Response
+
+    try:
+        resp = req_lib.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": "https://weibo.com/",
+        })
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "image/jpeg")
+        return Response(content=resp.content, media_type=content_type)
+    except Exception as err:
+        raise HTTPException(502, f"代理请求失败: {err}")
+
+
+# ── 本地素材 API ──────────────────────────────────────
+
+
+@app.get("/api/materials")
+async def list_materials():
+    """返回本地图片列表，按 celebrity/scene/post 三级分组。"""
+    groups: Dict[str, Dict] = {}
+    total_images = 0
+    img_root = DOWNLOAD_DIR.expanduser().resolve()
+    if not img_root.exists():
+        return {"groups": [], "total_images": 0}
+
+    for celeb_dir in sorted(img_root.iterdir()):
+        if not celeb_dir.is_dir():
+            continue
+        celeb_name = celeb_dir.name
+        celeb_group = {"celebrity": celeb_name, "scenes": [], "total": 0}
+        for scene_dir in sorted(celeb_dir.iterdir()):
+            if not scene_dir.is_dir():
+                continue
+            scene_name = scene_dir.name
+            scene_data = {"scene": scene_name, "posts": [], "total": 0}
+            for post_dir in sorted(scene_dir.iterdir()):
+                if not post_dir.is_dir():
+                    continue
+                images = []
+                for f in sorted(post_dir.iterdir()):
+                    if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+                        images.append(str(f))
+                if images:
+                    scene_data["posts"].append({
+                        "post_id": post_dir.name,
+                        "images": images,
+                    })
+                    scene_data["total"] += len(images)
+                    total_images += len(images)
+            if scene_data["posts"]:
+                celeb_group["scenes"].append(scene_data)
+                celeb_group["total"] += scene_data["total"]
+        if celeb_group["scenes"]:
+            groups[celeb_name] = celeb_group
+
+    return {"groups": list(groups.values()), "total_images": total_images}
+
+
+class MaterialsDeleteRequest(BaseModel):
+    paths: List[str] = []
+
+
+@app.delete("/api/materials")
+async def delete_materials(req: MaterialsDeleteRequest):
+    """删除指定图片文件并清理空目录。"""
+    deleted = 0
+    for p in req.paths:
+        fp = Path(p)
+        if fp.exists() and fp.is_file():
+            fp.unlink()
+            deleted += 1
+            # 清理空目录（向上最多 3 级到 images/）
+            parent = fp.parent
+            img_root = DOWNLOAD_DIR.expanduser().resolve()
+            for _ in range(3):
+                if parent == img_root or not parent.exists():
+                    break
+                try:
+                    next(parent.iterdir())
+                    break  # 目录非空，停止
+                except StopIteration:
+                    parent.rmdir()
+                    parent = parent.parent
+    return {"success": True, "deleted": deleted}
+
+
+@app.get("/api/discovery/download-stream")
+async def download_stream(indices: str = Query("")):
+    """SSE 流式下载图片，逐图推送进度。"""
+    import json as _json
+    from services.downloader import _download_one
+    from utils.pathsafe import sanitize_segment
+    from utils.file import hash_text
+
+    posts = app_state.get_discovery_results()
+    if not posts:
+        raise HTTPException(400, "没有搜索结果，请先搜索")
+
+    idx_list = [int(i) for i in indices.split(",") if i.strip().isdigit()] if indices else list(range(len(posts)))
+    valid_indices = [i for i in idx_list if 0 <= i < len(posts)]
+
+    def event_stream():
+        # 计算总图片数
+        total = 0
+        for i in valid_indices:
+            total += len(posts[i].get("images", []))
+        yield f"data: {_json.dumps({'type': 'start', 'total': total}, ensure_ascii=False)}\n\n"
+
+        current = 0
+        total_downloaded = 0
+        total_dropped = 0
+
+        for i in valid_indices:
+            post = posts[i]
+            celebrity = post.get("celebrity", "未命名")
+            scene = post.get("scene", "日常")
+            post_id = str(post.get("id") or "")[:12]
+            images = post.get("images", [])
+            if not images:
+                continue
+
+            celeb_dir = sanitize_segment(str(celebrity).strip() or "未命名艺人")
+            scene_dir = sanitize_segment(str(scene).strip() or "未分类选题")
+            slug_dir = sanitize_segment(str(post_id).strip() or "post")
+            pref = sanitize_segment(str(post_id)[:8] or "img")
+            base_dir = DOWNLOAD_DIR.expanduser().resolve() / celeb_dir / scene_dir / slug_dir
+            base_dir.mkdir(parents=True, exist_ok=True)
+
+            for idx, url in enumerate(images, start=1):
+                current += 1
+                ext = ".jpg"
+                tail = url.rsplit("/", 1)[-1]
+                if "." in tail:
+                    ext_candidate = "." + tail.rsplit(".", 1)[-1].split("?")[0][:5]
+                    if len(ext_candidate) <= 6 and ext_candidate.startswith("."):
+                        ext = ext_candidate
+                filename = base_dir / f"{pref}_{idx}_{hash_text(url)[:8]}{ext}"
+                result = _download_one(url, filename, overwrite=False)
+                if result:
+                    total_downloaded += 1
+                else:
+                    total_dropped += 1
+                yield f"data: {_json.dumps({'type': 'progress', 'current': current, 'total': total, 'celebrity': celebrity, 'scene': scene, 'downloaded': total_downloaded, 'dropped': total_dropped}, ensure_ascii=False)}\n\n"
+
+            post["local_images"] = [str(f) for f in sorted(base_dir.iterdir()) if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif")]
+            post["dropped_count"] = total_dropped
+
+        app_state.set_discovery_results(posts)
+        yield f"data: {_json.dumps({'type': 'done', 'downloaded': total_downloaded, 'dropped': total_dropped}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ── SPA Catch-All（放在所有路由最后）─────────────────
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
+async def spa_fallback(full_path: str):
+    """React SPA 路由回退：所有非 API 路径返回 index.html。"""
+    dist_index = DIST_DIR / "index.html"
+    if dist_index.exists():
+        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
+    html_path = STATIC_DIR / "index.html"
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))

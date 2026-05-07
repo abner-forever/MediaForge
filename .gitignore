@@ -1,0 +1,6 @@
+data
+desktop/static_dist/
+desktop/web/node_modules/
+.env
+.claude/settings.local.json
+__pycache__/
