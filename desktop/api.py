@@ -83,6 +83,10 @@ class QueueUpdateRequest(BaseModel):
     cover: Optional[str] = None
 
 
+class EnqueueRequest(BaseModel):
+    images: List[str] = []
+
+
 class PublishRequest(BaseModel):
     dry_run: bool = False
     save_draft: bool = True
@@ -299,6 +303,128 @@ async def discovery_search(req: SearchRequest):
         raise
     except Exception as err:
         raise HTTPException(500, f"搜索失败: {err}")
+
+
+@app.get("/api/discovery/search-stream")
+async def discovery_search_stream(
+    mode: str = Query("celebrities"),
+    celebrities: str = Query(""),
+    search_tags: str = Query(""),
+    super_topics: str = Query(""),
+    max_pages: int = Query(2),
+    post_limit: int = Query(5),
+):
+    """SSE 流式搜索，逐条推送进度消息。"""
+    import asyncio
+    import json as _json
+    from queue import Empty, Queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    celeb_list = [s.strip() for s in celebrities.split(",") if s.strip()]
+    tag_list = [s.strip() for s in search_tags.split(",") if s.strip()]
+    topic_list = [s.strip() for s in super_topics.split(",") if s.strip()]
+
+    msg_queue: Queue = Queue()
+
+    def progress_callback(msg: str):
+        msg_queue.put(("progress", msg))
+
+    def run_search():
+        try:
+            settings.weibo_celebrities = tuple(celeb_list)
+            settings.weibo_search_tags = tuple(tag_list)
+            settings.weibo_super_topics = tuple(topic_list)
+
+            if mode == "own":
+                progress_callback("正在获取本人时间线…")
+                posts = finalize_posts(fetch_own_timeline_paginated(max_pages=max_pages))
+            elif mode == "celebrities":
+                if not celeb_list:
+                    msg_queue.put(("error", "请至少指定一位明星"))
+                    return
+                progress_callback("开始明星发现模式…")
+                posts = finalize_posts(fetch_celebrity_discovery_posts(
+                    max_pages_per_uid=max_pages,
+                    progress_callback=progress_callback,
+                ))
+            elif mode == "super_topic":
+                if not topic_list:
+                    msg_queue.put(("error", "请至少指定一个超话"))
+                    return
+                progress_callback("开始超话搜索…")
+                posts = finalize_posts(fetch_super_topic_discovery_posts(
+                    tuple(topic_list), max_pages=max_pages,
+                    progress_callback=progress_callback,
+                ))
+            elif mode == "keyword":
+                if not tag_list:
+                    msg_queue.put(("error", "请至少指定一个搜索标签"))
+                    return
+                progress_callback("开始关键词搜索…")
+                posts = finalize_posts(fetch_keyword_only_posts(
+                    tuple(tag_list), max_pages_per_tag=max_pages,
+                    progress_callback=progress_callback,
+                ))
+            else:
+                progress_callback("开始混合模式搜索…")
+                parts = []
+                if celeb_list:
+                    parts.append(fetch_celebrity_discovery_posts(
+                        max_pages_per_uid=max_pages,
+                        progress_callback=progress_callback,
+                    ))
+                progress_callback("正在获取本人时间线…")
+                parts.append(fetch_own_timeline_paginated(max_pages=max_pages))
+                seen = set()
+                merged = []
+                for grp in parts:
+                    for p in grp:
+                        pid = str(p.get("id") or "")
+                        if pid and pid not in seen:
+                            seen.add(pid)
+                            merged.append(p)
+                posts = finalize_posts(merged)
+
+            posts = posts[:post_limit]
+            app_state.set_discovery_results(posts)
+            total_images = sum(len(p.get("images", [])) for p in posts)
+            app_state.add_operation("搜索", f"模式={mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
+            progress_callback(f"搜索完成！共 {len(posts)} 条帖子，{total_images} 张图片")
+
+            # 将 post 数据精简后通过 SSE 返回（去掉过长的 images URL 列表）
+            safe_posts = []
+            for p in posts:
+                sp = dict(p)
+                sp["images"] = sp.get("images", [])[:4]  # 仅前几张做预览
+                safe_posts.append(sp)
+
+            msg_queue.put(("done", safe_posts, len(posts), total_images, _json.dumps([p.get("id") for p in posts])))
+        except HTTPException:
+            raise
+        except Exception as err:
+            msg_queue.put(("error", str(err)))
+
+    ThreadPoolExecutor(1).submit(run_search)
+
+    def event_stream():
+        while True:
+            try:
+                msg = msg_queue.get(timeout=0.5)
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+
+            if msg[0] == "progress":
+                yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg[0] == "done":
+                _, safe_posts, total, total_imgs, _ = msg
+                yield f"data: {_json.dumps({'type': 'done', 'total_posts': total, 'total_images': total_imgs}, ensure_ascii=False)}\n\n"
+                break
+            elif msg[0] == "error":
+                yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/discovery/download")
@@ -519,6 +645,8 @@ async def publish_from_queue(index: int, req: PublishRequest):
         on_log=_on_log,
     )
     app_state.finish_publish()
+    # 将发布日志持久化到队列项，切换页面后不丢失
+    app_state.update_queue_item(index, {"publish_logs": app_state.get_publish_logs()})
     if result.get("success"):
         action = "保存草稿" if req.save_draft else "发布"
         app_state.add_operation(action, f"「{title}」")
@@ -540,8 +668,8 @@ async def get_publish_logs(after: int = 0):
 
 
 @app.post("/api/queue/enqueue-selected")
-async def enqueue_selected():
-    selected = app_state.get_selected_images()
+async def enqueue_selected(req: EnqueueRequest):
+    selected = req.images if req.images else app_state.get_selected_images()
     if not selected:
         raise HTTPException(400, "没有选中的图片")
 

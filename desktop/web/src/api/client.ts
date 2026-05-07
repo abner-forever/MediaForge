@@ -71,6 +71,7 @@ export interface QueueItem {
   images: string[];
   cover: string;
   celebrity?: string;
+  publish_logs?: string[];
 }
 
 export interface MaterialsGroup {
@@ -129,6 +130,13 @@ export interface DownloadStreamEvent {
   scene?: string;
   downloaded?: number;
   dropped?: number;
+}
+
+export interface SearchStreamEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+  total_posts?: number;
+  total_images?: number;
 }
 
 /* ── Dashboard API ────────────────────────────── */
@@ -200,6 +208,47 @@ export async function downloadStream(
   }
 }
 
+/* ── Search SSE Stream ────────────────────────── */
+
+export async function searchStream(
+  params: {
+    mode: string;
+    celebrities: string[];
+    search_tags: string[];
+    super_topics: string[];
+    max_pages: number;
+    post_limit: number;
+  },
+  onEvent: (evt: SearchStreamEvent) => void,
+): Promise<void> {
+  const q = new URLSearchParams({
+    mode: params.mode,
+    celebrities: params.celebrities.join(','),
+    search_tags: params.search_tags.join(','),
+    super_topics: params.super_topics.join(','),
+    max_pages: String(params.max_pages),
+    post_limit: String(params.post_limit),
+  });
+  const res = await fetch(`/api/discovery/search-stream?${q}`);
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        onEvent(JSON.parse(line.slice(6)));
+      } catch { /* ignore */ }
+    }
+  }
+}
+
 /* ── Selection API ────────────────────────────── */
 
 export const selectionApi = {
@@ -238,5 +287,5 @@ export const queueApi = {
   generate: (index: number) => post<{ success: boolean; title: string; desc: string; message?: string }>(`/api/queue/${index}/generate`),
   publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean }) =>
     post<{ success: boolean; message: string }>(`/api/queue/${index}/publish`, opts),
-  enqueueSelected: () => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected'),
+  enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
 };

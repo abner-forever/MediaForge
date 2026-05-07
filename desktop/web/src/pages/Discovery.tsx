@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../stores';
-import { discoveryApi, downloadStream, queueApi, selectionApi, settingsApi } from '../api/client';
+import { discoveryApi, downloadStream, queueApi, selectionApi, settingsApi, searchStream } from '../api/client';
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
 import SearchLoadingOverlay from '../components/SearchLoadingOverlay';
@@ -46,6 +46,7 @@ export default function Discovery() {
   }, []);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchMessage, setSearchMessage] = useState('');
   const [filterWatermark, setFilterWatermark] = useState(false);
   const [watermarkedImages, setWatermarkedImages] = useState<Set<string>>(new Set());
 
@@ -68,23 +69,31 @@ export default function Discovery() {
 
   async function doSearch() {
     setSearching(true);
-    setLoading(true);
+    setSearchMessage('正在搜索…');
     try {
-      const res = await discoveryApi.search({
+      await searchStream({
         mode,
         celebrities: celebs.split(',').map((s) => s.trim()).filter(Boolean),
         search_tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
         super_topics: superTopics.split(',').map((s) => s.trim()).filter(Boolean),
         max_pages: pages,
         post_limit: limit,
+      }, (evt) => {
+        if (evt.type === 'progress') {
+          setSearchMessage(evt.message!);
+        } else if (evt.type === 'done') {
+          discoveryApi.get().then((res) => {
+            setDiscoveryPosts(res.posts);
+          });
+          clearSelectedPosts();
+          setImageScores({});
+          clearSelectedImages();
+          addToast(`找到 ${evt.total_posts} 条帖子，${evt.total_images} 张图片`, 'success');
+        } else if (evt.type === 'error') {
+          addToast(evt.message || '搜索失败', 'error');
+        }
       });
-      setDiscoveryPosts(res.posts);
-      clearSelectedPosts();
-      setImageScores({});
-      clearSelectedImages();
-      addToast(`找到 ${res.total_posts} 条帖子，${res.total_images} 张图片`, 'success');
     } catch (err: any) { addToast(err.message, 'error'); }
-    setLoading(false);
     setSearching(false);
   }
 
@@ -143,12 +152,13 @@ export default function Discovery() {
 
   async function enqueueSelected() {
     if (!selectedImages.length) { addToast('请先选择图片', 'error'); return; }
+    setProgress({ current: 0, total: 0, detail: '正在生成文案并加入队列...' });
     try {
-      for (const path of selectedImages) await selectionApi.add(path);
-      const res = await queueApi.enqueueSelected();
+      const res = await queueApi.enqueueSelected(selectedImages);
       clearSelectedImages();
       addToast(`已加入队列：《${res.title}》`, 'success');
     } catch (err: any) { addToast(err.message, 'error'); }
+    setProgress(null);
   }
 
   function openPostLightbox(pi: number, ii: number) {
@@ -161,14 +171,14 @@ export default function Discovery() {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">图片发现</h2>
         <p className="text-xs text-text-muted mt-0.5">从微博搜寻明星美图，AI 智能评分筛选</p>
       </div>
 
       {/* Search Params */}
-      <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
         <h3 className="text-xs font-medium text-text-muted">搜索参数</h3>
         <div className="grid grid-cols-3 gap-3">
           <label>抓取模式
@@ -219,7 +229,7 @@ export default function Discovery() {
 
       {/* Post List */}
       {discoveryPosts.length > 0 && (
-        <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <h3 className="text-xs font-medium text-text-muted">
               搜索结果（{discoveryPosts.length} 条帖子，{discoveryPosts.reduce((s, p) => s + (p.images?.length || 0), 0)} 张图片）
@@ -252,11 +262,11 @@ export default function Discovery() {
                   </div>
                   {p.text && <div className="text-xs text-text-muted mb-2 line-clamp-2">{p.text.slice(0, 100)}</div>}
                   <div className="flex flex-wrap gap-1.5">
-                    {displayImgs.slice(0, 8).map((img, ii) => (
-                      <img key={ii} src={imgSrc(img)} alt="" className="w-[72px] h-[72px] object-cover rounded-lg border border-border cursor-pointer hover:border-text-muted transition-colors" onClick={() => openPostLightbox(pi, ii)} onError={(e) => (e.currentTarget.style.display = 'none')} loading="lazy" />
+                    {displayImgs.slice(0, 12).map((img, ii) => (
+                      <img key={ii} src={imgSrc(img)} alt="" className="w-[80px] h-[80px] object-cover rounded-lg border border-border cursor-pointer hover:border-accent/50 transition-colors" onClick={() => openPostLightbox(pi, ii)} onError={(e) => (e.currentTarget.style.display = 'none')} loading="lazy" />
                     ))}
-                    {displayImgs.length > 8 && (
-                      <div className="w-[72px] h-[72px] rounded-lg border border-border flex items-center justify-center text-[11px] text-text-muted">+{displayImgs.length - 8}</div>
+                    {displayImgs.length > 12 && (
+                      <div className="w-[80px] h-[80px] rounded-lg border border-border flex items-center justify-center text-[11px] text-text-muted">+{displayImgs.length - 12}</div>
                     )}
                   </div>
                 </div>
@@ -268,13 +278,13 @@ export default function Discovery() {
 
       {/* Gallery */}
       {allLocalImages.length > 0 && (
-        <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <h3 className="text-xs font-medium text-text-muted">图片画廊</h3>
             <span className="text-[11px] text-text-muted ml-auto">已选 {selectedImages.length} 张</span>
             {selectedImages.length > 0 && <button className="btn btn-primary btn-sm" onClick={enqueueSelected}>加入发布队列</button>}
           </div>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
             {allLocalImages.map((item, i) => {
               const s = item.scoreInfo;
               const scoreColor = s.score >= 70 ? 'text-emerald-600' : s.score >= 40 ? 'text-amber-600' : 'text-red-500';
@@ -283,7 +293,7 @@ export default function Discovery() {
               return (
                 <div key={item.path} className={`bg-bg border rounded-lg overflow-hidden transition-all hover:shadow-sm ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border'}`}>
                   <div className="relative">
-                    <img src={imgSrc(item.path)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => openGalleryLightbox(i)} loading="lazy" />
+                    <img src={imgSrc(item.path)} alt="" className="w-full h-[180px] object-cover cursor-pointer" onClick={() => openGalleryLightbox(i)} loading="lazy" />
                     {isWm && <span className="absolute top-1.5 right-1.5 text-[10px] font-medium bg-amber-500/90 text-white px-1.5 py-0.5 rounded">疑似水印</span>}
                   </div>
                   <div className="px-2.5 py-2 flex items-center justify-between">
@@ -311,7 +321,7 @@ export default function Discovery() {
         <div className="text-center py-4 text-text-muted text-xs">点击「下载图片」将远程图片保存到本地</div>
       )}
 
-      {searching && <SearchLoadingOverlay />}
+      {searching && <SearchLoadingOverlay message={searchMessage} />}
     </div>
   );
 }

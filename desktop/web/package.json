@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "desktop:start": "cd ../ && python3 main.py"
+    "desktop:start": "vite build && cd ../ && python3 main.py"
   },
   "dependencies": {
     "react": "^18.3.1",

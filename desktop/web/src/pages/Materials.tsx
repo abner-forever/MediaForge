@@ -53,13 +53,13 @@ export default function Materials() {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">本地素材</h2>
         <p className="text-xs text-text-muted mt-0.5">管理已下载的图片素材</p>
       </div>
 
-      <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center gap-4 flex-wrap">
           <input type="text" placeholder="搜索明星..." value={matFilter} onChange={(e) => setMatFilter(e.target.value)} className="flex-1 min-w-[200px]" />
           <div className="flex gap-4 text-[11px] text-text-muted">
@@ -125,7 +125,7 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
   }
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-bg-secondary transition-colors select-none"
         onClick={() => setCollapsed(!collapsed)}
@@ -139,14 +139,14 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
           {group.scenes.map((scene) => (
             <div key={scene.scene}>
               <div className="text-[11px] font-medium text-text-muted uppercase tracking-wider py-1 px-0.5">{scene.scene} · {scene.total}</div>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                 {scene.posts.flatMap((post) =>
                   post.images.map((img) => {
                     const isSel = matSelected.has(img);
                     const fileName = img.split('/').pop() || '';
                     return (
                       <div key={img} onContextMenu={(e) => handleContextMenu(e, img, scene.scene)} className={`bg-bg border rounded-lg overflow-hidden transition-all ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border hover:shadow-sm'}`}>
-                        <img src={imgSrc(img)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => openMatLightbox(img)} loading="lazy" />
+                        <img src={imgSrc(img)} alt="" className="w-full h-[180px] object-cover cursor-pointer" onClick={() => openMatLightbox(img)} loading="lazy" />
                         <div className="px-2.5 py-2 flex items-center justify-between">
                           <div className="text-[10px] text-text-muted truncate max-w-[100px]" title={fileName}>{fileName.slice(0, 18)}</div>
                           <input type="checkbox" checked={isSel} onChange={() => matToggleSelect(img)} className="w-3.5 h-3.5 accent-[var(--accent)]" />

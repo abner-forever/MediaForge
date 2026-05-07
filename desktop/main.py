@@ -1,4 +1,4 @@
-"""weibo2wechat 桌面应用入口。
+"""MediaForge 桌面应用入口。
 
 启动 FastAPI 后端 + PyWebView 原生窗口。
 """

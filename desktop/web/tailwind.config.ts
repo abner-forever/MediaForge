@@ -5,6 +5,10 @@ export default {
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
+      borderRadius: {
+        xl: '8px',
+        lg: '6px',
+      },
       colors: {
         accent: {
           DEFAULT: 'var(--accent)',

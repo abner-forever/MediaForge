@@ -2,7 +2,7 @@ import logging
 import sys
 
 
-def get_logger(name: str = "weibo2wechat") -> logging.Logger:
+def get_logger(name: str = "MediaForge") -> logging.Logger:
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger

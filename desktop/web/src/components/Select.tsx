@@ -50,7 +50,7 @@ export default function Select({ value, onChange, options, placeholder }: Select
           bg-[var(--bg-secondary)] text-[var(--text)] font-[inherit]
           ${open
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)] bg-[var(--bg-card)]'
-            : 'border-[var(--border)] hover:border-[var(--text-muted)]'
+            : 'border-[var(--border)] hover:border-[var(--accent)]'
           }
         `}
       >

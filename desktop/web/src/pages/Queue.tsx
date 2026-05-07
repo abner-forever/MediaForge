@@ -15,7 +15,7 @@ export default function Queue() {
   };
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">发布队列</h2>
         <p className="text-xs text-text-muted mt-0.5">预览和发布图文内容到公众号</p>
@@ -38,7 +38,7 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   const [title, setTitle] = useState(item.title);
   const [desc, setDesc] = useState(item.desc);
   const [cover, setCover] = useState(item.cover);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishing, setPublishing] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +113,7 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   }
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl">
+    <div className="bg-bg-card border border-border rounded-xl shadow-sm">
       <div className="flex flex-col md:flex-row">
         <div className="md:w-56 p-4 bg-bg-secondary border-b md:border-b-0 md:border-r border-border overflow-hidden">
           {cover && (
@@ -121,7 +121,7 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
           )}
           <div className="flex flex-wrap gap-1">
             {(item.images || []).map((img, ii) => (
-              <img key={ii} src={imgSrc(img)} alt="" className="w-10 h-10 object-cover rounded border border-border cursor-pointer hover:border-text-muted transition-colors" onClick={() => openLightbox(item.images.map(imgSrc), ii)} onError={(e) => (e.currentTarget.style.display = 'none')} />
+              <img key={ii} src={imgSrc(img)} alt="" className="w-10 h-10 object-cover rounded border border-border cursor-pointer hover:border-accent/50 transition-colors" onClick={() => openLightbox(item.images.map(imgSrc), ii)} onError={(e) => (e.currentTarget.style.display = 'none')} />
             ))}
           </div>
         </div>

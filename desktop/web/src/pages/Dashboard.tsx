@@ -59,10 +59,10 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       {/* 介绍区块 */}
-      <div className="bg-bg-card border border-border rounded-xl p-5">
-        <h2 className="text-lg font-semibold tracking-tight">欢迎使用图文工坊</h2>
+      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
+        <h2 className="text-base font-semibold tracking-tight">欢迎使用图文工坊</h2>
         <p className="text-xs text-text-muted mt-1 leading-relaxed">
           自动化内容发布工具：从微博发现优质图文 → AI 生成标题和文案 → 一键发布到微信公众号
         </p>
@@ -83,29 +83,29 @@ export default function Dashboard() {
       {/* 统计数据 */}
       <div className="grid grid-cols-4 gap-2.5">
         <div
-          className="bg-bg-card border border-border rounded-xl p-4 text-center cursor-pointer hover:border-text-muted transition-colors"
+          className="bg-bg-card border border-border rounded-xl p-4 text-center cursor-pointer hover:border-accent/50 transition-colors"
           onClick={() => navigate('/materials')}
         >
-          <div className="text-2xl font-semibold tabular-nums">{stats?.local_images ?? 0}</div>
+          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.local_images ?? 0}</div>
           <div className="text-[11px] text-text-muted mt-1">本地图片</div>
         </div>
         <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums">{stats?.queue_size ?? 0}</div>
+          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.queue_size ?? 0}</div>
           <div className="text-[11px] text-text-muted mt-1">待发布</div>
         </div>
         <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums">{stats?.selected_count ?? 0}</div>
+          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.selected_count ?? 0}</div>
           <div className="text-[11px] text-text-muted mt-1">已选图片</div>
         </div>
         <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums">{stats?.discovery_count ?? 0}</div>
+          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.discovery_count ?? 0}</div>
           <div className="text-[11px] text-text-muted mt-1">搜索结果</div>
         </div>
       </div>
 
       {/* 快捷操作 */}
-      <div className="bg-bg-card border border-border rounded-xl p-4">
-        <h3 className="text-xs font-medium text-text-muted mb-3">快捷操作</h3>
+      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
+        <h3 className="text-xs font-medium text-text-muted mb-4">快捷操作</h3>
         <div className="grid grid-cols-3 gap-2.5">
           {[
             { icon: '🔍', title: '搜图', desc: '从微博搜索优质图文', path: '/discovery' },
@@ -115,7 +115,7 @@ export default function Dashboard() {
             <div
               key={a.path}
               onClick={() => navigate(a.path)}
-              className="bg-bg-secondary rounded-xl p-4 text-center cursor-pointer hover:border hover:border-text-muted transition-all group"
+              className="bg-bg-secondary rounded-xl p-4 text-center cursor-pointer hover:border hover:border-accent/50 transition-all group"
             >
               <div className="text-xl mb-1">{a.icon}</div>
               <div className="text-sm font-medium">{a.title}</div>
@@ -126,7 +126,7 @@ export default function Dashboard() {
       </div>
 
       {/* 最近操作 */}
-      <div className="bg-bg-card border border-border rounded-xl p-4">
+      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
         <h3 className="text-xs font-medium text-text-muted mb-3">最近操作</h3>
         {ops.length === 0 ? (
           <div className="text-center py-8">

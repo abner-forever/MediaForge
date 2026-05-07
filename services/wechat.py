@@ -308,18 +308,10 @@ def publish_article(
             if not _goto_new_article_direct(page):
                 raise RuntimeError("无法从当前页面提取 token 进入编辑器")
             _emit("已通过直达链接进入新建图文页，等待编辑器加载...", on_log)
-            try:
-                page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-            _human_sleep(1.5, 0.5)
-            _emit("编辑器加载完成", on_log)
-
+            # 注意：微信编辑器有后台轮询（自动保存、统计），networkidle 几乎不会触发
+            # 用 load 确保 DOM 加载完成即可，然后直接等标题输入框
+            page.wait_for_load_state("load")
             editor_frame = _resolve_editor_frame(page)
-            _log_frames(page)
-
-            page.evaluate("window.scrollTo(0, 0)")
-            _human_sleep(0.5, 0.3)
 
             _emit("正在填写标题...", on_log)
             if not _fill_first_available(
@@ -332,7 +324,7 @@ def publish_article(
                     ".title_editor input",
                 ],
                 title,
-                wait_ms=5000,
+                wait_ms=8000,
             ):
                 try:
                     page.locator("text=请在这里输入标题").first.click(timeout=3000)

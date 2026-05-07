@@ -45,7 +45,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">系统设置</h2>
         <p className="text-xs text-text-muted mt-0.5">修改后点击保存，配置将写入 .env 文件并立即生效</p>
@@ -57,7 +57,7 @@ export default function Settings() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab.id ? 'border-text text-text' : 'border-transparent text-text-muted hover:text-text-secondary'
+              activeTab === tab.id ? 'border-accent text-accent' : 'border-transparent text-text-muted hover:text-text-secondary'
             }`}
           >
             {tab.label}
@@ -86,7 +86,7 @@ function ThemeSection() {
   const { theme, setTheme, accentId, setAccentId } = useStore();
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-4">
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">主题管理</h3>
 
       {/* 明暗模式 */}
@@ -156,7 +156,7 @@ function RunSection({ data, save }: { data: SettingsData; save: (u: Record<strin
   const [confirm, setConfirm] = useState(data.require_confirm);
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">运行参数</h3>
       <div className="grid grid-cols-3 gap-3">
         <label>每次处理条数<NumberInput value={postLimit} onChange={setPostLimit} min={1} max={3} /></label>
@@ -256,7 +256,7 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
   const displayKey = showKey ? (fullKey || apiKey) : (apiKey || (data.ai_api_key_set ? data.ai_api_key_masked : ''));
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">大模型配置</h3>
       <div className="grid grid-cols-2 gap-3">
         <label>AI 服务商
@@ -311,7 +311,7 @@ function WeiboSection({ data, save }: { data: SettingsData; save: (u: Record<str
   const [superTopics, setSuperTopics] = useState(data.weibo_super_topics);
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">微博配置</h3>
       <div className="grid grid-cols-2 gap-3">
         <label className="col-span-2">微博 Cookie
@@ -350,7 +350,7 @@ function WatermarkSection({ data, save }: { data: SettingsData; save: (u: Record
   const [bottomRatio, setBottomRatio] = useState(data.watermark_bottom_ratio);
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">水印过滤</h3>
       <div className="grid grid-cols-2 gap-3">
         <label className="flex-row items-center gap-2">

@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="weibo2wechat 自动化发布工具")
+    parser = argparse.ArgumentParser(description="MediaForge 自动化发布工具")
     parser.add_argument("--limit", type=int, default=settings.post_limit, help="限制处理条数")
     parser.add_argument("--pages", type=int, default=settings.weibo_pages, help="微博抓取页数")
     parser.add_argument("--dry-run", action="store_true", help="不发布，只打印")
