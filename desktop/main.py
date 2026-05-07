@@ -49,6 +49,46 @@ def main() -> None:
 
     # 启动 PyWebView 窗口
     import webview
+    from webview.menu import Menu, MenuAction, MenuSeparator
+
+    webview.settings['SHOW_DEFAULT_MENUS'] = False
+
+    localization = {
+        'global.quitConfirmation': '确定要退出吗？',
+        'global.ok': '好',
+        'global.quit': '退出',
+        'global.cancel': '取消',
+        'global.saveFile': '保存文件',
+        'cocoa.menu.about': '关于',
+        'cocoa.menu.services': '服务',
+        'cocoa.menu.view': '视图',
+        'cocoa.menu.edit': '编辑',
+        'cocoa.menu.hide': '隐藏',
+        'cocoa.menu.hideOthers': '隐藏其他',
+        'cocoa.menu.showAll': '显示全部',
+        'cocoa.menu.quit': '退出',
+        'cocoa.menu.fullscreen': '进入全屏',
+        'cocoa.menu.cut': '剪切',
+        'cocoa.menu.copy': '复制',
+        'cocoa.menu.paste': '粘贴',
+        'cocoa.menu.selectAll': '全选',
+    }
+
+    menus = [
+        Menu("编辑", [
+            MenuAction("撤销", lambda: None),
+            MenuAction("重做", lambda: None),
+            MenuSeparator(),
+            MenuAction("剪切", lambda: None),
+            MenuAction("复制", lambda: None),
+            MenuAction("粘贴", lambda: None),
+            MenuAction("全选", lambda: None),
+        ]),
+        Menu("窗口", [
+            MenuAction("最小化", lambda: webview.windows[0].minimize() if webview.windows else None),
+            MenuAction("缩放", lambda: webview.windows[0].maximize() if webview.windows else None),
+        ]),
+    ]
 
     window = webview.create_window(
         title="图文工坊",
@@ -57,7 +97,26 @@ def main() -> None:
         height=900,
         min_size=(960, 640),
         text_select=True,
+        menu=menus,
+        localization=localization,
     )
+
+    # macOS: 通过 AppKit 设置应用图标和名称
+    try:
+        from AppKit import NSImage, NSApplication, NSBundle
+        icon_path = Path(__file__).parent / "static" / "logo.png"
+        if icon_path.exists():
+            img = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+            if img:
+                NSApplication.sharedApplication().setApplicationIconImage_(img)
+        bundle = NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "图文工坊"
+            info["CFBundleDisplayName"] = "图文工坊"
+    except Exception:
+        pass
+
     webview.start(debug=False)
 
 

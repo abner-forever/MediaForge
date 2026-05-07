@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import requests
 
-from config import WEIBO_UID_CACHE_PATH, resolve_weibo_fetch_mode, settings
+from config import WEIBO_TOPIC_CACHE_PATH, WEIBO_UID_CACHE_PATH, resolve_weibo_fetch_mode, settings
 from utils.file import hash_text, read_json, write_json
 from utils.logger import get_logger
 
@@ -107,6 +107,19 @@ def _mobile_container_id(kind: str, keyword: str) -> str:
     return "100103" + quote(inner, safe="")
 
 
+def _mobile_headers(referer: str = "https://m.weibo.cn/") -> dict:
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+        ),
+        "Cookie": settings.weibo_cookie,
+        "Referer": referer,
+        "Accept": "application/json, text/plain, */*",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+
+
 def _request_with_retry(url: str, params_list: Iterable[Mapping[str, object]]) -> dict:
     headers = _json_headers()
     last_err: Optional[BaseException] = None
@@ -139,6 +152,7 @@ def _get_json_single(url: str, params: dict, *, referer: Optional[str] = None) -
             payload.get("msg") or payload.get("errno"),
             resp.url,
         )
+    logger.info("[DEBUG] API %s ok=%s keys=%s", resp.url, payload.get("ok") if isinstance(payload, dict) else "?", list(payload.keys()) if isinstance(payload, dict) else "?")
     return payload
 
 
@@ -151,6 +165,128 @@ def _load_uid_cache() -> MutableMapping[str, str]:
 
 def _save_uid_cache(obj: Mapping[str, str]) -> None:
     write_json(WEIBO_UID_CACHE_PATH, dict(sorted(obj.items())))
+
+
+def _load_topic_cache() -> MutableMapping[str, str]:
+    raw = read_json(WEIBO_TOPIC_CACHE_PATH, default={})
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
+def _save_topic_cache(obj: Mapping[str, str]) -> None:
+    write_json(WEIBO_TOPIC_CACHE_PATH, dict(sorted(obj.items())))
+
+
+def _first_topic_hash_from_side_payload(payload: dict, topic_name: str) -> str:
+    """从桌面端搜索结果中提取超话 hash。"""
+    strip_name = topic_name.replace("超话", "").strip()
+    for key in ("topics", "realtime", "data"):
+        blk = payload.get(key)
+        items: List = []
+        if isinstance(blk, list):
+            items = blk
+        elif isinstance(blk, dict):
+            items = blk.get("topics") or blk.get("list") or blk.get("data") or []
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            topic_id = str(item.get("topic_id") or item.get("tid") or "")
+            title = item.get("topic_title") or item.get("title") or ""
+            if topic_id and re.match(r"^[a-f0-9]{6,}$", topic_id):
+                if not strip_name or strip_name in title or strip_name in topic_name:
+                    return topic_id
+    blob = json.dumps(payload, ensure_ascii=False)
+    m = re.search(r"100808([a-f0-9]{6,})", blob)
+    if m:
+        return m.group(1)
+    return ""
+
+
+def _first_topic_hash_from_mobile_cards(payload: dict, topic_name: str) -> str:
+    """从移动端搜索结果中提取超话 hash。"""
+    strip_name = topic_name.replace("超话", "").strip()
+    cards = payload.get("data", {}).get("cards", []) or []
+    for card in cards:
+        # card 级别
+        itemid = str(card.get("itemid") or "")
+        m = re.search(r"topic_(100808)?([a-f0-9]{6,})", itemid)
+        if m:
+            return m.group(2)
+        scheme = str(card.get("scheme") or "")
+        m = re.search(r"100808([a-f0-9]{6,})", scheme)
+        if m:
+            return m.group(1)
+        # card_group 级别
+        for grp in card.get("card_group", []) or []:
+            itemid = str(grp.get("itemid") or "")
+            m = re.search(r"topic_(100808)?([a-f0-9]{6,})", itemid)
+            if m:
+                return m.group(2)
+            scheme = str(grp.get("scheme") or "")
+            m = re.search(r"100808([a-f0-9]{6,})", scheme)
+            if m:
+                return m.group(1)
+            containerid = str(grp.get("containerid") or "")
+            m = re.search(r"100808([a-f0-9]{6,})", containerid)
+            if m:
+                return m.group(1)
+    # 兜底：全文正则
+    blob = json.dumps(payload, ensure_ascii=False)
+    m = re.search(r"100808([a-f0-9]{6,})", blob)
+    if m:
+        return m.group(1)
+    return ""
+
+
+def resolve_super_topic_hash(topic_name: str) -> str:
+    """解析超话名称 → 超话 hash（100808 后面的部分），结果缓存到 JSON。"""
+    cache = _load_topic_cache()
+    if topic_name in cache:
+        logger.info("使用缓存的超话 hash「%s」→ %s", topic_name, cache[topic_name])
+        return cache[topic_name]
+
+    search_name = topic_name.replace("超话", "").strip() or topic_name
+    hash_val = ""
+    try:
+        cid = _mobile_container_id("38", search_name)
+        resp = requests.get(
+            "https://m.weibo.cn/api/container/getIndex",
+            params={"containerid": cid, "page_type": "searchall", "page": 1},
+            headers=_mobile_headers(f"https://m.weibo.cn/search?q={quote(search_name, safe='')}"),
+            timeout=settings.request_timeout,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        logger.info("[DEBUG] 超话搜索 mobile API ok=%s keys=%s", payload.get("ok"), list(payload.keys()) if isinstance(payload, dict) else "?")
+        hash_val = _first_topic_hash_from_mobile_cards(payload, topic_name)
+    except Exception as err:
+        logger.error("超话搜索失败(%s)：%s", topic_name, err)
+
+    if not hash_val:
+        try:
+            cid = _mobile_container_id("38", topic_name)
+            resp = requests.get(
+                "https://m.weibo.cn/api/container/getIndex",
+                params={"containerid": cid, "page_type": "searchall", "page": 1},
+                headers=_mobile_headers(f"https://m.weibo.cn/search?q={quote(topic_name, safe='')}"),
+                timeout=settings.request_timeout,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            hash_val = _first_topic_hash_from_mobile_cards(payload, topic_name)
+        except Exception as err:
+            logger.error("超话搜索重试失败(%s)：%s", topic_name, err)
+
+    if hash_val:
+        cache[topic_name] = hash_val
+        _save_topic_cache(cache)
+        logger.info("已解析超话「%s」→ hash=%s", topic_name, hash_val)
+    else:
+        logger.error("未能解析超话「%s」的 hash", topic_name)
+    return hash_val
 
 
 def resolve_uid_for_nickname(nickname: str) -> str:
@@ -357,6 +493,9 @@ def _post_from_card(
     text_plain = raw_text if not isinstance(raw_text, str) or "<" not in raw_text else _strip_simple_html(raw_text)
     scene = (scene_hint or "").strip() or infer_scene_from_post_text(text_plain.strip())
 
+    user = mblog.get("user") or {}
+    screen_name = user.get("screen_name") or ""
+
     return {
         "id": pid,
         "text": text_plain.strip(),
@@ -364,6 +503,8 @@ def _post_from_card(
         "celebrity": celebrity,
         "source": source,
         "scene": scene,
+        "screen_name": screen_name,
+        "created_at": mblog.get("created_at") or "",
     }
 
 
@@ -383,27 +524,26 @@ def _parse_mblogs_from_cards_payload(payload: dict) -> List[dict]:
 
 
 def fetch_keyword_timeline_mobile(keyword: str, *, page: int, celebrity: str, scene: str) -> List[Dict]:
-    cid = _mobile_container_id("1", keyword)
-    kw_q = quote(keyword, safe="")
-    payload = _get_json_single(
-        "https://m.weibo.cn/api/container/getIndex",
-        {"containerid": cid, "page_type": "searchall", "page": page},
-        referer=f"https://m.weibo.cn/search?q={kw_q}",
+    """通过桌面端 API 搜索关键词帖子。"""
+    payload = _request_with_retry(
+        url="https://weibo.com/ajax/statuses/search",
+        params_list=(
+            {"q": keyword, "page": page, "hasori": "1", "hasret": "1", "hastext": "1", "haspic": "1", "category": "1"},
+            {"q": keyword, "page": page, "haspic": "1"},
+            {"q": keyword, "page": page},
+        ),
     )
-    mblogs = _parse_mblogs_from_cards_payload(payload)
+    statuses = payload.get("data", {}).get("list", []) or []
 
     parsed: List[Dict] = []
-    for mb in mblogs:
-        pt = _post_from_card(mb, celebrity=celebrity, source="search_mobile", scene_hint=scene)
+    for item in statuses:
+        pt = _post_from_card(item, celebrity=celebrity, source="search_desktop", scene_hint=scene)
         if pt:
             parsed.append(pt)
 
     logger.info(
-        "关键词搜索「%s」第%s页原始卡片 %s → 含图帖子 %s",
-        keyword,
-        page,
-        len(mblogs),
-        len(parsed),
+        "关键词搜索「%s」第%s页原始帖子 %s → 含图帖子 %s",
+        keyword, page, len(statuses), len(parsed),
     )
     return parsed
 
@@ -429,6 +569,8 @@ def fetch_mymblog_for_uid(uid: str, *, page: int, celebrity_hint: str) -> List[D
         text = item.get("text_raw") or item.get("text") or ""
         text_plain = text if isinstance(text, str) and "<" not in text else _strip_simple_html(text)
         text_plain = text_plain.strip()
+        user = item.get("user") or {}
+        screen_name = user.get("screen_name") or ""
         resolved.append(
             {
                 "id": pid.strip(),
@@ -437,6 +579,8 @@ def fetch_mymblog_for_uid(uid: str, *, page: int, celebrity_hint: str) -> List[D
                 "celebrity": celebrity_hint,
                 "source": "mymblog",
                 "scene": infer_scene_from_post_text(text_plain),
+                "screen_name": screen_name,
+                "created_at": item.get("created_at") or "",
             }
         )
     logger.info(
@@ -548,6 +692,63 @@ def fetch_celebrity_discovery_posts(max_pages_per_uid: int) -> List[Dict]:
     return _merge_post_lists(buckets)
 
 
+def fetch_super_topic_posts(topic_name: str, *, max_pages: int = 1) -> List[Dict]:
+    """从超话抓取带图片的帖子（桌面端 API）。"""
+    topic_hash = resolve_super_topic_hash(topic_name)
+    if not topic_hash:
+        return []
+
+    containerid = f"100808{topic_hash}"
+    parsed: List[Dict] = []
+
+    for page in range(1, max(1, max_pages) + 1):
+        try:
+            payload = _request_with_retry(
+                url="https://weibo.com/ajax/feed/topic",
+                params_list=(
+                    {"containerid": containerid, "page": page, "count": 25},
+                    {"containerid": containerid, "page": page},
+                ),
+            )
+            statuses = payload.get("data", {}).get("list", []) or []
+            for item in statuses:
+                pt = _post_from_card(item, celebrity=topic_name, source="super_topic", scene_hint=topic_name)
+                if pt:
+                    parsed.append(pt)
+            logger.info(
+                "超话「%s」第%s页：原始帖子 %s → 含图帖子 %s",
+                topic_name, page, len(statuses), len(parsed),
+            )
+        except Exception as err:
+            logger.error("超话「%s」第%s页抓取失败：%s", topic_name, page, err)
+        if page < max_pages:
+            time.sleep(0.9 + (hash(topic_name) % 5) * 0.05)
+
+    return parsed
+
+
+def fetch_keyword_only_posts(tags: tuple, *, max_pages_per_tag: int = 1) -> List[Dict]:
+    """直接用标签搜索，不带明星名称前缀。"""
+    buckets: List[List[Dict]] = []
+    for tag in tags:
+        tag_posts: List[Dict] = []
+        for pg in range(1, max(1, max_pages_per_tag) + 1):
+            tag_posts.extend(
+                fetch_keyword_timeline_mobile(tag, page=pg, celebrity="关键词搜索", scene=tag)
+            )
+            time.sleep(0.95 + pg * 0.05)
+        buckets.append(tag_posts)
+    return _merge_post_lists(buckets)
+
+
+def fetch_super_topic_discovery_posts(topics: tuple, max_pages: int) -> List[Dict]:
+    """遍历超话列表抓取帖子。"""
+    buckets: List[List[Dict]] = []
+    for topic in topics:
+        buckets.append(fetch_super_topic_posts(topic, max_pages=max_pages))
+    return _merge_post_lists(buckets)
+
+
 def fetch_weibo_posts_paginated(max_pages: int = 1) -> List[Dict]:
     mode = resolve_weibo_fetch_mode()
 
@@ -577,6 +778,28 @@ def fetch_weibo_posts_paginated(max_pages: int = 1) -> List[Dict]:
         merged = _merge_post_lists(parts)
         logger.info("mixed 模式下合并帖子数（去重后）: %s", len(merged))
         return finalize_posts(merged)
+
+    if mode == "super_topic":
+        topics = settings.weibo_super_topics
+        logger.info(
+            "微博抓取模式: super_topic（超话：%s）",
+            "、".join(topics) if topics else "未配置 WEIBO_SUPER_TOPICS",
+        )
+        if not topics:
+            logger.warning("未配置 WEIBO_SUPER_TOPICS，super_topic 模式无内容")
+            return finalize_posts([])
+        return finalize_posts(fetch_super_topic_discovery_posts(topics, max_pages))
+
+    if mode == "keyword":
+        tags = settings.weibo_search_tags
+        logger.info(
+            "微博抓取模式: keyword（关键词：%s）",
+            "、".join(tags) if tags else "未配置 WEIBO_SEARCH_TAGS",
+        )
+        if not tags:
+            logger.warning("未配置 WEIBO_SEARCH_TAGS，keyword 模式无内容")
+            return finalize_posts([])
+        return finalize_posts(fetch_keyword_only_posts(tags, max_pages_per_tag=max_pages))
 
     logger.info("未知的 WEIBO_FETCH_MODE，回退为 own")
     return finalize_posts(fetch_own_timeline_paginated(max_pages))

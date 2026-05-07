@@ -1,6 +1,22 @@
 import { create } from 'zustand';
 import type { Post, ScoreInfo, QueueItem, MaterialsData } from '../api/client';
 
+/* ── Theme Presets ──────────────────────────── */
+export interface ThemePreset {
+  id: string;
+  name: string;
+  light: string;
+  dark: string;
+  hover: string;
+}
+
+export const THEME_PRESETS: ThemePreset[] = [
+  { id: 'blue', name: '默认蓝', light: '#00a1d6', dark: '#4dc9f6', hover: '#0090c0' },
+  { id: 'red', name: '小红书红', light: '#FF2442', dark: '#FF5C6E', hover: '#E62038' },
+  { id: 'green', name: '清新绿', light: '#10B981', dark: '#34D399', hover: '#059669' },
+  { id: 'purple', name: '皇家紫', light: '#7C3AED', dark: '#A78BFA', hover: '#6D28D9' },
+];
+
 /* ── Toast ───────────────────────────────────── */
 export interface ToastItem {
   id: number;
@@ -23,6 +39,8 @@ interface AppState {
   // Theme
   theme: string;
   setTheme: (t: string) => void;
+  accentId: string;
+  setAccentId: (id: string) => void;
 
   // Toast
   toasts: ToastItem[];
@@ -68,15 +86,34 @@ interface AppState {
 }
 
 const THEME_KEY = 'w2w-theme';
+const ACCENT_KEY = 'w2w-accent';
 
 function getInitialTheme(): string {
   if (typeof window === 'undefined') return 'auto';
   return localStorage.getItem(THEME_KEY) || 'auto';
 }
 
+function getInitialAccent(): string {
+  if (typeof window === 'undefined') return 'blue';
+  return localStorage.getItem(ACCENT_KEY) || 'blue';
+}
+
+function applyAccentVars(accentId: string, theme: string) {
+  const preset = THEME_PRESETS.find((p) => p.id === accentId) || THEME_PRESETS[0];
+  const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const accent = isDark ? preset.dark : preset.light;
+  const root = document.documentElement;
+  root.style.setProperty('--accent', accent);
+  root.style.setProperty('--accent-hover', preset.hover);
+  root.style.setProperty('--accent-soft', accent + '14');
+  root.style.setProperty('--accent-softer', accent + '0a');
+  localStorage.setItem(ACCENT_KEY, accentId);
+}
+
 function applyThemeVars(theme: string) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(THEME_KEY, theme);
+  applyAccentVars(getInitialAccent(), theme);
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -85,6 +122,11 @@ export const useStore = create<AppState>((set, get) => ({
   setTheme: (t) => {
     applyThemeVars(t);
     set({ theme: t });
+  },
+  accentId: getInitialAccent(),
+  setAccentId: (id) => {
+    applyAccentVars(id, get().theme);
+    set({ accentId: id });
   },
 
   // Toast

@@ -1,6 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../stores';
-import { discoveryApi, downloadStream, queueApi } from '../api/client';
+import { discoveryApi, downloadStream, queueApi, selectionApi, settingsApi } from '../api/client';
+import Select from '../components/Select';
+import NumberInput from '../components/NumberInput';
+import SearchLoadingOverlay from '../components/SearchLoadingOverlay';
+
+function formatWeiboTime(raw?: string): string {
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  if (diff < 86_400_000 * 30) return `${Math.floor(diff / 86_400_000)} 天前`;
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
 
 export default function Discovery() {
   const store = useStore();
@@ -14,9 +30,24 @@ export default function Discovery() {
   const [mode, setMode] = useState('celebrities');
   const [pages, setPages] = useState(2);
   const [limit, setLimit] = useState(5);
-  const [celebs, setCelebs] = useState('周也,张婧仪,鞠婧祎,赵丽颖,孔雪儿');
-  const [tags, setTags] = useState('美图,日常,时装周,美妆,穿搭');
+  const [celebs, setCelebs] = useState('');
+  const [tags, setTags] = useState('');
+  const [superTopics, setSuperTopics] = useState('');
+
+  useEffect(() => {
+    settingsApi.get().then((s) => {
+      if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
+      if (s.weibo_search_tags) setTags(s.weibo_search_tags);
+      if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
+      if (s.weibo_fetch_mode) setMode(s.weibo_fetch_mode);
+      if (s.weibo_pages) setPages(s.weibo_pages);
+      if (s.post_limit) setLimit(s.post_limit);
+    }).catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [filterWatermark, setFilterWatermark] = useState(false);
+  const [watermarkedImages, setWatermarkedImages] = useState<Set<string>>(new Set());
 
   const hasLocal = discoveryPosts.some((p) => p.local_images && p.local_images.length > 0);
 
@@ -36,12 +67,14 @@ export default function Discovery() {
   };
 
   async function doSearch() {
+    setSearching(true);
     setLoading(true);
     try {
       const res = await discoveryApi.search({
         mode,
         celebrities: celebs.split(',').map((s) => s.trim()).filter(Boolean),
         search_tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+        super_topics: superTopics.split(',').map((s) => s.trim()).filter(Boolean),
         max_pages: pages,
         post_limit: limit,
       });
@@ -52,6 +85,7 @@ export default function Discovery() {
       addToast(`找到 ${res.total_posts} 条帖子，${res.total_images} 张图片`, 'success');
     } catch (err: any) { addToast(err.message, 'error'); }
     setLoading(false);
+    setSearching(false);
   }
 
   async function doDownload(indicesStr: string) {
@@ -64,17 +98,23 @@ export default function Discovery() {
         if (evt.type === 'start') setProgress({ current: 0, total: evt.total!, detail: '准备下载...' });
         else if (evt.type === 'progress') setProgress({ current: evt.current!, total: evt.total!, detail: `${evt.celebrity} · ${evt.scene}` });
         else if (evt.type === 'done') {
-          discoveryApi.get().then((r) => setDiscoveryPosts(r.posts));
+          discoveryApi.get().then((r) => {
+            setDiscoveryPosts(r.posts);
+            const allPaths = r.posts.flatMap((p) => p.local_images || []);
+            if (allPaths.length) {
+              discoveryApi.checkWatermark(allPaths).then((res) => setWatermarkedImages(new Set(res.watermarked)));
+            }
+          });
           addToast(`下载完成！${evt.downloaded} 张成功${evt.dropped ? `，${evt.dropped} 张跳过` : ''}`, 'success');
         }
-      });
+      }, filterWatermark);
     } catch (err: any) { addToast(err.message, 'error'); }
     setProgress(null);
   }
 
   async function doDownloadSelected() {
+    if (!selectedPosts.size) { addToast('请先勾选要下载的帖子', 'error'); return; }
     const indices = [...selectedPosts];
-    if (!indices.length) { addToast('请先勾选要下载的帖子', 'error'); return; }
     await doDownload(indices.join(','));
     clearSelectedPosts();
   }
@@ -102,7 +142,9 @@ export default function Discovery() {
   }
 
   async function enqueueSelected() {
+    if (!selectedImages.length) { addToast('请先选择图片', 'error'); return; }
     try {
+      for (const path of selectedImages) await selectionApi.add(path);
       const res = await queueApi.enqueueSelected();
       clearSelectedImages();
       addToast(`已加入队列：《${res.title}》`, 'success');
@@ -130,28 +172,45 @@ export default function Discovery() {
         <h3 className="text-xs font-medium text-text-muted">搜索参数</h3>
         <div className="grid grid-cols-3 gap-3">
           <label>抓取模式
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="celebrities">明星列表</option>
-              <option value="own">本人时间线</option>
-              <option value="mixed">混合模式</option>
-            </select>
+            <Select value={mode} onChange={setMode} options={[
+              { label: '明星列表', value: 'celebrities' },
+              { label: '本人时间线', value: 'own' },
+              { label: '混合模式', value: 'mixed' },
+              { label: '超话抓取', value: 'super_topic' },
+              { label: '关键词搜索', value: 'keyword' },
+            ]} />
           </label>
           <label>抓取页数
-            <input type="number" value={pages} onChange={(e) => setPages(+e.target.value)} min={1} max={5} />
+            <NumberInput value={pages} onChange={setPages} min={1} max={5} />
           </label>
           <label>处理帖子数
-            <input type="number" value={limit} onChange={(e) => setLimit(+e.target.value)} min={1} max={20} />
+            <NumberInput value={limit} onChange={setLimit} min={1} max={20} />
           </label>
         </div>
-        <label>明星列表（逗号分隔）
-          <input type="text" value={celebs} onChange={(e) => setCelebs(e.target.value)} />
-        </label>
-        <label>搜索标签（逗号分隔）
-          <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} />
+        {(mode === 'celebrities' || mode === 'mixed') && (
+          <label>明星列表（逗号分隔）
+            <input type="text" value={celebs} onChange={(e) => setCelebs(e.target.value)} />
+          </label>
+        )}
+        {mode === 'super_topic' && (
+          <label>超话列表（逗号分隔）
+            <input type="text" value={superTopics} onChange={(e) => setSuperTopics(e.target.value)} placeholder="如：迪丽热巴超话,杨幂超话" />
+          </label>
+        )}
+        {(mode === 'celebrities' || mode === 'mixed' || mode === 'keyword') && (
+          <label>搜索标签（逗号分隔）
+            <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} />
+          </label>
+        )}
+        <label className="flex-row items-center gap-2 w-fit">
+          <input type="checkbox" checked={filterWatermark} onChange={(e) => setFilterWatermark(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
+          <span className="text-[13px] font-normal text-text-secondary">下载时过滤疑似水印图片</span>
         </label>
         <div className="flex gap-2 flex-wrap pt-1">
           <button className="btn btn-primary" onClick={doSearch} disabled={loading}>开始搜索</button>
-          <button className="btn" onClick={doDownloadSelected} disabled={!discoveryPosts.length}>下载选中</button>
+          <button className="btn" onClick={doDownloadSelected} disabled={!selectedPosts.size}>
+            下载选中{selectedPosts.size > 0 ? `（${selectedPosts.size} 条）` : ''}
+          </button>
           <button className="btn" onClick={() => doDownload('')} disabled={!discoveryPosts.length}>全部下载</button>
           <button className="btn" onClick={doScore} disabled={!hasLocal}>AI 评分</button>
           <button className="btn" onClick={clearDiscovery}>清除结果</button>
@@ -177,12 +236,18 @@ export default function Discovery() {
               return (
                 <div key={pi} className={`p-3 rounded-lg transition-colors ${isChecked ? 'bg-accent-soft ring-1 ring-accent' : 'hover:bg-bg-secondary'}`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <input type="checkbox" checked={isChecked} onChange={() => togglePostSelect(pi)} className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                    <input type="checkbox" checked={isChecked} onChange={() => togglePostSelect(pi)} className="w-4 h-4 accent-[var(--accent)] cursor-pointer" />
                     <span className="text-sm font-medium text-text">{p.celebrity}</span>
+                    {p.screen_name && (
+                      p.screen_name === p.celebrity
+                        ? <span className="text-[11px] bg-accent-soft text-accent px-1.5 py-0.5 rounded-md font-medium">本人</span>
+                        : <span className="text-[11px] bg-bg-secondary text-text-muted px-1.5 py-0.5 rounded-md border border-border">@{p.screen_name}</span>
+                    )}
                     <span className="text-[11px] bg-bg-secondary text-text-muted px-2 py-0.5 rounded-md border border-border">{p.scene}</span>
                     <span className="text-[11px] text-text-muted">
                       {remoteImgs.length} 张图{imgs.length ? ` · 已下载 ${imgs.length} 张` : ''}
                     </span>
+                    {p.created_at && <span className="text-[11px] text-text-muted">{formatWeiboTime(p.created_at)}</span>}
                     <button className="btn btn-sm text-text-muted ml-auto" onClick={() => removePost(pi)}>删除</button>
                   </div>
                   {p.text && <div className="text-xs text-text-muted mb-2 line-clamp-2">{p.text.slice(0, 100)}</div>}
@@ -214,15 +279,19 @@ export default function Discovery() {
               const s = item.scoreInfo;
               const scoreColor = s.score >= 70 ? 'text-emerald-600' : s.score >= 40 ? 'text-amber-600' : 'text-red-500';
               const isSel = selectedImages.includes(item.path);
+              const isWm = watermarkedImages.has(item.path);
               return (
                 <div key={item.path} className={`bg-bg border rounded-lg overflow-hidden transition-all hover:shadow-sm ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border'}`}>
-                  <img src={imgSrc(item.path)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => openGalleryLightbox(i)} loading="lazy" />
+                  <div className="relative">
+                    <img src={imgSrc(item.path)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => openGalleryLightbox(i)} loading="lazy" />
+                    {isWm && <span className="absolute top-1.5 right-1.5 text-[10px] font-medium bg-amber-500/90 text-white px-1.5 py-0.5 rounded">疑似水印</span>}
+                  </div>
                   <div className="px-2.5 py-2 flex items-center justify-between">
                     <div>
                       <span className={`text-[11px] font-medium ${scoreColor}`}>{s.score}</span>
                       <div className="text-[10px] text-text-muted truncate max-w-[100px]">{s.reason}</div>
                     </div>
-                    <input type="checkbox" checked={isSel} onChange={() => toggleImageSelect(item.path)} className="w-3.5 h-3.5 accent-blue-600" />
+                    <input type="checkbox" checked={isSel} onChange={() => toggleImageSelect(item.path)} className="w-3.5 h-3.5 accent-[var(--accent)]" />
                   </div>
                 </div>
               );
@@ -241,6 +310,8 @@ export default function Discovery() {
       {discoveryPosts.length > 0 && !hasLocal && (
         <div className="text-center py-4 text-text-muted text-xs">点击「下载图片」将远程图片保存到本地</div>
       )}
+
+      {searching && <SearchLoadingOverlay />}
     </div>
   );
 }

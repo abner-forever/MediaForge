@@ -44,11 +44,13 @@ def _resolve_vision_url() -> str:
             base = "https://open.bigmodel.cn/api/paas/v4"
         else:
             return ""
-    if base.endswith("/chat/completions"):
-        return base
+    for suffix in ("/messages", "/v1/messages", "/chat/completions"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    base = base.rstrip("/")
     if base.endswith("/v1"):
         return f"{base}/chat/completions"
-    return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
 
 
 def _image_to_base64_url(path: str) -> str:

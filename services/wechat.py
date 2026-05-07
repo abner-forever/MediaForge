@@ -13,6 +13,15 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _emit(msg: str, on_log: Optional[Callable[[str], None]] = None) -> None:
+    logger.info(msg)
+    if on_log:
+        try:
+            on_log(msg)
+        except Exception:
+            pass
+
+
 def _human_sleep(base: float = 1.0, jitter: float = 0.8) -> None:
     time.sleep(base + random.random() * jitter)
 
@@ -108,6 +117,135 @@ def _resolve_editor_frame(page):
     return page.main_frame
 
 
+def _log_frames(page) -> None:
+    for i, f in enumerate(page.frames):
+        logger.info("  frame[%d] url=%s", i, f.url[:120] if f.url else "(empty)")
+
+
+def _find_content_editor(page, editor_frame):
+    """在编辑器 frame 和所有嵌套 frame 中查找正文编辑区域。
+    返回 (locator, frame) 或 (None, None)。
+    """
+    content_selectors = [
+        "[contenteditable='true']",
+        "div[role='textbox']",
+        "div[contenteditable]",
+        ".ProseMirror",
+        ".ql-editor",
+        "#js_content",
+        "body[contenteditable]",
+    ]
+    # 先在编辑器 frame 中找
+    for sel in content_selectors:
+        loc = editor_frame.locator(sel).first
+        try:
+            loc.wait_for(state="visible", timeout=3000)
+            return loc, editor_frame
+        except Exception:
+            continue
+    # 遍历所有 frame（包括嵌套 iframe 中的 UEditor）
+    for f in page.frames:
+        if f == editor_frame:
+            continue
+        for sel in content_selectors:
+            loc = f.locator(sel).first
+            try:
+                loc.wait_for(state="visible", timeout=2000)
+                return loc, f
+            except Exception:
+                continue
+    return None, None
+
+
+def _select_cover(page, editor_frame, on_log=None) -> None:
+    """自动选择封面：选择封面 → 从正文选择 → 选图 → 编辑封面弹窗确认。"""
+    # 1. 点击"选择封面"按钮
+    cover_selectors = [
+        "text=选择封面",
+        "a:has-text('选择封面')",
+        "button:has-text('选择封面')",
+        ".js_cover_area",
+    ]
+    clicked = False
+    for sel in cover_selectors:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=3000)
+            loc.click()
+            clicked = True
+            _emit("已点击选择封面", on_log)
+            break
+        except Exception:
+            continue
+    if not clicked:
+        _emit("未找到选择封面按钮，跳过", on_log)
+        return
+    _human_sleep(1.0, 0.5)
+
+    # 2. 点击"从正文选择"
+    from_body_selectors = [
+        "text=从正文选择",
+        "a:has-text('从正文选择')",
+        "button:has-text('从正文选择')",
+        "text=正文选择",
+    ]
+    for sel in from_body_selectors:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=3000)
+            loc.click()
+            _emit("已点击从正文选择", on_log)
+            break
+        except Exception:
+            continue
+    _human_sleep(1.0, 0.5)
+
+    # 3. 在弹窗中选择第一张图片
+    img_selectors = [
+        ".weui-desktop-img-picker__img-item img",
+        ".img_item img",
+        ".pic_list img",
+        ".image_list img",
+        "[class*='cover'] img",
+        "[class*='picker'] img",
+        "img[src*='mmbiz']",
+    ]
+    img_clicked = False
+    for sel in img_selectors:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=3000)
+            loc.click()
+            img_clicked = True
+            _emit("已选择封面图片", on_log)
+            break
+        except Exception:
+            continue
+    if not img_clicked:
+        _emit("未找到可选图片，跳过封面设置", on_log)
+        return
+    _human_sleep(0.8, 0.3)
+
+    # 4. 编辑封面弹窗 → 点击确认/完成
+    confirm_selectors = [
+        "button:has-text('完成')",
+        "button:has-text('确定')",
+        "button:has-text('确认')",
+        ".weui-desktop-btn_primary:has-text('完成')",
+        ".weui-desktop-btn_primary:has-text('确定')",
+    ]
+    for sel in confirm_selectors:
+        try:
+            loc = page.locator(sel).first
+            loc.wait_for(state="visible", timeout=3000)
+            loc.click()
+            _emit("封面设置完成", on_log)
+            return
+        except Exception:
+            continue
+    _emit("未找到封面确认按钮", on_log)
+
+
 def publish_article(
     title: str,
     content: str,
@@ -116,6 +254,7 @@ def publish_article(
     save_draft: bool = False,
     on_scan_needed: Optional[Callable[[], None]] = None,
     on_confirm_needed: Optional[Callable[[str], bool]] = None,
+    on_log: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
     发布文章到微信公众号。
@@ -144,42 +283,26 @@ def publish_article(
             page = context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             _ensure_login(page, on_scan_needed=on_scan_needed)
-            _human_sleep()
 
-            opened = _click_first_available(
-                page,
-                [
-                    "a:has-text('图文消息')",
-                    "a:has-text('内容与互动')",
-                    "a:has-text('发表')",
-                    "a[href*='appmsg']",
-                    "a[href*='masssend']",
-                ],
-            )
-            if opened:
-                _human_sleep()
-                _click_first_available(
-                    page,
-                    [
-                        "button:has-text('新建图文')",
-                        "a:has-text('新建图文')",
-                        "a:has-text('写新图文')",
-                    ],
-                )
-                _human_sleep(1.5, 1.0)
-            if not _resolve_editor_frame(page).url or 'appmsg' not in _resolve_editor_frame(page).url:
-                if _goto_new_article_direct(page):
-                    logger.info("已通过直达链接进入新建图文页")
-                    _human_sleep(1.5, 1.0)
-                else:
-                    raise RuntimeError("未找到图文入口，且无法直达新建图文页")
+            # 直接用 token 跳转新建图文页，避免逐个点击导航链接的等待
+            if not _goto_new_article_direct(page):
+                raise RuntimeError("无法从当前页面提取 token 进入编辑器")
+            _emit("已通过直达链接进入新建图文页", on_log)
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except Exception:
+                pass
+            _human_sleep(1.5, 0.5)
 
             editor_frame = _resolve_editor_frame(page)
+            logger.info("编辑器 frame url=%s", editor_frame.url[:120] if editor_frame.url else "(empty)")
+            _log_frames(page)
 
             # 编辑器打开后可能定位在正文区域，先滚动到顶部找到标题
             page.evaluate("window.scrollTo(0, 0)")
             _human_sleep(0.5, 0.3)
 
+            _emit("正在填写标题...", on_log)
             if not _fill_first_available(
                 editor_frame,
                 [
@@ -203,26 +326,58 @@ def publish_article(
                     page.keyboard.type(title, delay=30)
                 except Exception:
                     raise RuntimeError("未找到标题输入框")
-            if not _fill_first_available(
-                editor_frame,
-                [
-                    "[contenteditable='true']",
-                    "div[role='textbox']",
-                ],
-                content,
-            ):
+            _emit("正在填写正文内容...", on_log)
+            content_loc, content_frame = _find_content_editor(page, editor_frame)
+            if not content_loc:
                 raise RuntimeError("未找到正文输入区域")
+            content_loc.click()
+            _human_sleep(0.3, 0.2)
+            try:
+                content_loc.evaluate("el => { el.focus(); el.innerHTML = arguments[0]; el.dispatchEvent(new Event('input', {bubbles:true})); }", content)
+            except Exception:
+                page.keyboard.type(content, delay=10)
 
-            upload = editor_frame.locator("input[type='file']").first
-            upload.wait_for(state="attached", timeout=6000)
-            for img in images:
+            # 文件上传可能在编辑器 frame 或内容 frame 中
+            upload = None
+            upload_frame = None
+            for frame in [editor_frame, content_frame]:
+                if frame is None:
+                    continue
+                try:
+                    loc = frame.locator("input[type='file']").first
+                    loc.wait_for(state="attached", timeout=3000)
+                    upload = loc
+                    upload_frame = frame
+                    break
+                except Exception:
+                    continue
+            if not upload:
+                for f in page.frames:
+                    try:
+                        loc = f.locator("input[type='file']").first
+                        loc.wait_for(state="attached", timeout=2000)
+                        upload = loc
+                        upload_frame = f
+                        break
+                    except Exception:
+                        continue
+            if not upload:
+                raise RuntimeError("未找到图片上传入口")
+            _emit("正在上传图片...", on_log)
+            for i, img in enumerate(images):
                 if Path(img).exists():
                     upload.set_input_files(img)
-                    _human_sleep(1.2, 1.2)
+                    _emit(f"已上传图片 {i+1}/{len(images)}: {Path(img).name}", on_log)
+                    _human_sleep(2.0, 1.0)
+
+            # 等待图片在正文中渲染完成
+            _human_sleep(2.0, 1.0)
+            _emit("正在选择封面...", on_log)
+            _select_cover(page, editor_frame, on_log)
 
             # 保存草稿或发布
             if save_draft:
-                logger.info("正在保存草稿...")
+                _emit("正在保存草稿...", on_log)
                 if not _click_first_available(
                     editor_frame,
                     [
@@ -236,9 +391,10 @@ def publish_article(
                 _human_sleep(1.5, 0.8)
                 context.storage_state(path=str(WECHAT_STATE_PATH))
                 context.close()
+                _emit("草稿保存成功", on_log)
                 return {"success": True, "message": "已保存为草稿", "title": title}
             else:
-                logger.info("已填充内容，请人工检查后手动点击发布")
+                _emit("已填充内容，正在发布...", on_log)
                 if on_confirm_needed:
                     if not on_confirm_needed(title):
                         context.close()
@@ -259,7 +415,8 @@ def publish_article(
                 context.storage_state(path=str(WECHAT_STATE_PATH))
                 context.close()
 
+        _emit("发布成功", on_log)
         return {"success": True, "message": "发布成功", "title": title}
     except Exception as err:
-        logger.error("发布失败: %s", err)
+        _emit(f"发布失败: {err}", on_log)
         return {"success": False, "message": str(err), "title": title}

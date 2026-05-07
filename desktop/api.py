@@ -26,24 +26,26 @@ from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
 from services.weibo import (
     fetch_celebrity_discovery_posts,
+    fetch_keyword_only_posts,
     fetch_own_timeline_paginated,
+    fetch_super_topic_discovery_posts,
     finalize_posts,
 )
 from utils.env_manager import read_env, update_env
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
 
-app = FastAPI(title="weibo2wechat Desktop")
+app = FastAPI(title="图文工坊")
 
-# 静态文件
+# 静态文件（Vite 构建输出 + logo 等资源）
 STATIC_DIR = Path(__file__).parent / "static"
-DIST_DIR = Path(__file__).parent / "static_dist"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# React 构建产物（如果存在）
-if DIST_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="dist-assets")
+# React 构建产物中的 JS/CSS chunk
+_assets_dir = STATIC_DIR / "assets"
+if _assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
 
 # ── Pydantic 模型 ──────────────────────────────────────
@@ -53,6 +55,7 @@ class SearchRequest(BaseModel):
     mode: str = "celebrities"
     celebrities: List[str] = []
     search_tags: List[str] = ["美图", "日常"]
+    super_topics: List[str] = []
     max_pages: int = 2
     post_limit: int = 5
 
@@ -90,15 +93,18 @@ class PublishRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    # 优先使用 React 构建产物
-    dist_index = DIST_DIR / "index.html"
-    if dist_index.exists():
-        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
     html_path = STATIC_DIR / "index.html"
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
 # ── Settings API ──────────────────────────────────────
+
+
+def _mask_key(key: str) -> str:
+    """Mask API key: show first 4 and last 4 chars, middle replaced with dots."""
+    if not key or len(key) <= 8:
+        return key
+    return f"{key[:4]}{'*' * (len(key) - 8)}{key[-4:]}"
 
 
 @app.get("/api/settings")
@@ -115,12 +121,21 @@ async def get_settings():
             or env.get("DEEPSEEK_API_KEY")
             or env.get("OPENAI_API_KEY")
         ),
+        "ai_api_key_masked": _mask_key(
+            env.get("AI_API_KEY")
+            or env.get("MIMO_API_KEY")
+            or env.get("GLM_API_KEY")
+            or env.get("DEEPSEEK_API_KEY")
+            or env.get("OPENAI_API_KEY")
+            or ""
+        ),
         "weibo_cookie_set": bool(env.get("WEIBO_COOKIE")),
         "weibo_uid": env.get("WEIBO_UID", ""),
         "weibo_fetch_mode": env.get("WEIBO_FETCH_MODE", "celebrities"),
         "weibo_celebrities": env.get("WEIBO_CELEBRITIES", ""),
         "weibo_search_tags": env.get("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"),
         "weibo_scene_extra_tags": env.get("WEIBO_SCENE_EXTRA_TAGS", ""),
+        "weibo_super_topics": env.get("WEIBO_SUPER_TOPICS", ""),
         "post_limit": int(env.get("POST_LIMIT", "3")),
         "weibo_pages": int(env.get("WEIBO_PAGES", "2")),
         "publish_interval": int(env.get("PUBLISH_INTERVAL_SECONDS", "10")),
@@ -146,6 +161,20 @@ async def save_settings(data: Dict[str, Any]):
             updates[k] = str(v)
     update_env(updates)
     return {"success": True, "message": "配置已保存"}
+
+
+@app.get("/api/settings/api-key")
+async def get_api_key():
+    env = read_env()
+    key = (
+        env.get("AI_API_KEY")
+        or env.get("MIMO_API_KEY")
+        or env.get("GLM_API_KEY")
+        or env.get("DEEPSEEK_API_KEY")
+        or env.get("OPENAI_API_KEY")
+        or ""
+    )
+    return {"key": key}
 
 
 # ── Dashboard API ──────────────────────────────────────
@@ -216,6 +245,7 @@ async def discovery_search(req: SearchRequest):
         # 临时更新配置
         settings.weibo_celebrities = tuple(req.celebrities)
         settings.weibo_search_tags = tuple(req.search_tags)
+        settings.weibo_super_topics = tuple(req.super_topics)
 
         if req.mode == "own":
             posts = finalize_posts(fetch_own_timeline_paginated(max_pages=req.max_pages))
@@ -223,6 +253,18 @@ async def discovery_search(req: SearchRequest):
             if not req.celebrities:
                 raise HTTPException(400, "请至少指定一位明星")
             posts = finalize_posts(fetch_celebrity_discovery_posts(max_pages_per_uid=req.max_pages))
+        elif req.mode == "super_topic":
+            if not req.super_topics:
+                raise HTTPException(400, "请至少指定一个超话")
+            posts = finalize_posts(fetch_super_topic_discovery_posts(
+                tuple(req.super_topics), max_pages=req.max_pages
+            ))
+        elif req.mode == "keyword":
+            if not req.search_tags:
+                raise HTTPException(400, "请至少指定一个搜索标签")
+            posts = finalize_posts(fetch_keyword_only_posts(
+                tuple(req.search_tags), max_pages_per_tag=req.max_pages
+            ))
         else:
             parts = []
             if req.celebrities:
@@ -441,11 +483,13 @@ async def publish_from_queue(index: int, req: PublishRequest):
     if not title:
         raise HTTPException(400, "标题为空")
 
-    content = build_html(desc, images)
+    content = desc
     from services.wechat import publish_article
-    from utils.logger import get_logger
 
-    _pub_logger = get_logger("desktop.publish")
+    app_state.clear_publish_logs()
+
+    def _on_log(msg: str) -> None:
+        app_state.add_publish_log(msg)
 
     # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
     import asyncio
@@ -456,13 +500,35 @@ async def publish_from_queue(index: int, req: PublishRequest):
         images=images,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
-        on_scan_needed=lambda: _pub_logger.info("请在弹出的浏览器窗口中扫码登录"),
-        on_confirm_needed=lambda t: True,  # 桌面模式自动确认，用户可在浏览器中观察
+        on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
+        on_confirm_needed=lambda t: True,
+        on_log=_on_log,
     )
+    app_state.finish_publish()
     # 保存草稿不移除队列项，发布成功才移除
     if result.get("success") and not req.save_draft:
         app_state.remove_from_queue(index)
     return result
+
+
+@app.get("/api/publish-logs")
+async def publish_log_stream():
+    """SSE 端点，实时推送发布日志到前端。"""
+    import asyncio
+
+    async def event_generator():
+        sent = 0
+        while True:
+            logs = app_state.get_publish_logs()
+            for msg in logs[sent:]:
+                yield f"data: {json.dumps({'msg': msg})}\n\n"
+                sent += 1
+            if not app_state.publish_active and sent >= len(logs):
+                yield f"data: {json.dumps({'done': True})}\n\n"
+                break
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/api/queue/enqueue-selected")
@@ -593,7 +659,7 @@ async def delete_materials(req: MaterialsDeleteRequest):
 
 
 @app.get("/api/discovery/download-stream")
-async def download_stream(indices: str = Query("")):
+async def download_stream(indices: str = Query(""), filter_watermark: bool = Query(True)):
     """SSE 流式下载图片，逐图推送进度。"""
     import json as _json
     from services.downloader import _download_one
@@ -643,7 +709,7 @@ async def download_stream(indices: str = Query("")):
                     if len(ext_candidate) <= 6 and ext_candidate.startswith("."):
                         ext = ext_candidate
                 filename = base_dir / f"{pref}_{idx}_{hash_text(url)[:8]}{ext}"
-                result = _download_one(url, filename, overwrite=False)
+                result = _download_one(url, filename, overwrite=False, filter_watermark=filter_watermark)
                 if result:
                     total_downloaded += 1
                 else:
@@ -659,14 +725,33 @@ async def download_stream(indices: str = Query("")):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.post("/api/discovery/check-watermark")
+async def check_watermark(paths: List[str]):
+    """检查图片是否有水印（不删除），返回有水印的路径列表。"""
+    from services.watermark import watermark_metrics
+    from config import settings as cfg
+
+    watermarked = []
+    for p in paths:
+        full = Path(p)
+        if not full.is_absolute():
+            full = DOWNLOAD_DIR / p
+        if not full.exists():
+            continue
+        try:
+            corner_ratio, bottom_ratio = watermark_metrics(str(full))
+            if corner_ratio >= cfg.watermark_corner_ratio or bottom_ratio >= cfg.watermark_bottom_ratio:
+                watermarked.append(p)
+        except Exception:
+            pass
+    return {"watermarked": watermarked}
+
+
 # ── SPA Catch-All（放在所有路由最后）─────────────────
 
 
 @app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
 async def spa_fallback(full_path: str):
     """React SPA 路由回退：所有非 API 路径返回 index.html。"""
-    dist_index = DIST_DIR / "index.html"
-    if dist_index.exists():
-        return HTMLResponse(dist_index.read_text(encoding="utf-8"))
     html_path = STATIC_DIR / "index.html"
     return HTMLResponse(html_path.read_text(encoding="utf-8"))

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../stores';
 import { materialsApi, queueApi } from '../api/client';
+import ContextMenu, { type MenuItem } from '../components/ContextMenu';
 
 export default function Materials() {
   const {
@@ -92,8 +93,36 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
   imgSrc: (p: string) => string;
   openMatLightbox: (p: string) => void;
 }) {
-  const { matSelected, matToggleSelect } = useStore();
+  const { matSelected, matToggleSelect, addToast } = useStore();
   const [collapsed, setCollapsed] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; img: string; scene: string } | null>(null);
+
+  function handleContextMenu(e: React.MouseEvent, img: string, scene: string) {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY, img, scene });
+  }
+
+  function getCtxMenuItems(): MenuItem[] {
+    if (!ctxMenu) return [];
+    const fileName = ctxMenu.img.split('/').pop() || '';
+    return [
+      { label: '查看大图', onClick: () => openMatLightbox(ctxMenu.img),
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg> },
+      { label: '加入发布队列', onClick: async () => {
+          try { await queueApi.add({ title: '', desc: '', images: [ctxMenu.img], cover: ctxMenu.img }); addToast('已加入发布队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); }
+        },
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4"><path d="M12 5v14M5 12h14"/></svg> },
+      { label: `${fileName}`, disabled: true,
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4 opacity-50"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg> },
+      { label: `场景：${ctxMenu.scene}`, disabled: true,
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4 opacity-50"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> },
+      { label: '删除此图片', danger: true, onClick: async () => {
+          if (!confirm(`确认删除 ${fileName}？`)) return;
+          try { await materialsApi.delete([ctxMenu.img]); addToast('已删除', 'success'); useStore.getState().setMaterialsData(await materialsApi.list()); } catch (err: any) { addToast(err.message, 'error'); }
+        },
+        icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> },
+    ];
+  }
 
   return (
     <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
@@ -116,11 +145,11 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
                     const isSel = matSelected.has(img);
                     const fileName = img.split('/').pop() || '';
                     return (
-                      <div key={img} className={`bg-bg border rounded-lg overflow-hidden transition-all ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border hover:shadow-sm'}`}>
+                      <div key={img} onContextMenu={(e) => handleContextMenu(e, img, scene.scene)} className={`bg-bg border rounded-lg overflow-hidden transition-all ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border hover:shadow-sm'}`}>
                         <img src={imgSrc(img)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => openMatLightbox(img)} loading="lazy" />
                         <div className="px-2.5 py-2 flex items-center justify-between">
                           <div className="text-[10px] text-text-muted truncate max-w-[100px]" title={fileName}>{fileName.slice(0, 18)}</div>
-                          <input type="checkbox" checked={isSel} onChange={() => matToggleSelect(img)} className="w-3.5 h-3.5 accent-blue-600" />
+                          <input type="checkbox" checked={isSel} onChange={() => matToggleSelect(img)} className="w-3.5 h-3.5 accent-[var(--accent)]" />
                         </div>
                       </div>
                     );
@@ -130,6 +159,14 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
             </div>
           ))}
         </div>
+      )}
+
+      {ctxMenu && (
+        <ContextMenu
+          items={getCtxMenuItems()}
+          position={{ x: ctxMenu.x, y: ctxMenu.y }}
+          onClose={() => setCtxMenu(null)}
+        />
       )}
     </div>
   );

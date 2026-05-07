@@ -48,6 +48,8 @@ export interface Post {
   images: string[];
   local_images?: string[];
   dropped_count?: number;
+  screen_name?: string;
+  created_at?: string;
 }
 
 export interface ScoreInfo {
@@ -90,12 +92,14 @@ export interface SettingsData {
   ai_model: string;
   ai_base_url: string;
   ai_api_key_set: boolean;
+  ai_api_key_masked: string;
   weibo_cookie_set: boolean;
   weibo_uid: string;
   weibo_fetch_mode: string;
   weibo_celebrities: string;
   weibo_search_tags: string;
   weibo_scene_extra_tags: string;
+  weibo_super_topics: string;
   post_limit: number;
   weibo_pages: number;
   publish_interval: number;
@@ -133,6 +137,7 @@ export const dashboardApi = {
 export const settingsApi = {
   get: () => get<SettingsData>('/api/settings'),
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
+  getKey: () => get<{ key: string }>('/api/settings/api-key'),
 };
 
 /* ── Discovery API ────────────────────────────── */
@@ -143,6 +148,7 @@ export const discoveryApi = {
     mode: string;
     celebrities: string[];
     search_tags: string[];
+    super_topics: string[];
     max_pages: number;
     post_limit: number;
   }) => post<DiscoveryResult>('/api/discovery/search', params),
@@ -153,6 +159,8 @@ export const discoveryApi = {
     post<{ success: boolean; scores: Record<string, ScoreInfo>; vision_count: number; heuristic_count: number }>(
       '/api/discovery/score', { use_vision }
     ),
+  checkWatermark: (paths: string[]) =>
+    post<{ watermarked: string[] }>('/api/discovery/check-watermark', paths),
 };
 
 /* ── Discovery SSE Download ───────────────────── */
@@ -160,8 +168,10 @@ export const discoveryApi = {
 export async function downloadStream(
   indices: string,
   onEvent: (evt: DownloadStreamEvent) => void,
+  filterWatermark?: boolean,
 ): Promise<void> {
-  const url = `/api/discovery/download-stream?indices=${encodeURIComponent(indices)}`;
+  let url = `/api/discovery/download-stream?indices=${encodeURIComponent(indices)}`;
+  if (filterWatermark !== undefined) url += `&filter_watermark=${filterWatermark}`;
   const res = await fetch(url);
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
@@ -197,6 +207,35 @@ export const materialsApi = {
   list: () => get<MaterialsData>('/api/materials'),
   delete: (paths: string[]) => del<{ success: boolean; deleted: number }>('/api/materials', { paths }),
 };
+
+/* ── Publish Log SSE ──────────────────────────── */
+
+export async function publishLogStream(
+  onLog: (msg: string) => void,
+  onDone: () => void,
+): Promise<void> {
+  const res = await fetch('/api/publish-logs');
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const data = JSON.parse(line.slice(6));
+        if (data.done) { onDone(); return; }
+        if (data.msg) onLog(data.msg);
+      } catch { /* ignore */ }
+    }
+  }
+  onDone();
+}
 
 /* ── Queue API ────────────────────────────────── */
 

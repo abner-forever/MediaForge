@@ -28,9 +28,11 @@ PROMPT_TEMPLATE = """你是公众号运营专家，请生成：
 
 def _normalize_model_name(model: str) -> str:
     m = (model or "").strip()
-    if settings.ai_provider == "deepseek" and m == "deepseek-v4":
-        # deepseek 返回已声明仅支持 -pro / -flash
+    # deepseek 旧名称兼容
+    if m == "deepseek-chat":
         return "deepseek-v4-flash"
+    if m == "deepseek-reasoner":
+        return "deepseek-v4-pro"
     return m or "mimo-chat"
 
 
@@ -46,11 +48,14 @@ def _resolve_chat_url_candidates() -> List[str]:
             return []
         else:
             base = "https://api.openai.com/v1"
-    if base.endswith("/chat/completions"):
-        return [base]
+    # 清理常见的非 OpenAI 兼容后缀
+    for suffix in ("/messages", "/v1/messages", "/chat/completions"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    base = base.rstrip("/")
     if base.endswith("/v1"):
-        return [f"{base}/chat/completions", base.replace("/v1", "") + "/chat/completions"]
-    return [f"{base}/chat/completions", f"{base}/v1/chat/completions"]
+        return [f"{base}/chat/completions"]
+    return [f"{base}/v1/chat/completions"]
 
 
 def generate_content(text: str) -> Tuple[str, str]:

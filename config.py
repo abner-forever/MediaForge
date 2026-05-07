@@ -13,8 +13,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DOWNLOAD_DIR = DATA_DIR / "images"
 POSTS_CACHE_PATH = DATA_DIR / "posts.json"
+QUEUE_CACHE_PATH = DATA_DIR / "queue.json"
 WECHAT_STATE_PATH = DATA_DIR / "state" / "wechat.json"
 WEIBO_UID_CACHE_PATH = DATA_DIR / "state" / "weibo_uid_map.json"
+WEIBO_TOPIC_CACHE_PATH = DATA_DIR / "state" / "weibo_topic_map.json"
 LOG_DIR = DATA_DIR / "logs"
 
 
@@ -27,7 +29,7 @@ def _csv_tuple(value: str) -> Tuple[str, ...]:
 
 def _effective_weibo_fetch_mode(raw_mode: str, celebrities: Tuple[str, ...]) -> str:
     mode = (raw_mode or "").strip().lower()
-    if mode in ("own", "celebrities", "mixed"):
+    if mode in ("own", "celebrities", "mixed", "super_topic", "keyword"):
         return mode
     return "celebrities" if celebrities else "own"
 
@@ -43,6 +45,7 @@ class Settings:
     )
     weibo_keyword_pages: int = int(os.getenv("WEIBO_KEYWORD_PAGES", "1"))
     weibo_scene_extra_tags: Tuple[str, ...] = _csv_tuple(os.getenv("WEIBO_SCENE_EXTRA_TAGS", ""))
+    weibo_super_topics: Tuple[str, ...] = _csv_tuple(os.getenv("WEIBO_SUPER_TOPICS", ""))
     ai_provider: str = os.getenv("AI_PROVIDER", "mimo").lower()
     ai_model: str = os.getenv("AI_MODEL", "mimo-chat")
     ai_api_key: str = (
@@ -74,8 +77,7 @@ settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
 def reload_settings() -> None:
     """重新从 .env 文件加载配置到全局 settings 单例。"""
     global settings, CELEBRITY_NAMES
-    from dotenv import reload_dotenv
-    reload_dotenv(override=True)
+    load_dotenv(override=True)
     CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))
     settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
 
@@ -91,3 +93,5 @@ def ensure_dirs() -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     if not POSTS_CACHE_PATH.exists():
         POSTS_CACHE_PATH.write_text("[]", encoding="utf-8")
+    if not QUEUE_CACHE_PATH.exists():
+        QUEUE_CACHE_PATH.write_text("[]", encoding="utf-8")

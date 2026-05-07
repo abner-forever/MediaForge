@@ -159,7 +159,7 @@ def main() -> None:
                     continue
 
             title, desc = generate_content(post.get("text", ""))
-            content = build_html(desc, images)
+            content = desc
             cover = select_cover(images)
             logger.info(
                 "准备发布: title=%s, cover=%s, 艺人=%s 场景=%s 来源=%s",

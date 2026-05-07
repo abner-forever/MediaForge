@@ -1,5 +1,5 @@
 data
-desktop/static_dist/
+desktop/static/
 desktop/web/node_modules/
 .env
 .claude/settings.local.json

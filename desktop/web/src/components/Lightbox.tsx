@@ -21,57 +21,65 @@ export default function Lightbox() {
 
   if (!lightbox) return null;
 
-  const { images, index, originals } = lightbox;
+  const { images, index } = lightbox;
   const url = images[index];
-  const origUrl = originals?.[index] || url;
 
   return (
-    <div className="fixed inset-0 z-[9000] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={closeLightbox} />
+    <div className="fixed inset-0 z-[9000] flex flex-col items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={closeLightbox} />
 
-      <div className="relative z-10 flex flex-col items-center max-w-[90vw] max-h-[90vh]">
-        <button
-          onClick={closeLightbox}
-          className="absolute -top-10 right-0 text-white/60 text-2xl hover:text-white z-20 transition-colors"
-        >
-          ✕
-        </button>
+      {/* Close button */}
+      <button
+        onClick={closeLightbox}
+        className="absolute top-4 right-4 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+      >
+        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
 
+      {/* Image container */}
+      <div className="relative z-10 flex items-center justify-center w-full h-full px-16 py-12">
+        {/* Prev */}
         {images.length > 1 && (
           <button
             onClick={() => lightboxNav(-1)}
-            className="absolute left-[-48px] top-1/2 -translate-y-1/2 text-white/40 text-3xl hover:text-white z-20 select-none transition-colors"
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
           >
-            ‹
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </button>
         )}
 
-        <div onClick={(e) => e.stopPropagation()}>
-          <img src={url} alt="" className="max-h-[80vh] max-w-[85vw] object-contain rounded-lg" />
-        </div>
+        {/* Image */}
+        <img
+          src={url}
+          alt=""
+          className="max-h-[82vh] max-w-[82vw] object-contain rounded-xl shadow-2xl select-none"
+          draggable={false}
+        />
 
+        {/* Next */}
         {images.length > 1 && (
           <button
             onClick={() => lightboxNav(1)}
-            className="absolute right-[-48px] top-1/2 -translate-y-1/2 text-white/40 text-3xl hover:text-white z-20 select-none transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
           >
-            ›
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
           </button>
         )}
-
-        <div className="flex items-center gap-4 mt-3">
-          <span className="text-white/50 text-sm tabular-nums">{index + 1} / {images.length}</span>
-          <a
-            href={origUrl}
-            target="_blank"
-            download
-            className="btn btn-sm text-white/70 border-white/20 hover:text-white hover:border-white/40"
-            onClick={(e) => e.stopPropagation()}
-          >
-            原图下载
-          </a>
-        </div>
       </div>
+
+      {/* Bottom bar */}
+      {images.length > 1 && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-center py-4 bg-gradient-to-t from-black/60 to-transparent">
+          <span className="text-white/50 text-[13px] tabular-nums">{index + 1} / {images.length}</span>
+        </div>
+      )}
     </div>
   );
 }

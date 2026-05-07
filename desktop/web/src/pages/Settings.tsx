@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '../stores';
+import { useStore, THEME_PRESETS } from '../stores';
 import { settingsApi, type SettingsData } from '../api/client';
+import Select from '../components/Select';
+import NumberInput from '../components/NumberInput';
+import EyeIcon from '../components/EyeIcon';
 
 const TABS = [
-  { id: 'llm', label: '大模型' },
-  { id: 'weibo', label: '微博' },
-  { id: 'run', label: '运行参数' },
-  { id: 'watermark', label: '水印过滤' },
+  { id: 'general', label: '常规设置' },
+  { id: 'system', label: '系统设置' },
 ];
 
 export default function Settings() {
   const { addToast } = useStore();
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('llm');
+  const [activeTab, setActiveTab] = useState('general');
 
   async function load() {
     try {
@@ -64,75 +65,89 @@ export default function Settings() {
         ))}
       </div>
 
-      {activeTab === 'llm' && <LLMTab data={data} save={save} />}
-      {activeTab === 'weibo' && <WeiboTab data={data} save={save} />}
-      {activeTab === 'run' && <RunTab data={data} save={save} />}
-      {activeTab === 'watermark' && <WatermarkTab data={data} save={save} />}
+      {activeTab === 'general' && <GeneralTab data={data} save={save} />}
+      {activeTab === 'system' && <SystemTab data={data} save={save} />}
     </div>
   );
 }
 
-function LLMTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
-  const [provider, setProvider] = useState(data.ai_provider);
-  const [model, setModel] = useState(data.ai_model);
-  const [baseUrl, setBaseUrl] = useState(data.ai_base_url);
-  const [apiKey, setApiKey] = useState('');
+/* ── 常规设置：主题管理 + 运行参数 ──────────────── */
+
+function GeneralTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  return (
+    <div className="space-y-4">
+      <ThemeSection />
+      <RunSection data={data} save={save} />
+    </div>
+  );
+}
+
+function ThemeSection() {
+  const { theme, setTheme, accentId, setAccentId } = useStore();
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <label>AI Provider
-          <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-            {['mimo', 'openai', 'deepseek', 'glm'].map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </label>
-        <label>Model<input type="text" value={model} onChange={(e) => setModel(e.target.value)} /></label>
-        <label>Base URL<input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" /></label>
-        <label>API Key<input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={data.ai_api_key_set ? '已设置（留空保持不变）' : '请输入 API Key'} /></label>
+    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-4">
+      <h3 className="text-[13px] font-semibold text-text">主题管理</h3>
+
+      {/* 明暗模式 */}
+      <div>
+        <p className="text-[12px] text-text-muted mb-2">显示模式</p>
+        <div className="flex gap-2">
+          {[
+            { value: 'light', icon: '☀️', label: '浅色' },
+            { value: 'dark', icon: '🌙', label: '深色' },
+            { value: 'auto', icon: '💻', label: '跟随系统' },
+          ].map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTheme(t.value)}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[13px] font-medium border transition-all ${
+                theme === t.value
+                  ? 'border-accent bg-accent-soft text-accent'
+                  : 'border-border bg-bg-secondary text-text-muted hover:border-accent/40'
+              }`}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <button className="btn btn-primary" onClick={() => {
-        const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl };
-        if (apiKey) { const m: Record<string, string> = { mimo: 'MIMO_API_KEY', openai: 'OPENAI_API_KEY', deepseek: 'DEEPSEEK_API_KEY', glm: 'GLM_API_KEY' }; u[m[provider] || 'AI_API_KEY'] = apiKey; }
-        save(u);
-      }}>保存模型配置</button>
+
+      {/* 主题配色 */}
+      <div>
+        <p className="text-[12px] text-text-muted mb-2">主题配色</p>
+        <div className="grid grid-cols-4 gap-2">
+          {THEME_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => setAccentId(preset.id)}
+              className={`flex flex-col items-center gap-1.5 py-3 rounded-lg border transition-all ${
+                accentId === preset.id
+                  ? 'border-accent bg-accent-soft'
+                  : 'border-border bg-bg-secondary hover:border-accent/40'
+              }`}
+            >
+              <div className="flex gap-1">
+                <span
+                  className="w-4 h-4 rounded-full"
+                  style={{ background: preset.light }}
+                />
+                <span
+                  className="w-4 h-4 rounded-full"
+                  style={{ background: preset.dark }}
+                />
+              </div>
+              <span className="text-[11px] text-text-secondary">{preset.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function WeiboTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
-  const [cookie, setCookie] = useState('');
-  const [uid, setUid] = useState(data.weibo_uid);
-  const [fetchMode, setFetchMode] = useState(data.weibo_fetch_mode);
-  const [celebs, setCelebs] = useState(data.weibo_celebrities);
-  const [tags, setTags] = useState(data.weibo_search_tags);
-  const [sceneTags, setSceneTags] = useState(data.weibo_scene_extra_tags);
-
-  return (
-    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <label className="col-span-2">微博 Cookie
-          <textarea value={cookie} onChange={(e) => setCookie(e.target.value)} placeholder={data.weibo_cookie_set ? '已设置（留空保持不变）' : ''} rows={3} />
-        </label>
-        <label>微博 UID<input type="text" value={uid} onChange={(e) => setUid(e.target.value)} placeholder="留空自动推断" /></label>
-        <label>抓取模式
-          <select value={fetchMode} onChange={(e) => setFetchMode(e.target.value)}>
-            {['own', 'celebrities', 'mixed'].map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </label>
-        <label>明星列表（逗号分隔）<input type="text" value={celebs} onChange={(e) => setCelebs(e.target.value)} /></label>
-        <label>搜索标签（逗号分隔）<input type="text" value={tags} onChange={(e) => setTags(e.target.value)} /></label>
-        <label>场景补充标签<input type="text" value={sceneTags} onChange={(e) => setSceneTags(e.target.value)} /></label>
-      </div>
-      <button className="btn btn-primary" onClick={() => {
-        const u: Record<string, string> = { WEIBO_UID: uid, WEIBO_FETCH_MODE: fetchMode, WEIBO_CELEBRITIES: celebs, WEIBO_SEARCH_TAGS: tags, WEIBO_SCENE_EXTRA_TAGS: sceneTags };
-        if (cookie && cookie !== '已设置（留空保持不变）') u.WEIBO_COOKIE = cookie;
-        save(u);
-      }}>保存微博配置</button>
-    </div>
-  );
-}
-
-function RunTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+function RunSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
   const [postLimit, setPostLimit] = useState(data.post_limit);
   const [weiboPages, setWeiboPages] = useState(data.weibo_pages);
   const [interval, setInterval_] = useState(data.publish_interval);
@@ -142,14 +157,15 @@ function RunTab({ data, save }: { data: SettingsData; save: (u: Record<string, s
 
   return (
     <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <h3 className="text-[13px] font-semibold text-text">运行参数</h3>
       <div className="grid grid-cols-3 gap-3">
-        <label>每次处理条数<input type="number" value={postLimit} onChange={(e) => setPostLimit(+e.target.value)} min={1} max={3} /></label>
-        <label>微博抓取页数<input type="number" value={weiboPages} onChange={(e) => setWeiboPages(+e.target.value)} min={1} max={10} /></label>
-        <label>发布间隔（秒）<input type="number" value={interval} onChange={(e) => setInterval_(+e.target.value)} min={5} max={60} /></label>
-        <label>请求超时（秒）<input type="number" value={timeout} onChange={(e) => setTimeout_(+e.target.value)} min={5} max={60} /></label>
-        <label>重试次数<input type="number" value={retry} onChange={(e) => setRetry(+e.target.value)} min={1} max={5} /></label>
+        <label>每次处理条数<NumberInput value={postLimit} onChange={setPostLimit} min={1} max={3} /></label>
+        <label>微博抓取页数<NumberInput value={weiboPages} onChange={setWeiboPages} min={1} max={10} /></label>
+        <label>发布间隔（秒）<NumberInput value={interval} onChange={setInterval_} min={5} max={60} /></label>
+        <label>请求超时（秒）<NumberInput value={timeout} onChange={setTimeout_} min={5} max={60} /></label>
+        <label>重试次数<NumberInput value={retry} onChange={setRetry} min={1} max={5} /></label>
         <label className="flex-row items-center gap-2">
-          <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+          <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
           <span className="text-[13px] font-normal text-text-secondary">发布前需确认</span>
         </label>
       </div>
@@ -161,7 +177,171 @@ function RunTab({ data, save }: { data: SettingsData; save: (u: Record<string, s
   );
 }
 
-function WatermarkTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+/* ── 系统设置：大模型 + 微博 + 水印 ──────────────── */
+
+function SystemTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  return (
+    <div className="space-y-4">
+      <LLMSection data={data} save={save} />
+      <WeiboSection data={data} save={save} />
+      <WatermarkSection data={data} save={save} />
+    </div>
+  );
+}
+
+const PROVIDERS: Record<string, { name: string; models: string[]; baseUrl: string; keyName: string; urlHint: string }> = {
+  mimo: {
+    name: '小米 MiMo',
+    models: ['mimo-chat', 'mimo-v2.5-pro'],
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    keyName: 'MIMO_API_KEY',
+    urlHint: '小米 Mimo OpenAI 兼容地址，格式：https://api.xiaomimimo.com/v1',
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    baseUrl: 'https://api.deepseek.com/v1',
+    keyName: 'DEEPSEEK_API_KEY',
+    urlHint: 'DeepSeek API 地址，格式：https://api.deepseek.com/v1',
+  },
+  openai: {
+    name: 'OpenAI',
+    models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
+    baseUrl: 'https://api.openai.com/v1',
+    keyName: 'OPENAI_API_KEY',
+    urlHint: 'OpenAI API 地址，格式：https://api.openai.com/v1',
+  },
+  glm: {
+    name: '智谱 GLM',
+    models: ['GLM-5.1', 'GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.7-Flash', 'GLM-4.6', 'GLM-4.5-Air', 'GLM-4-Long'],
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    keyName: 'GLM_API_KEY',
+    urlHint: '智谱 API 地址，格式：https://open.bigmodel.cn/api/paas/v4',
+  },
+};
+
+function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  const [provider, setProvider] = useState(data.ai_provider);
+  const [model, setModel] = useState(data.ai_model);
+  const [baseUrl, setBaseUrl] = useState(data.ai_base_url);
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [fullKey, setFullKey] = useState('');
+
+  const current = PROVIDERS[provider];
+
+  function handleProviderChange(p: string) {
+    setProvider(p);
+    const conf = PROVIDERS[p];
+    if (conf) {
+      setBaseUrl(conf.baseUrl);
+      setModel(conf.models[0]);
+    }
+  }
+
+  async function toggleKeyVisibility() {
+    if (showKey) {
+      setShowKey(false);
+      return;
+    }
+    if (!fullKey && data.ai_api_key_set) {
+      try {
+        const res = await settingsApi.getKey();
+        setFullKey(res.key);
+      } catch { /* ignore */ }
+    }
+    setShowKey(true);
+  }
+
+  const displayKey = showKey ? (fullKey || apiKey) : (apiKey || (data.ai_api_key_set ? data.ai_api_key_masked : ''));
+
+  return (
+    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <h3 className="text-[13px] font-semibold text-text">大模型配置</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <label>AI 服务商
+          <Select value={provider} onChange={handleProviderChange} options={Object.entries(PROVIDERS).map(([k, v]) => ({ label: v.name, value: k }))} />
+        </label>
+        <label>模型
+          <Select value={model} onChange={setModel} options={(current?.models || []).map((m) => ({ label: m, value: m }))} />
+        </label>
+        <label className="col-span-2">Base URL
+          <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={current?.urlHint || 'https://api.example.com/v1'} />
+        </label>
+        <label className="col-span-2">API Key
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={displayKey}
+              onChange={(e) => { setApiKey(e.target.value); setFullKey(''); }}
+              placeholder={data.ai_api_key_set ? '已设置（留空保持不变）' : `请输入 ${current?.keyName || 'API Key'}`}
+              className="pr-10"
+            />
+            {data.ai_api_key_set && (
+              <button
+                type="button"
+                onClick={toggleKeyVisibility}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-colors"
+              >
+                <EyeIcon visible={showKey} />
+              </button>
+            )}
+          </div>
+        </label>
+      </div>
+      <p className="text-[11px] text-text-muted leading-relaxed">
+        Base URL 请填写 OpenAI 兼容的地址，以 <code className="px-1 py-0.5 bg-bg-secondary rounded text-text-muted">/v1</code> 结尾（如 {current?.baseUrl}）。系统会自动拼接 <code className="px-1 py-0.5 bg-bg-secondary rounded text-text-muted">/chat/completions</code> 路径。
+      </p>
+      <button className="btn btn-primary" onClick={() => {
+        const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl };
+        if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey;
+        save(u);
+      }}>保存模型配置</button>
+    </div>
+  );
+}
+
+function WeiboSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  const [cookie, setCookie] = useState('');
+  const [uid, setUid] = useState(data.weibo_uid);
+  const [fetchMode, setFetchMode] = useState(data.weibo_fetch_mode);
+  const [celebs, setCelebs] = useState(data.weibo_celebrities);
+  const [tags, setTags] = useState(data.weibo_search_tags);
+  const [sceneTags, setSceneTags] = useState(data.weibo_scene_extra_tags);
+  const [superTopics, setSuperTopics] = useState(data.weibo_super_topics);
+
+  return (
+    <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <h3 className="text-[13px] font-semibold text-text">微博配置</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="col-span-2">微博 Cookie
+          <textarea value={cookie} onChange={(e) => setCookie(e.target.value)} placeholder={data.weibo_cookie_set ? '已设置（留空保持不变）' : ''} rows={3} />
+        </label>
+        <label>微博 UID<input type="text" value={uid} onChange={(e) => setUid(e.target.value)} placeholder="留空自动推断" /></label>
+        <label>抓取模式
+          <Select value={fetchMode} onChange={setFetchMode} options={[
+            { label: '本人时间线', value: 'own' },
+            { label: '明星列表', value: 'celebrities' },
+            { label: '混合模式', value: 'mixed' },
+            { label: '超话抓取', value: 'super_topic' },
+            { label: '关键词搜索', value: 'keyword' },
+          ]} />
+        </label>
+        <label>明星列表（逗号分隔）<input type="text" value={celebs} onChange={(e) => setCelebs(e.target.value)} /></label>
+        <label>搜索标签（逗号分隔）<input type="text" value={tags} onChange={(e) => setTags(e.target.value)} /></label>
+        <label>超话列表（逗号分隔）<input type="text" value={superTopics} onChange={(e) => setSuperTopics(e.target.value)} placeholder="如：迪丽热巴超话,杨幂超话" /></label>
+        <label>场景补充标签<input type="text" value={sceneTags} onChange={(e) => setSceneTags(e.target.value)} /></label>
+      </div>
+      <button className="btn btn-primary" onClick={() => {
+        const u: Record<string, string> = { WEIBO_UID: uid, WEIBO_FETCH_MODE: fetchMode, WEIBO_CELEBRITIES: celebs, WEIBO_SEARCH_TAGS: tags, WEIBO_SCENE_EXTRA_TAGS: sceneTags, WEIBO_SUPER_TOPICS: superTopics };
+        if (cookie && cookie !== '已设置（留空保持不变）') u.WEIBO_COOKIE = cookie;
+        save(u);
+      }}>保存微博配置</button>
+    </div>
+  );
+}
+
+function WatermarkSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
   const [wmFilter, setWmFilter] = useState(data.watermark_filter);
   const [wmStrict, setWmStrict] = useState(data.watermark_strict_mode);
   const [minClean, setMinClean] = useState(data.min_clean_images);
@@ -171,24 +351,33 @@ function WatermarkTab({ data, save }: { data: SettingsData; save: (u: Record<str
 
   return (
     <div className="bg-bg-card border border-border rounded-xl p-4 space-y-3">
+      <h3 className="text-[13px] font-semibold text-text">水印过滤</h3>
       <div className="grid grid-cols-2 gap-3">
         <label className="flex-row items-center gap-2">
-          <input type="checkbox" checked={wmFilter} onChange={(e) => setWmFilter(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+          <input type="checkbox" checked={wmFilter} onChange={(e) => setWmFilter(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
           <span className="text-[13px] font-normal text-text-secondary">启用水印过滤</span>
         </label>
         <label className="flex-row items-center gap-2">
-          <input type="checkbox" checked={wmStrict} onChange={(e) => setWmStrict(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+          <input type="checkbox" checked={wmStrict} onChange={(e) => setWmStrict(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
           <span className="text-[13px] font-normal text-text-secondary">严格模式</span>
         </label>
-        <label>最少无水印图片数<input type="number" value={minClean} onChange={(e) => setMinClean(+e.target.value)} min={1} max={10} /></label>
+        <label>最少无水印图片数<NumberInput value={minClean} onChange={setMinClean} min={1} max={10} /></label>
         <label className="flex-row items-center gap-2">
-          <input type="checkbox" checked={wmFallback} onChange={(e) => setWmFallback(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+          <input type="checkbox" checked={wmFallback} onChange={(e) => setWmFallback(e.target.checked)} className="w-4 h-4 accent-[var(--accent)]" />
           <span className="text-[13px] font-normal text-text-secondary">严格模式下允许降级</span>
         </label>
-        <label>角标检测阈值: {cornerRatio}
+        <label>
+          <div className="flex items-center justify-between">
+            <span>角标检测阈值</span>
+            <span className="text-[12px] font-mono text-accent tabular-nums">{cornerRatio.toFixed(2)}</span>
+          </div>
           <input type="range" min={1.0} max={2.0} step={0.02} value={cornerRatio} onChange={(e) => setCornerRatio(+e.target.value)} />
         </label>
-        <label>底边检测阈值: {bottomRatio}
+        <label>
+          <div className="flex items-center justify-between">
+            <span>底边检测阈值</span>
+            <span className="text-[12px] font-mono text-accent tabular-nums">{bottomRatio.toFixed(2)}</span>
+          </div>
           <input type="range" min={1.0} max={2.0} step={0.02} value={bottomRatio} onChange={(e) => setBottomRatio(+e.target.value)} />
         </label>
       </div>

@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: fileURLToPath(new URL('../static_dist', import.meta.url)),
+    outDir: fileURLToPath(new URL('../static', import.meta.url)),
     emptyOutDir: true,
   },
   server: {

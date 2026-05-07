@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useStore } from '../stores';
-import { queueApi, type QueueItem } from '../api/client';
+import { queueApi, publishLogStream, type QueueItem } from '../api/client';
+import Select from '../components/Select';
 
 export default function Queue() {
   const { queue, setQueue, addToast } = useStore();
@@ -37,6 +38,13 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   const [title, setTitle] = useState(item.title);
   const [desc, setDesc] = useState(item.desc);
   const [cover, setCover] = useState(item.cover);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   async function updateField(field: string, value: string) {
     await queueApi.update(index, { [field]: value } as any);
@@ -61,19 +69,29 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
     addToast(`正在${action}...`, 'info');
+    setLogs([]);
+    setPublishing(true);
+
+    // 启动 SSE 日志流
+    publishLogStream(
+      (msg) => setLogs((prev) => [...prev, msg]),
+      () => setPublishing(false),
+    );
+
     try {
       const res = await queueApi.publish(index, opts);
       addToast(res.success ? `${action}成功：${res.message}` : `${action}失败：${res.message}`, res.success ? 'success' : 'error');
     } catch (err: any) { addToast(err.message, 'error'); }
+    setPublishing(false);
     setQueue((await queueApi.get()).queue);
   }
 
   return (
-    <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-bg-card border border-border rounded-xl">
       <div className="flex flex-col md:flex-row">
-        <div className="md:w-56 p-4 bg-bg-secondary border-b md:border-b-0 md:border-r border-border">
-          {item.cover && (
-            <img src={imgSrc(item.cover)} alt="" className="w-full h-32 object-cover rounded-lg mb-2" onError={(e) => (e.currentTarget.style.display = 'none')} />
+        <div className="md:w-56 p-4 bg-bg-secondary border-b md:border-b-0 md:border-r border-border overflow-hidden">
+          {cover && (
+            <img src={imgSrc(cover)} alt="" className="w-full h-32 object-cover rounded-lg mb-2" onError={(e) => (e.currentTarget.style.display = 'none')} />
           )}
           <div className="flex flex-wrap gap-1">
             {(item.images || []).map((img, ii) => (
@@ -89,17 +107,30 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
             <textarea value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={() => updateField('desc', desc)} />
           </label>
           <label>封面
-            <select value={cover} onChange={(e) => { setCover(e.target.value); updateField('cover', e.target.value); }}>
-              {(item.images || []).map((img) => <option key={img} value={img}>{img.split('/').pop()}</option>)}
-            </select>
+            <Select value={cover} onChange={(v) => { setCover(v); updateField('cover', v); }} options={(item.images || []).map((img) => ({ label: img.split('/').pop() || img, value: img }))} />
           </label>
           <div className="flex gap-2 flex-wrap">
-            <button className="btn btn-primary" onClick={() => publish({ save_draft: true })}>保存草稿</button>
-            <button className="btn" onClick={() => publish({ save_draft: false })}>直接发布</button>
-            <button className="btn" onClick={() => publish({ dry_run: true })}>预览</button>
-            <button className="btn" onClick={generateContent}>AI 生成</button>
-            <button className="btn btn-danger" onClick={deleteItem}>删除</button>
+            <button className="btn btn-primary" onClick={() => publish({ save_draft: true })} disabled={publishing}>保存草稿</button>
+            <button className="btn" onClick={() => publish({ save_draft: false })} disabled={publishing}>直接发布</button>
+            <button className="btn" onClick={() => publish({ dry_run: true })} disabled={publishing}>预览</button>
+            <button className="btn" onClick={generateContent} disabled={publishing}>AI 生成</button>
+            <button className="btn btn-danger" onClick={deleteItem} disabled={publishing}>删除</button>
           </div>
+
+          {(logs.length > 0 || publishing) && (
+            <div className="bg-bg-secondary border border-border rounded-lg p-3 max-h-48 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-2">
+                {publishing && <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />}
+                <span className="text-[12px] font-medium text-text-muted">{publishing ? '发布中...' : '发布日志'}</span>
+              </div>
+              <div className="space-y-0.5">
+                {logs.map((msg, i) => (
+                  <div key={i} className="text-[12px] text-text-secondary font-mono leading-relaxed">{msg}</div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

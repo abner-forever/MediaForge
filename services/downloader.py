@@ -21,9 +21,10 @@ def _coerce_folder_label(value: object, fallback: str) -> str:
     return text if text else fallback
 
 
-def _download_one(url: str, filename: Path, overwrite: bool) -> Optional[str]:
+def _download_one(url: str, filename: Path, overwrite: bool, filter_watermark: Optional[bool] = None) -> Optional[str]:
+    do_filter = settings.watermark_filter if filter_watermark is None else filter_watermark
     if filename.exists() and not overwrite:
-        if settings.watermark_filter and should_drop_as_watermarked(str(filename)):
+        if do_filter and should_drop_as_watermarked(str(filename)):
             return None
         return str(filename)
     try:
@@ -32,7 +33,7 @@ def _download_one(url: str, filename: Path, overwrite: bool) -> Optional[str]:
         filename.parent.mkdir(parents=True, exist_ok=True)
         filename.write_bytes(resp.content)
         path_str = str(filename)
-        if settings.watermark_filter and should_drop_as_watermarked(path_str):
+        if do_filter and should_drop_as_watermarked(path_str):
             return None
         return path_str
     except Exception as err:
