@@ -1,6 +1,7 @@
 # MediaForge · 图文工坊
 
 ![构建状态](https://img.shields.io/github/actions/workflow/status/abner-forever/MediaForge/build.yml?branch=main&logo=github&label=%E6%9E%84%E5%BB%BA)
+![版本](https://img.shields.io/github/v/release/abner-forever/MediaForge?logo=semver&label=%E7%89%88%E6%9C%AC)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 

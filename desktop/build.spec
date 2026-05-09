@@ -18,6 +18,15 @@ if not _spec_path.is_absolute():
 SPEC_DIR = _spec_path.resolve().parent            # desktop/
 PROJECT_ROOT = SPEC_DIR.parent                     # 项目根目录
 
+# 从 pyproject.toml 读取版本号
+import tomllib
+_pyproject_path = PROJECT_ROOT / 'pyproject.toml'
+if _pyproject_path.exists():
+    _pyproject_data = tomllib.loads(_pyproject_path.read_text(encoding='utf-8'))
+    APP_VERSION = _pyproject_data['project']['version']
+else:
+    APP_VERSION = '0.0.0'
+
 block_cipher = None
 
 a = Analysis(
@@ -146,12 +155,12 @@ if system == 'Darwin':
         info_plist={
             'CFBundleName': '图文工坊',
             'CFBundleDisplayName': '图文工坊',
-            'CFBundleVersion': '1.0.0',
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': APP_VERSION,
+            'CFBundleShortVersionString': APP_VERSION,
             'CFBundleDevelopmentRegion': 'zh_CN',
             'NSHighResolutionCapable': True,
         },
-        version='1.0.0',
+        version=APP_VERSION,
     )
 elif system == 'Windows':
     # Windows: 单目录模式 → dist/MediaForge/MediaForge.exe

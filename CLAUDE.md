@@ -58,9 +58,22 @@ hdiutil create -volname "图文工坊" -srcfolder dist/MediaForge.app -ov -forma
 推送到 `main` 分支自动触发 GitHub Actions 构建桌面安装包：
 - **macOS** — PyInstaller 构建 `.app` → `hdiutil` 打包为 `.dmg`（未签名）
 - **Windows** — PyInstaller 构建目录 → `7z` 打包为 `.zip`
-- **Release** — 构建完成后自动创建 **Draft Release**，版本号 `vYYYYMMDD-HHMM`
+- **Release** — 构建完成后自动**发布 Release**，版本号 `vYYYYMMDD-HHMMSS`，可在 GitHub 仓库 **Releases** 页面查看和下载
 
 手动触发：GitHub 仓库 Actions 页面 → "构建桌面安装包" → "Run workflow"
+
+### 版本号管理
+
+使用 `python-semantic-release` 自动管理版本：
+- 版本定义在 `pyproject.toml` 的 `[project] version`
+- 推送 `main` 时自动分析 commit 信息，按 conventional commits 推导版本号
+  - `fix:` → patch 升级（1.0.0 → 1.0.1）
+  - `feat:` → minor 升级（1.0.0 → 1.1.0）
+  - `BREAKING CHANGE:` → major 升级（1.0.0 → 2.0.0）
+- 自动生成 `v{semver}` 格式 tag 并创建 GitHub Release
+- 应用版本写入 macOS `CFBundleVersion` / `CFBundleShortVersionString`
+
+手动触发版本：提交时使用 `fix:` / `feat:` / `BREAKING CHANGE:` 前缀控制升级级别。也可在 Actions 页面手动触发 workflow。
 
 工作流文件：`.github/workflows/build.yml`
 PyInstaller 配置：`desktop/build.spec`
