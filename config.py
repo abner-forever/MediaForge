@@ -68,6 +68,16 @@ class Settings:
     watermark_strict_mode: bool = os.getenv("WATERMARK_STRICT_MODE", "true").lower() == "true"
     min_clean_images: int = int(os.getenv("MIN_CLEAN_IMAGES", "3"))
     allow_watermark_fallback: bool = os.getenv("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true"
+    # ── 平台选择 ──
+    platform: str = os.getenv("PLATFORM", "weibo")
+    # ── 今日头条 ──
+    toutiao_cookie: str = os.getenv("TOUTIAO_COOKIE", "")
+    toutiao_user_id: str = os.getenv("TOUTIAO_USER_ID", "")
+    toutiao_fetch_mode: str = os.getenv("TOUTIAO_FETCH_MODE", "feed")
+    toutiao_search_tags: Tuple[str, ...] = _csv_tuple(
+        os.getenv("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭")
+    )
+    toutiao_keyword_pages: int = int(os.getenv("TOUTIAO_KEYWORD_PAGES", "1"))
 
 
 CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))

@@ -148,6 +148,7 @@ function ThemeSection() {
 }
 
 function RunSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  const [platform, setPlatform] = useState(data.platform);
   const [postLimit, setPostLimit] = useState(data.post_limit);
   const [weiboPages, setWeiboPages] = useState(data.weibo_pages);
   const [interval, setInterval_] = useState(data.publish_interval);
@@ -159,8 +160,14 @@ function RunSection({ data, save }: { data: SettingsData; save: (u: Record<strin
     <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
       <h3 className="text-[13px] font-semibold text-text">运行参数</h3>
       <div className="grid grid-cols-3 gap-3">
-        <label>每次处理条数<NumberInput value={postLimit} onChange={setPostLimit} min={1} max={3} /></label>
-        <label>微博抓取页数<NumberInput value={weiboPages} onChange={setWeiboPages} min={1} max={10} /></label>
+        <label>激活平台
+          <Select value={platform} onChange={setPlatform} options={[
+            { label: '微博', value: 'weibo' },
+            { label: '今日头条', value: 'toutiao' },
+          ]} />
+        </label>
+        <label>每次处理条数<NumberInput value={postLimit} onChange={setPostLimit} min={1} max={20} /></label>
+        <label>抓取页数<NumberInput value={weiboPages} onChange={setWeiboPages} min={1} max={5} /></label>
         <label>发布间隔（秒）<NumberInput value={interval} onChange={setInterval_} min={5} max={60} /></label>
         <label>请求超时（秒）<NumberInput value={timeout} onChange={setTimeout_} min={5} max={60} /></label>
         <label>重试次数<NumberInput value={retry} onChange={setRetry} min={1} max={5} /></label>
@@ -170,7 +177,7 @@ function RunSection({ data, save }: { data: SettingsData; save: (u: Record<strin
         </label>
       </div>
       <button className="btn btn-primary" onClick={() => save({
-        POST_LIMIT: String(postLimit), WEIBO_PAGES: String(weiboPages), PUBLISH_INTERVAL_SECONDS: String(interval),
+        PLATFORM: platform, POST_LIMIT: String(postLimit), WEIBO_PAGES: String(weiboPages), PUBLISH_INTERVAL_SECONDS: String(interval),
         REQUEST_TIMEOUT: String(timeout), RETRY_TIMES: String(retry), REQUIRE_CONFIRM: confirm ? 'true' : 'false',
       })}>保存运行参数</button>
     </div>
@@ -184,6 +191,7 @@ function SystemTab({ data, save }: { data: SettingsData; save: (u: Record<string
     <div className="space-y-4">
       <LLMSection data={data} save={save} />
       <WeiboSection data={data} save={save} />
+      <ToutiaoSection data={data} save={save} />
       <WatermarkSection data={data} save={save} />
     </div>
   );
@@ -340,6 +348,41 @@ function WeiboSection({ data, save }: { data: SettingsData; save: (u: Record<str
     </div>
   );
 }
+
+function ToutiaoSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  const [cookie, setCookie] = useState('');
+  const [userId, setUserId] = useState(data.toutiao_user_id);
+  const [fetchMode, setFetchMode] = useState(data.toutiao_fetch_mode);
+  const [searchTags, setSearchTags] = useState(data.toutiao_search_tags);
+
+  return (
+    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
+      <h3 className="text-[13px] font-semibold text-text">今日头条配置</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="col-span-2">头条 Cookie
+          <textarea value={cookie} onChange={(e) => setCookie(e.target.value)} placeholder={data.toutiao_cookie_set ? '已设置（留空保持不变）' : ''} rows={3} />
+        </label>
+        <label>用户 ID<input type="text" value={userId} onChange={(e) => setUserId(e.target.value)} /></label>
+        <label>抓取模式
+          <Select value={fetchMode} onChange={setFetchMode} options={[
+            { label: '推荐流', value: 'feed' },
+            { label: '用户主页', value: 'user' },
+            { label: '关键词搜索', value: 'keyword' },
+          ]} />
+        </label>
+        <label className="col-span-2">搜索关键词（逗号分隔）
+          <input type="text" value={searchTags} onChange={(e) => setSearchTags(e.target.value)} placeholder="时尚,明星,穿搭" />
+        </label>
+      </div>
+      <button className="btn btn-primary" onClick={() => {
+        const u: Record<string, string> = { TOUTIAO_USER_ID: userId, TOUTIAO_FETCH_MODE: fetchMode, TOUTIAO_SEARCH_TAGS: searchTags };
+        if (cookie && cookie !== '已设置（留空保持不变）') u.TOUTIAO_COOKIE = cookie;
+        save(u);
+      }}>保存头条配置</button>
+    </div>
+  );
+}
+
 
 function WatermarkSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
   const [wmFilter, setWmFilter] = useState(data.watermark_filter);

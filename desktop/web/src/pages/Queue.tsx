@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useStore } from '../stores';
 import { queueApi, publishLogsApi, type QueueItem } from '../api/client';
 import Select from '../components/Select';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Queue() {
   const { queue, setQueue, addToast } = useStore();
@@ -40,6 +41,7 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
   const [cover, setCover] = useState(item.cover);
   const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishing, setPublishing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -146,8 +148,18 @@ function QueueCard({ item, index, imgSrc }: { item: QueueItem; index: number; im
             <button className="btn" onClick={() => publish({ save_draft: false })} disabled={publishing}>直接发布</button>
             <button className="btn" onClick={() => publish({ dry_run: true })} disabled={publishing}>预览</button>
             <button className="btn" onClick={generateContent} disabled={publishing}>AI 生成文案</button>
-            <button className="btn btn-danger" onClick={deleteItem} disabled={publishing}>删除</button>
+            <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)} disabled={publishing}>删除</button>
           </div>
+
+          <ConfirmDialog
+            open={showDeleteConfirm}
+            title="删除队列项"
+            message={`确认删除《${title || '无标题'}》？此操作不可恢复。`}
+            confirmText="删除"
+            danger
+            onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }}
+            onCancel={() => setShowDeleteConfirm(false)}
+          />
 
           {(logs.length > 0 || publishing) && (
             <div className="bg-bg-secondary border border-border rounded-lg p-3 max-h-48 overflow-y-auto">

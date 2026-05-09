@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../stores';
 import { materialsApi, queueApi } from '../api/client';
 import ContextMenu, { type MenuItem } from '../components/ContextMenu';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Materials() {
   const {
@@ -9,6 +10,7 @@ export default function Materials() {
     setMaterialsData, setMatFilter, matToggleSelect, matSelectAll, matClearSelection,
     openLightbox, addToast,
   } = useStore();
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
 
   useEffect(() => { materialsApi.list().then(setMaterialsData); }, [setMaterialsData]);
 
@@ -28,7 +30,6 @@ export default function Materials() {
   async function matDeleteSelected() {
     const paths = [...matSelected];
     if (!paths.length) return;
-    if (!confirm(`确认删除 ${paths.length} 张图片？此操作不可恢复。`)) return;
     try {
       await materialsApi.delete(paths);
       matClearSelection();
@@ -72,9 +73,19 @@ export default function Materials() {
           <button className="btn btn-sm" onClick={matSelectAll}>全选当前</button>
           <button className="btn btn-sm" onClick={matClearSelection} disabled={!matSelected.size}>取消选择</button>
           <button className="btn btn-sm" onClick={matEnqueueSelected} disabled={!matSelected.size}>加入发布队列</button>
-          <button className="btn btn-sm btn-danger" onClick={matDeleteSelected} disabled={!matSelected.size}>删除所选</button>
+          <button className="btn btn-sm btn-danger" onClick={() => setShowBatchDeleteConfirm(true)} disabled={!matSelected.size}>删除所选</button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showBatchDeleteConfirm}
+        title="批量删除图片"
+        message={`确认删除 ${matSelected.size} 张图片？此操作不可恢复。`}
+        confirmText="删除"
+        danger
+        onConfirm={() => { setShowBatchDeleteConfirm(false); matDeleteSelected(); }}
+        onCancel={() => setShowBatchDeleteConfirm(false)}
+      />
 
       {filteredGroups.length === 0 ? (
         <div className="text-center py-16 text-text-muted">
@@ -96,6 +107,7 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
   const { matSelected, matToggleSelect, addToast } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; img: string; scene: string } | null>(null);
+  const [ctxDeleteConfirm, setCtxDeleteConfirm] = useState(false);
 
   function handleContextMenu(e: React.MouseEvent, img: string, scene: string) {
     e.preventDefault();
@@ -116,10 +128,7 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4 opacity-50"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg> },
       { label: `场景：${ctxMenu.scene}`, disabled: true,
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4 opacity-50"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> },
-      { label: '删除此图片', danger: true, onClick: async () => {
-          if (!confirm(`确认删除 ${fileName}？`)) return;
-          try { await materialsApi.delete([ctxMenu.img]); addToast('已删除', 'success'); useStore.getState().setMaterialsData(await materialsApi.list()); } catch (err: any) { addToast(err.message, 'error'); }
-        },
+      { label: '删除此图片', danger: true, onClick: () => setCtxDeleteConfirm(true),
         icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> },
     ];
   }
@@ -168,6 +177,20 @@ function CelebrityGroup({ group, imgSrc, openMatLightbox }: {
           onClose={() => setCtxMenu(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={ctxDeleteConfirm}
+        title="删除图片"
+        message={`确认删除 ${ctxMenu?.img.split('/').pop() || ''}？此操作不可恢复。`}
+        confirmText="删除"
+        danger
+        onConfirm={async () => {
+          setCtxDeleteConfirm(false);
+          if (!ctxMenu) return;
+          try { await materialsApi.delete([ctxMenu.img]); addToast('已删除', 'success'); useStore.getState().setMaterialsData(await materialsApi.list()); } catch (err: any) { addToast(err.message, 'error'); }
+        }}
+        onCancel={() => setCtxDeleteConfirm(false)}
+      />
     </div>
   );
 }

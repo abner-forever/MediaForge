@@ -4,11 +4,11 @@ import time
 from datetime import datetime
 from typing import Dict, Set
 
-from config import POSTS_CACHE_PATH, ensure_dirs, resolve_weibo_fetch_mode, settings
+from config import POSTS_CACHE_PATH, ensure_dirs, settings
 from services.ai import generate_content
 from services.downloader import download_images
 from services.extensions import build_html, select_cover
-from services.weibo import fetch_weibo_posts_paginated
+from services.platforms import get_default_platform, get_platform
 from utils.audit import append_audit, create_run_log_path
 from utils.file import hash_text, read_json, write_json
 from utils.logger import get_logger
@@ -18,9 +18,15 @@ logger = get_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
+    default_platform = get_default_platform()
+    platform_svc = get_platform(default_platform)
+    default_mode = platform_svc.meta.default_fetch_mode if platform_svc else ""
+
     parser = argparse.ArgumentParser(description="MediaForge 自动化发布工具")
+    parser.add_argument("--platform", type=str, default=default_platform, help="平台选择 (weibo, toutiao)")
+    parser.add_argument("--mode", type=str, default=None, help=f"平台抓取模式（默认：{default_mode}）")
     parser.add_argument("--limit", type=int, default=settings.post_limit, help="限制处理条数")
-    parser.add_argument("--pages", type=int, default=settings.weibo_pages, help="微博抓取页数")
+    parser.add_argument("--pages", type=int, default=settings.weibo_pages, help="抓取页数")
     parser.add_argument("--dry-run", action="store_true", help="不发布，只打印")
     parser.add_argument(
         "--ignore-post-cache",
@@ -65,32 +71,38 @@ def main() -> None:
 
     limit = max(1, min(args.limit, 3))  # 风控：最多 1~3 篇
     pages = max(1, args.pages)
+
+    platform_svc = get_platform(args.platform)
+    if not platform_svc:
+        logger.error("未知平台: %s，可用平台: %s", args.platform, list(get_platform.__globals__.get("_PLATFORM_REGISTRY", {}).keys()))
+        return
+    fetch_mode = args.mode or platform_svc.meta.default_fetch_mode
+
     logger.info(
-        "启动任务 limit=%s pages=%s dry_run=%s 微博模式=%s 明星列表=%s",
+        "启动任务 平台=%s 模式=%s limit=%s pages=%s dry_run=%s",
+        platform_svc.meta.name,
+        fetch_mode,
         limit,
         pages,
         args.dry_run,
-        resolve_weibo_fetch_mode(),
-        "、".join(settings.weibo_celebrities)
-        if settings.weibo_celebrities
-        else "（仅本人或未配置 WEIBO_CELEBRITIES）",
     )
     append_audit(
         audit_path,
         "run_started",
         {
             "run_id": run_id,
+            "platform": args.platform,
+            "mode": fetch_mode,
             "limit": limit,
             "pages": pages,
             "dry_run": args.dry_run,
-            "mode": resolve_weibo_fetch_mode(),
         },
     )
 
     try:
-        posts = fetch_weibo_posts_paginated(max_pages=pages)
+        posts = platform_svc.fetch_posts(mode=fetch_mode, max_pages=pages)
     except Exception as err:
-        logger.error("抓取微博失败: %s", err)
+        logger.error("抓取失败（%s）: %s", platform_svc.meta.name, err)
         append_audit(audit_path, "fetch_failed", {"error": str(err)})
         return
 

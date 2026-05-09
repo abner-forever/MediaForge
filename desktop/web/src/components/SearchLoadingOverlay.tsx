@@ -2,9 +2,11 @@ import { createPortal } from 'react-dom';
 
 interface Props {
   message?: string;
+  platformName?: string;
+  onCancel?: () => void;
 }
 
-export default function SearchLoadingOverlay({ message }: Props) {
+export default function SearchLoadingOverlay({ message, platformName, onCancel }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-bg-card border border-border rounded-2xl p-8 text-center min-w-[300px] shadow-2xl">
@@ -18,7 +20,10 @@ export default function SearchLoadingOverlay({ message }: Props) {
             <div className="mt-2 text-xs text-text-muted leading-relaxed max-w-[320px]">{message}</div>
           </>
         ) : (
-          <div className="mt-4 text-sm font-medium text-text">正在搜索微博内容…</div>
+          <div className="mt-4 text-sm font-medium text-text">正在搜索{platformName || ''}内容…</div>
+        )}
+        {onCancel && (
+          <button className="btn mt-5" onClick={onCancel}>取消搜索</button>
         )}
       </div>
     </div>,

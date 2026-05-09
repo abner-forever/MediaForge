@@ -19,6 +19,9 @@ const del = <T>(p: string, b?: unknown) => request<T>('DELETE', p, b);
 /* ── Types ───────────────────────────────────── */
 
 export interface HealthStatus {
+  platform: string;
+  platform_name: string;
+  platform_auth: boolean;
   weibo_cookie: boolean;
   weibo_uid_or_celebrities: boolean;
   ai_api_key: boolean;
@@ -90,6 +93,7 @@ export interface MaterialsData {
 }
 
 export interface SettingsData {
+  platform: string;
   ai_provider: string;
   ai_model: string;
   ai_base_url: string;
@@ -102,6 +106,10 @@ export interface SettingsData {
   weibo_search_tags: string;
   weibo_scene_extra_tags: string;
   weibo_super_topics: string;
+  toutiao_cookie_set: boolean;
+  toutiao_user_id: string;
+  toutiao_fetch_mode: string;
+  toutiao_search_tags: string;
   post_limit: number;
   weibo_pages: number;
   publish_interval: number;
@@ -139,6 +147,21 @@ export interface SearchStreamEvent {
   total_images?: number;
 }
 
+export interface PlatformMeta {
+  id: string;
+  name: string;
+  auth_fields: string[];
+  fetch_modes: Record<string, string>;
+  default_fetch_mode: string;
+  search_params_description: string;
+}
+
+/* ── Platform API ─────────────────────────────── */
+
+export const platformApi = {
+  list: () => get<{ platforms: Record<string, PlatformMeta>; default: string }>('/api/platforms'),
+};
+
 /* ── Dashboard API ────────────────────────────── */
 
 export const dashboardApi = {
@@ -161,6 +184,7 @@ export const settingsApi = {
 export const discoveryApi = {
   get: () => get<{ posts: Post[] }>('/api/discovery'),
   search: (params: {
+    platform: string;
     mode: string;
     celebrities: string[];
     search_tags: string[];
@@ -212,6 +236,7 @@ export async function downloadStream(
 
 export async function searchStream(
   params: {
+    platform: string;
     mode: string;
     celebrities: string[];
     search_tags: string[];
@@ -220,8 +245,10 @@ export async function searchStream(
     post_limit: number;
   },
   onEvent: (evt: SearchStreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const q = new URLSearchParams({
+    platform: params.platform,
     mode: params.mode,
     celebrities: params.celebrities.join(','),
     search_tags: params.search_tags.join(','),
@@ -229,7 +256,7 @@ export async function searchStream(
     max_pages: String(params.max_pages),
     post_limit: String(params.post_limit),
   });
-  const res = await fetch(`/api/discovery/search-stream?${q}`);
+  const res = await fetch(`/api/discovery/search-stream?${q}`, { signal });
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

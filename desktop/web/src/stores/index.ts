@@ -68,6 +68,7 @@ interface AppState {
   selectAllPosts: () => void;
   setImageScores: (scores: Record<string, ScoreInfo>) => void;
   toggleImageSelect: (path: string) => void;
+  selectAllImages: (paths: string[]) => void;
   clearSelectedImages: () => void;
 
   // Materials
@@ -189,6 +190,11 @@ export const useStore = create<AppState>((set, get) => ({
       return { selectedImages: [...s.selectedImages, path] };
     }),
   clearSelectedImages: () => set({ selectedImages: [] }),
+  selectAllImages: (paths: string[]) =>
+    set((s) => {
+      const isAll = s.selectedImages.length === paths.length && paths.every((p) => s.selectedImages.includes(p));
+      return { selectedImages: isAll ? [] : [...paths] };
+    }),
 
   // Materials
   materialsData: { groups: [], total_images: 0 },

@@ -24,13 +24,7 @@ from desktop.app_state import app_state
 from services.ai import generate_content
 from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
-from services.weibo import (
-    fetch_celebrity_discovery_posts,
-    fetch_keyword_only_posts,
-    fetch_own_timeline_paginated,
-    fetch_super_topic_discovery_posts,
-    finalize_posts,
-)
+from services.platforms import get_platform, list_platforms
 from utils.env_manager import read_env, update_env
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
@@ -52,6 +46,7 @@ if _assets_dir.exists():
 
 
 class SearchRequest(BaseModel):
+    platform: str = "weibo"
     mode: str = "celebrities"
     celebrities: List[str] = []
     search_tags: List[str] = ["美图", "日常"]
@@ -115,6 +110,7 @@ def _mask_key(key: str) -> str:
 async def get_settings():
     env = read_env()
     return {
+        "platform": env.get("PLATFORM", "weibo"),
         "ai_provider": env.get("AI_PROVIDER", "mimo"),
         "ai_model": env.get("AI_MODEL", "mimo-chat"),
         "ai_base_url": env.get("AI_BASE_URL", ""),
@@ -140,6 +136,11 @@ async def get_settings():
         "weibo_search_tags": env.get("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"),
         "weibo_scene_extra_tags": env.get("WEIBO_SCENE_EXTRA_TAGS", ""),
         "weibo_super_topics": env.get("WEIBO_SUPER_TOPICS", ""),
+        # ── 今日头条 ──
+        "toutiao_cookie_set": bool(env.get("TOUTIAO_COOKIE")),
+        "toutiao_user_id": env.get("TOUTIAO_USER_ID", ""),
+        "toutiao_fetch_mode": env.get("TOUTIAO_FETCH_MODE", "feed"),
+        "toutiao_search_tags": env.get("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"),
         "post_limit": int(env.get("POST_LIMIT", "3")),
         "weibo_pages": int(env.get("WEIBO_PAGES", "2")),
         "publish_interval": int(env.get("PUBLISH_INTERVAL_SECONDS", "10")),
@@ -181,12 +182,36 @@ async def get_api_key():
     return {"key": key}
 
 
+@app.get("/api/platforms")
+async def get_platforms():
+    """返回所有已注册平台的元数据，供前端动态构建平台选择器。"""
+    platforms = list_platforms()
+    from services.platforms import get_default_platform
+
+    return {
+        "platforms": {pid: {
+            "id": meta.id,
+            "name": meta.name,
+            "auth_fields": meta.auth_fields,
+            "fetch_modes": meta.fetch_modes,
+            "default_fetch_mode": meta.default_fetch_mode,
+            "search_params_description": meta.search_params_description,
+        } for pid, meta in platforms.items()},
+        "default": get_default_platform(),
+    }
+
+
 # ── Dashboard API ──────────────────────────────────────
 
 
 @app.get("/api/dashboard/health")
 async def health_check():
+    active_platform = settings.platform or "weibo"
+    platform_svc = get_platform(active_platform)
     return {
+        "platform": active_platform,
+        "platform_name": platform_svc.meta.name if platform_svc else active_platform,
+        "platform_auth": platform_svc.check_auth() if platform_svc else False,
         "weibo_cookie": bool(settings.weibo_cookie),
         "weibo_uid_or_celebrities": bool(settings.weibo_uid or settings.weibo_celebrities),
         "ai_api_key": bool(settings.ai_api_key),
@@ -251,48 +276,23 @@ async def get_discovery():
 @app.post("/api/discovery/search")
 async def discovery_search(req: SearchRequest):
     try:
-        # 临时更新配置
+        platform_svc = get_platform(req.platform)
+        if not platform_svc:
+            raise HTTPException(400, f"未知平台: {req.platform}")
+
+        # 临时更新平台专属配置
         settings.weibo_celebrities = tuple(req.celebrities)
         settings.weibo_search_tags = tuple(req.search_tags)
         settings.weibo_super_topics = tuple(req.super_topics)
 
-        if req.mode == "own":
-            posts = finalize_posts(fetch_own_timeline_paginated(max_pages=req.max_pages))
-        elif req.mode == "celebrities":
-            if not req.celebrities:
-                raise HTTPException(400, "请至少指定一位明星")
-            posts = finalize_posts(fetch_celebrity_discovery_posts(max_pages_per_uid=req.max_pages))
-        elif req.mode == "super_topic":
-            if not req.super_topics:
-                raise HTTPException(400, "请至少指定一个超话")
-            posts = finalize_posts(fetch_super_topic_discovery_posts(
-                tuple(req.super_topics), max_pages=req.max_pages
-            ))
-        elif req.mode == "keyword":
-            if not req.search_tags:
-                raise HTTPException(400, "请至少指定一个搜索标签")
-            posts = finalize_posts(fetch_keyword_only_posts(
-                tuple(req.search_tags), max_pages_per_tag=req.max_pages
-            ))
-        else:
-            parts = []
-            if req.celebrities:
-                parts.append(fetch_celebrity_discovery_posts(max_pages_per_uid=req.max_pages))
-            parts.append(fetch_own_timeline_paginated(max_pages=req.max_pages))
-            seen = set()
-            merged = []
-            for grp in parts:
-                for p in grp:
-                    pid = str(p.get("id") or "")
-                    if pid and pid not in seen:
-                        seen.add(pid)
-                        merged.append(p)
-            posts = finalize_posts(merged)
-
+        posts = platform_svc.fetch_posts(
+            mode=req.mode,
+            max_pages=req.max_pages,
+        )
         posts = posts[: req.post_limit]
         app_state.set_discovery_results(posts)
         total_images = sum(len(p.get("images", [])) for p in posts)
-        app_state.add_operation("搜索", f"模式={req.mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
+        app_state.add_operation("搜索", f"平台={req.platform} 模式={req.mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
         return {
             "success": True,
             "posts": posts,
@@ -307,6 +307,7 @@ async def discovery_search(req: SearchRequest):
 
 @app.get("/api/discovery/search-stream")
 async def discovery_search_stream(
+    platform: str = Query("weibo"),
     mode: str = Query("celebrities"),
     celebrities: str = Query(""),
     search_tags: str = Query(""),
@@ -320,6 +321,12 @@ async def discovery_search_stream(
     from queue import Empty, Queue
     from concurrent.futures import ThreadPoolExecutor
 
+    platform_svc = get_platform(platform)
+    if not platform_svc:
+        def err_stream():
+            yield f"data: {_json.dumps({'type': 'error', 'message': f'未知平台: {platform}'}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(err_stream(), media_type="text/event-stream")
+
     celeb_list = [s.strip() for s in celebrities.split(",") if s.strip()]
     tag_list = [s.strip() for s in search_tags.split(",") if s.strip()]
     topic_list = [s.strip() for s in super_topics.split(",") if s.strip()]
@@ -331,71 +338,27 @@ async def discovery_search_stream(
 
     def run_search():
         try:
+            # 临时更新平台专属配置
             settings.weibo_celebrities = tuple(celeb_list)
             settings.weibo_search_tags = tuple(tag_list)
             settings.weibo_super_topics = tuple(topic_list)
 
-            if mode == "own":
-                progress_callback("正在获取本人时间线…")
-                posts = finalize_posts(fetch_own_timeline_paginated(max_pages=max_pages))
-            elif mode == "celebrities":
-                if not celeb_list:
-                    msg_queue.put(("error", "请至少指定一位明星"))
-                    return
-                progress_callback("开始明星发现模式…")
-                posts = finalize_posts(fetch_celebrity_discovery_posts(
-                    max_pages_per_uid=max_pages,
-                    progress_callback=progress_callback,
-                ))
-            elif mode == "super_topic":
-                if not topic_list:
-                    msg_queue.put(("error", "请至少指定一个超话"))
-                    return
-                progress_callback("开始超话搜索…")
-                posts = finalize_posts(fetch_super_topic_discovery_posts(
-                    tuple(topic_list), max_pages=max_pages,
-                    progress_callback=progress_callback,
-                ))
-            elif mode == "keyword":
-                if not tag_list:
-                    msg_queue.put(("error", "请至少指定一个搜索标签"))
-                    return
-                progress_callback("开始关键词搜索…")
-                posts = finalize_posts(fetch_keyword_only_posts(
-                    tuple(tag_list), max_pages_per_tag=max_pages,
-                    progress_callback=progress_callback,
-                ))
-            else:
-                progress_callback("开始混合模式搜索…")
-                parts = []
-                if celeb_list:
-                    parts.append(fetch_celebrity_discovery_posts(
-                        max_pages_per_uid=max_pages,
-                        progress_callback=progress_callback,
-                    ))
-                progress_callback("正在获取本人时间线…")
-                parts.append(fetch_own_timeline_paginated(max_pages=max_pages))
-                seen = set()
-                merged = []
-                for grp in parts:
-                    for p in grp:
-                        pid = str(p.get("id") or "")
-                        if pid and pid not in seen:
-                            seen.add(pid)
-                            merged.append(p)
-                posts = finalize_posts(merged)
-
+            progress_callback(f"开始 {platform_svc.meta.name} 搜索…")
+            posts = platform_svc.fetch_posts(
+                mode=mode,
+                max_pages=max_pages,
+                progress_callback=progress_callback,
+            )
             posts = posts[:post_limit]
             app_state.set_discovery_results(posts)
             total_images = sum(len(p.get("images", [])) for p in posts)
-            app_state.add_operation("搜索", f"模式={mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
+            app_state.add_operation("搜索", f"平台={platform} 模式={mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
             progress_callback(f"搜索完成！共 {len(posts)} 条帖子，{total_images} 张图片")
 
-            # 将 post 数据精简后通过 SSE 返回（去掉过长的 images URL 列表）
             safe_posts = []
             for p in posts:
                 sp = dict(p)
-                sp["images"] = sp.get("images", [])[:4]  # 仅前几张做预览
+                sp["images"] = sp.get("images", [])[:4]
                 safe_posts.append(sp)
 
             msg_queue.put(("done", safe_posts, len(posts), total_images, _json.dumps([p.get("id") for p in posts])))
@@ -709,16 +672,23 @@ async def serve_image(path: str):
     return FileResponse(str(file_path))
 
 
+_PLATFORM_REFERERS = {
+    "weibo": "https://weibo.com/",
+    "toutiao": "https://www.toutiao.com/",
+}
+
+
 @app.get("/proxy")
-async def proxy_image(url: str):
+async def proxy_image(url: str, platform: str = Query("weibo")):
     """代理远程图片，解决 CORS 问题。"""
     import requests as req_lib
     from fastapi.responses import Response
 
+    referer = _PLATFORM_REFERERS.get(platform, "https://weibo.com/")
     try:
         resp = req_lib.get(url, timeout=10, headers={
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Referer": "https://weibo.com/",
+            "Referer": referer,
         })
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "image/jpeg")

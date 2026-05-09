@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useStore } from '../stores';
-import { discoveryApi, downloadStream, queueApi, selectionApi, settingsApi, searchStream } from '../api/client';
+import { discoveryApi, downloadStream, queueApi, selectionApi, settingsApi, searchStream, platformApi, PlatformMeta } from '../api/client';
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
 import SearchLoadingOverlay from '../components/SearchLoadingOverlay';
+import ConfirmDialog from '../components/ConfirmDialog';
 
-function formatWeiboTime(raw?: string): string {
+function formatRelativeTime(raw?: string): string {
   if (!raw) return '';
   const d = new Date(raw);
   if (isNaN(d.getTime())) return raw;
@@ -23,32 +24,65 @@ export default function Discovery() {
   const {
     discoveryPosts, selectedPosts, imageScores, selectedImages,
     setDiscoveryPosts, togglePostSelect, clearSelectedPosts, selectAllPosts,
-    setImageScores, toggleImageSelect, clearSelectedImages,
+    setImageScores, toggleImageSelect, selectAllImages, clearSelectedImages,
     openLightbox, addToast, setProgress,
   } = store;
 
+  const [platform, setPlatform] = useState('weibo');
+  const [platforms, setPlatforms] = useState<Record<string, PlatformMeta>>({});
   const [mode, setMode] = useState('celebrities');
   const [pages, setPages] = useState(2);
   const [limit, setLimit] = useState(5);
   const [celebs, setCelebs] = useState('');
   const [tags, setTags] = useState('');
   const [superTopics, setSuperTopics] = useState('');
+  const [toutiaoKeywords, setToutiaoKeywords] = useState('');
+
+  const activePlatform = platforms[platform];
+  const modeOptions = activePlatform
+    ? Object.entries(activePlatform.fetch_modes).map(([k, v]) => ({ label: v, value: k }))
+    : [];
 
   useEffect(() => {
-    settingsApi.get().then((s) => {
+    Promise.all([
+      platformApi.list(),
+      settingsApi.get(),
+    ]).then(([platRes, s]) => {
+      setPlatforms(platRes.platforms);
+      const def = platRes.default || 'weibo';
+      if (platRes.platforms[def]) {
+        setPlatform(def);
+        setMode(platRes.platforms[def].default_fetch_mode);
+      }
+      // Weibo defaults
       if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
       if (s.weibo_search_tags) setTags(s.weibo_search_tags);
       if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
-      if (s.weibo_fetch_mode) setMode(s.weibo_fetch_mode);
       if (s.weibo_pages) setPages(s.weibo_pages);
       if (s.post_limit) setLimit(s.post_limit);
+      // Toutiao defaults
+      if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
     }).catch(() => {});
   }, []);
+
+  // 切换平台时同步更新模式
+  function handlePlatformChange(p: string) {
+    setPlatform(p);
+    const meta = platforms[p];
+    if (meta) setMode(meta.default_fetch_mode);
+    setCelebs('');
+    setTags('');
+    setSuperTopics('');
+    setToutiaoKeywords('');
+  }
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
   const [filterWatermark, setFilterWatermark] = useState(false);
   const [watermarkedImages, setWatermarkedImages] = useState<Set<string>>(new Set());
+  const [removeConfirmIndex, setRemoveConfirmIndex] = useState<number | null>(null);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const hasLocal = discoveryPosts.some((p) => p.local_images && p.local_images.length > 0);
 
@@ -70,11 +104,14 @@ export default function Discovery() {
   async function doSearch() {
     setSearching(true);
     setSearchMessage('正在搜索…');
+    const ctrl = new AbortController();
+    searchAbortRef.current = ctrl;
     try {
       await searchStream({
+        platform,
         mode,
         celebrities: celebs.split(',').map((s) => s.trim()).filter(Boolean),
-        search_tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+        search_tags: platform === 'toutiao' ? toutiaoKeywords.split(',').map((s) => s.trim()).filter(Boolean) : tags.split(',').map((s) => s.trim()).filter(Boolean),
         super_topics: superTopics.split(',').map((s) => s.trim()).filter(Boolean),
         max_pages: pages,
         post_limit: limit,
@@ -92,9 +129,20 @@ export default function Discovery() {
         } else if (evt.type === 'error') {
           addToast(evt.message || '搜索失败', 'error');
         }
-      });
-    } catch (err: any) { addToast(err.message, 'error'); }
+      }, ctrl.signal);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        addToast('搜索已取消', 'info');
+      } else {
+        addToast(err.message, 'error');
+      }
+    }
     setSearching(false);
+    searchAbortRef.current = null;
+  }
+
+  function cancelSearch() {
+    searchAbortRef.current?.abort();
   }
 
   async function doDownload(indicesStr: string) {
@@ -174,22 +222,23 @@ export default function Discovery() {
     <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">图片发现</h2>
-        <p className="text-xs text-text-muted mt-0.5">从微博搜寻明星美图，AI 智能评分筛选</p>
+        <p className="text-xs text-text-muted mt-0.5">{activePlatform?.search_params_description || '从平台搜寻美图，AI 智能评分筛选'}</p>
       </div>
 
       {/* Search Params */}
       <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4 shadow-sm">
         <h3 className="text-xs font-medium text-text-muted">搜索参数</h3>
         <div className="grid grid-cols-3 gap-3">
-          <label>抓取模式
-            <Select value={mode} onChange={setMode} options={[
-              { label: '明星列表', value: 'celebrities' },
-              { label: '本人时间线', value: 'own' },
-              { label: '混合模式', value: 'mixed' },
-              { label: '超话抓取', value: 'super_topic' },
-              { label: '关键词搜索', value: 'keyword' },
-            ]} />
+          <label>内容平台
+            <Select value={platform} onChange={handlePlatformChange} options={
+              Object.values(platforms).map((p) => ({ label: p.name, value: p.id }))
+            } />
           </label>
+          <label>抓取模式
+            <Select value={mode} onChange={setMode} options={modeOptions} />
+          </label>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
           <label>抓取页数
             <NumberInput value={pages} onChange={setPages} min={1} max={5} />
           </label>
@@ -197,19 +246,26 @@ export default function Discovery() {
             <NumberInput value={limit} onChange={setLimit} min={1} max={20} />
           </label>
         </div>
-        {(mode === 'celebrities' || mode === 'mixed') && (
+        {/* Weibo-specific fields */}
+        {platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed') && (
           <label>明星列表（逗号分隔）
             <input type="text" value={celebs} onChange={(e) => setCelebs(e.target.value)} />
           </label>
         )}
-        {mode === 'super_topic' && (
+        {platform === 'weibo' && mode === 'super_topic' && (
           <label>超话列表（逗号分隔）
             <input type="text" value={superTopics} onChange={(e) => setSuperTopics(e.target.value)} placeholder="如：迪丽热巴超话,杨幂超话" />
           </label>
         )}
-        {(mode === 'celebrities' || mode === 'mixed' || mode === 'keyword') && (
+        {platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed' || mode === 'keyword') && (
           <label>搜索标签（逗号分隔）
             <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} />
+          </label>
+        )}
+        {/* Toutiao-specific fields */}
+        {platform === 'toutiao' && mode === 'keyword' && (
+          <label>搜索关键词（逗号分隔）
+            <input type="text" value={toutiaoKeywords} onChange={(e) => setToutiaoKeywords(e.target.value)} placeholder="时尚,明星,穿搭" />
           </label>
         )}
         <label className="flex-row items-center gap-2 w-fit">
@@ -223,7 +279,7 @@ export default function Discovery() {
           </button>
           <button className="btn" onClick={() => doDownload('')} disabled={!discoveryPosts.length}>全部下载</button>
           <button className="btn" onClick={doScore} disabled={!hasLocal}>AI 评分</button>
-          <button className="btn" onClick={clearDiscovery}>清除结果</button>
+          <button className="btn" onClick={() => setClearConfirm(true)}>清除结果</button>
         </div>
       </div>
 
@@ -257,8 +313,9 @@ export default function Discovery() {
                     <span className="text-[11px] text-text-muted">
                       {remoteImgs.length} 张图{imgs.length ? ` · 已下载 ${imgs.length} 张` : ''}
                     </span>
-                    {p.created_at && <span className="text-[11px] text-text-muted">{formatWeiboTime(p.created_at)}</span>}
-                    <button className="btn btn-sm text-text-muted ml-auto" onClick={() => removePost(pi)}>删除</button>
+                    {p.created_at && <span className="text-[11px] text-text-muted">{formatRelativeTime(p.created_at)}</span>}
+                    <button className="btn btn-sm text-text-muted" onClick={() => doDownload(String(pi))}>下载</button>
+                    <button className="btn btn-sm text-text-muted" onClick={() => setRemoveConfirmIndex(pi)}>删除</button>
                   </div>
                   {p.text && <div className="text-xs text-text-muted mb-2 line-clamp-2">{p.text.slice(0, 100)}</div>}
                   <div className="flex flex-wrap gap-1.5">
@@ -281,8 +338,11 @@ export default function Discovery() {
         <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <h3 className="text-xs font-medium text-text-muted">图片画廊</h3>
-            <span className="text-[11px] text-text-muted ml-auto">已选 {selectedImages.length} 张</span>
-            {selectedImages.length > 0 && <button className="btn btn-primary btn-sm" onClick={enqueueSelected}>加入发布队列</button>}
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[11px] text-text-muted">已选 {selectedImages.length} 张</span>
+              <button className="btn btn-sm" onClick={() => selectAllImages(allLocalImages.map((i) => i.path))}>全选/取消</button>
+              {selectedImages.length > 0 && <button className="btn btn-primary btn-sm" onClick={enqueueSelected}>加入发布队列</button>}
+            </div>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
             {allLocalImages.map((item, i) => {
@@ -321,7 +381,26 @@ export default function Discovery() {
         <div className="text-center py-4 text-text-muted text-xs">点击「下载图片」将远程图片保存到本地</div>
       )}
 
-      {searching && <SearchLoadingOverlay message={searchMessage} />}
+      {searching && <SearchLoadingOverlay message={searchMessage} platformName={activePlatform?.name} onCancel={cancelSearch} />}
+
+      <ConfirmDialog
+        open={removeConfirmIndex !== null}
+        title="删除帖子"
+        message={`确认删除第 ${removeConfirmIndex !== null ? removeConfirmIndex + 1 : ''} 条帖子？此操作不可恢复。`}
+        confirmText="删除"
+        danger
+        onConfirm={() => { if (removeConfirmIndex !== null) removePost(removeConfirmIndex); setRemoveConfirmIndex(null); }}
+        onCancel={() => setRemoveConfirmIndex(null)}
+      />
+      <ConfirmDialog
+        open={clearConfirm}
+        title="清除搜索结果"
+        message="确认清除所有搜索结果？此操作将清空当前搜索到的所有帖子。"
+        confirmText="清除"
+        danger
+        onConfirm={() => { setClearConfirm(false); clearDiscovery(); }}
+        onCancel={() => setClearConfirm(false)}
+      />
     </div>
   );
 }

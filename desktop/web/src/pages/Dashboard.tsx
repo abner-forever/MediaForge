@@ -1,13 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi, type HealthStatus, type DashboardStats, type OperationItem } from '../api/client';
-
-const HEALTH_ITEMS = [
-  { key: 'weibo_cookie' as const, name: '微博 Cookie' },
-  { key: 'weibo_uid_or_celebrities' as const, name: '微博 UID/明星' },
-  { key: 'ai_api_key' as const, name: 'AI API Key' },
-  { key: 'ai_base_url' as const, name: 'AI Base URL' },
-];
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -64,20 +57,36 @@ export default function Dashboard() {
       <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
         <h2 className="text-base font-semibold tracking-tight">欢迎使用图文工坊</h2>
         <p className="text-xs text-text-muted mt-1 leading-relaxed">
-          自动化内容发布工具：从微博发现优质图文 → AI 生成标题和文案 → 一键发布到微信公众号
+          自动化内容发布工具：从微博/头条发现优质图文 → AI 生成标题和文案 → 一键发布到微信公众号
         </p>
       </div>
 
       {/* 配置状态 */}
       <div className="grid grid-cols-4 gap-2.5">
-        {HEALTH_ITEMS.map((item) => (
-          <div key={item.key} className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
-            <div className="flex justify-center">
-              <span className={`w-2 h-2 rounded-full ${health?.[item.key] ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            </div>
-            <div className="mt-2 text-[11px] text-text-muted">{item.name}</div>
+        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
+          <div className="flex justify-center">
+            <span className={`w-2 h-2 rounded-full ${health?.platform_auth ? 'bg-emerald-500' : 'bg-red-500'}`} />
           </div>
-        ))}
+          <div className="mt-2 text-[11px] text-text-muted">{health?.platform_name || '平台'} 认证</div>
+        </div>
+        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
+          <div className="flex justify-center">
+            <span className={`w-2 h-2 rounded-full ${health?.weibo_cookie ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          </div>
+          <div className="mt-2 text-[11px] text-text-muted">微博 Cookie</div>
+        </div>
+        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
+          <div className="flex justify-center">
+            <span className={`w-2 h-2 rounded-full ${health?.ai_api_key ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          </div>
+          <div className="mt-2 text-[11px] text-text-muted">AI API Key</div>
+        </div>
+        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
+          <div className="flex justify-center">
+            <span className={`w-2 h-2 rounded-full ${health?.ai_base_url ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          </div>
+          <div className="mt-2 text-[11px] text-text-muted">AI Base URL</div>
+        </div>
       </div>
 
       {/* 统计数据 */}
@@ -108,9 +117,9 @@ export default function Dashboard() {
         <h3 className="text-xs font-medium text-text-muted mb-4">快捷操作</h3>
         <div className="grid grid-cols-3 gap-2.5">
           {[
-            { icon: '🔍', title: '搜图', desc: '从微博搜索优质图文', path: '/discovery' },
+            { icon: '🔍', title: '搜图', desc: '从平台搜索优质图文', path: '/discovery' },
             { icon: '📝', title: '发布队列', desc: '查看和管理待发布内容', path: '/queue' },
-            { icon: '⚙️', title: '设置', desc: '配置大模型和微博账号', path: '/settings' },
+            { icon: '⚙️', title: '设置', desc: '配置大模型和平台账号', path: '/settings' },
           ].map((a) => (
             <div
               key={a.path}
@@ -132,7 +141,7 @@ export default function Dashboard() {
           <div className="text-center py-8">
             <div className="text-2xl mb-2 opacity-30">📋</div>
             <p className="text-xs text-text-muted">暂无操作记录</p>
-            <p className="text-[11px] text-text-muted mt-1">搜索微博图片后将在此显示</p>
+            <p className="text-[11px] text-text-muted mt-1">搜索图片后将在此显示</p>
           </div>
         ) : (
           <div className="space-y-0 max-h-64 overflow-y-auto">
