@@ -4,3 +4,8 @@ desktop/web/node_modules/
 .env
 .claude/settings.local.json
 __pycache__/
+dist/
+build/
+*.dmg
+*.zip
+*.exe

@@ -1,0 +1,192 @@
+name: 构建桌面安装包
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'CLAUDE.md'
+      - 'SPEC.md'
+      - 'USER_GUIDE.md'
+  workflow_dispatch:  # 允许手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: 构建前端
+        run: |
+          cd desktop/web
+          npm ci
+          npm run build
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装 Python 依赖
+        run: |
+          pip install -r requirements.txt pyinstaller pillow
+
+      - name: 生成应用图标（icns）
+        run: |
+          mkdir -p build
+          python3 -c "
+          from PIL import Image
+          import os
+
+          img = Image.open('desktop/static/logo.png')
+          # 裁切为正方形
+          size = min(img.size)
+          left = (img.width - size) // 2
+          top = (img.height - size) // 2
+          img = img.crop((left, top, left + size, top + size))
+
+          os.makedirs('build/icon.iconset', exist_ok=True)
+          for s in [16, 32, 64, 128, 256, 512, 1024]:
+              resized = img.resize((s, s), Image.LANCZOS)
+              resized.save(f'build/icon.iconset/icon_{s}x{s}.png')
+              if s * 2 <= 1024:
+                  resized.save(f'build/icon.iconset/icon_{s}x{s}@2x.png')
+
+          import subprocess
+          subprocess.run(['iconutil', '-c', 'icns', 'build/icon.iconset', '-o', 'build/app.icns'], check=True)
+          print('icon created: build/app.icns')
+          "
+
+      - name: PyInstaller 构建 macOS 应用
+        run: pyinstaller desktop/build.spec --clean
+
+      - name: 创建 DMG
+        run: |
+          hdiutil create -volname "图文工坊" \
+            -srcfolder dist/MediaForge.app \
+            -ov -format UDZO \
+            dist/MediaForge-macOS-unsigned.dmg
+
+      - name: 上传 DMG 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaForge-macOS
+          path: dist/MediaForge-macOS-unsigned.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: desktop/web/package-lock.json
+
+      - name: 构建前端
+        shell: bash
+        run: |
+          cd desktop/web
+          npm ci
+          npm run build
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装 Python 依赖
+        shell: bash
+        run: |
+          pip install -r requirements.txt pyinstaller pillow
+
+      - name: 生成应用图标（ico）
+        shell: bash
+        run: |
+          mkdir -p build
+          python -c "
+          from PIL import Image
+          img = Image.open('desktop/static/logo.png')
+          size = min(img.size)
+          left = (img.width - size) // 2
+          top = (img.height - size) // 2
+          img = img.crop((left, top, left + size, top + size))
+          img.save('build/app.ico', sizes=[(256, 256)])
+          print('icon created: build/app.ico')
+          "
+
+      - name: PyInstaller 构建 Windows 应用
+        shell: bash
+        run: pyinstaller desktop/build.spec --clean
+
+      - name: 打包为 ZIP
+        shell: bash
+        run: |
+          cd dist
+          7z a -tzip MediaForge-Windows.zip MediaForge/
+
+      - name: 上传 ZIP 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaForge-Windows
+          path: dist/MediaForge-Windows.zip
+
+  create-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          pattern: MediaForge-*
+          merge-multiple: true
+
+      - name: 生成版本号
+        id: version
+        run: |
+          DATE_TAG=$(date '+%Y%m%d-%H%M')
+          echo "tag=v${DATE_TAG}" >> $GITHUB_OUTPUT
+          echo "date=${DATE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "图文工坊 v${{ steps.version.outputs.date }}"
+          body: |
+            ## 图文工坊 自动构建
+
+            提交: ${{ github.sha }}
+
+            ### 下载
+
+            - **macOS**: `MediaForge-macOS-unsigned.dmg` — 首次运行需右键 → 打开（未签名）
+            - **Windows**: `MediaForge-Windows.zip` — 解压后运行 `MediaForge.exe`
+
+            ### 使用说明
+
+            1. 解压/安装后，首次运行前请拷贝 `.env.example` 为 `.env` 并配置
+            2. 如需微信发布功能，请额外运行 `playwright install chromium`
+          files: |
+            MediaForge-macOS-unsigned.dmg
+            MediaForge-Windows.zip
+          draft: true
+          prerelease: false
