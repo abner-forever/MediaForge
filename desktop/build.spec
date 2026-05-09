@@ -5,12 +5,18 @@ macOS: pyinstaller desktop/build.spec  →  dist/MediaForge.app
 Windows: pyinstaller desktop/build.spec →  dist/MediaForge/MediaForge.exe
 """
 
+import sys
 import platform
 from pathlib import Path
 
 system = platform.system()
-SPEC_DIR = Path(__file__).resolve().parent       # desktop/
-PROJECT_ROOT = SPEC_DIR.parent                    # 项目根目录
+
+# PyInstaller exec spec 文件时不注入 __file__，改用 sys.argv[0] 定位
+_spec_path = Path(sys.argv[0])
+if not _spec_path.is_absolute():
+    _spec_path = Path.cwd() / _spec_path
+SPEC_DIR = _spec_path.resolve().parent            # desktop/
+PROJECT_ROOT = SPEC_DIR.parent                     # 项目根目录
 
 block_cipher = None
 

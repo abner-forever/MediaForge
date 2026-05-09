@@ -1,5 +1,9 @@
 # MediaForge · 图文工坊
 
+![构建状态](https://img.shields.io/github/actions/workflow/status/abner-forever/MediaForge/build.yml?branch=main&logo=github&label=%E6%9E%84%E5%BB%BA)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
+
 自动化的微信公众号内容发布工具。从微博发现优质图文 → AI 智能评分与文案生成 → 一键发布到微信公众号。
 
 ## 功能特性
@@ -59,7 +63,35 @@ python3 main.py
 cd desktop/web
 npm run dev    # Vite 热更新，端口 5173，API 代理到 8765
 ```
-新增一个今日头条的抓取数据平台配置 支持可切换 微博或者今日头条 后续可能还会新增平台 帮我实现 且要支持后续的可扩展性以及迭代优
+
+### 打包桌面应用
+
+```bash
+# 构建前端
+cd desktop/web && npm ci && npm run build
+
+# 安装打包工具
+pip install pyinstaller pillow
+
+# 执行打包（项目根目录）
+pyinstaller desktop/build.spec --clean
+# macOS → dist/MediaForge.app  （可用 hdiutil 制作 DMG）
+# Windows → dist/MediaForge/   （可打包为 ZIP）
+```
+
+> 推送到 `main` 分支会自动触发 GitHub Actions 构建安装包，详见 `.github/workflows/build.yml`。
+
+## 平台支持
+
+支持多数据源，通过 `PLATFORM` 配置切换：
+
+| 平台 | 模式 | 说明 |
+|------|------|------|
+| **微博** (`weibo`) | `own` / `celebrities` / `mixed` / `super_topic` / `keyword` | 明星时间线聚合、超话、关键词搜索 |
+| **今日头条** (`toutiao`) | `feed` / `keyword` | 信息流推荐、关键词搜索 |
+
+设计上采用 `services/platforms/` 插件架构，新增平台只需继承 `PlatformService` 基类并注册即可。
+
 ## 项目结构
 
 ```
