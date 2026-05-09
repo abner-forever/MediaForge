@@ -115,15 +115,12 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 if system == 'Darwin':
-    # macOS: 构建 .app 包
+    # macOS: .app 包（BUNDLE 自动执行 COLLECT 逻辑）
     app_icon = SPEC_DIR / 'build' / 'app.icns'
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
+        exclude_binaries=True,
         name='MediaForge',
         debug=False,
         bootloader_ignore_signals=False,
@@ -157,15 +154,12 @@ if system == 'Darwin':
         version='1.0.0',
     )
 elif system == 'Windows':
-    # Windows: 构建单目录可执行程序
+    # Windows: 单目录模式 → dist/MediaForge/MediaForge.exe
     app_icon = SPEC_DIR / 'build' / 'app.ico'
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
+        exclude_binaries=True,
         name='MediaForge',
         debug=False,
         bootloader_ignore_signals=False,
@@ -180,4 +174,11 @@ elif system == 'Windows':
         codesign_identity=None,
         entitlements_file=None,
         icon=str(app_icon) if app_icon.exists() else None,
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        name='MediaForge',
     )
