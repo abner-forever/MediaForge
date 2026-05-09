@@ -1,0 +1,21 @@
+[project]
+name = "MediaForge"
+version = "1.0.0"
+description = "自动化微信公众号内容发布工具"
+requires-python = ">=3.10"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+commit_message = "chore(release): {version}"
+commit_parser = "conventional"
+major_on_zero = true
+tag_format = "v{version}"
+
+[tool.semantic_release.branches.main]
+match = "(main|master)"
+
+[tool.semantic_release.commit_author]
+default = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+[tool.semantic_release.publish]
+dist_glob_patterns = []

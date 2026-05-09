@@ -152,41 +152,55 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 下载所有构建产物
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 配置 git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 安装 python-semantic-release
+        run: pip install python-semantic-release
+
+      - name: 记录当前最新 tag
+        id: before
+        run: echo "tag=$(git tag --sort=-creatordate | head -1 || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Semantic Release — 自动版本号 + 发布
+        id: semantic
+        run: semantic-release version --skip-build --no-changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 获取新版 tag
+        id: after
+        run: |
+          NEW_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
+          echo "tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          if [ "${NEW_TAG}" != "${{ steps.before.outputs.tag }}" ] && [ -n "${NEW_TAG}" ]; then
+            echo "new=true" >> $GITHUB_OUTPUT
+          else
+            echo "new=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 下载构建产物
+        if: steps.after.outputs.new == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: MediaForge-*
           merge-multiple: true
 
-      - name: 生成版本号
-        id: version
+      - name: 上传构件到 Release
+        if: steps.after.outputs.new == 'true'
         run: |
-          DATE_TAG=$(date '+%Y%m%d-%H%M')
-          echo "tag=v${DATE_TAG}" >> $GITHUB_OUTPUT
-          echo "date=${DATE_TAG}" >> $GITHUB_OUTPUT
-
-      - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "图文工坊 v${{ steps.version.outputs.date }}"
-          body: |
-            ## 图文工坊 自动构建
-
-            提交: ${{ github.sha }}
-
-            ### 下载
-
-            - **macOS**: `MediaForge-macOS-unsigned.dmg` — 首次运行需右键 → 打开（未签名）
-            - **Windows**: `MediaForge-Windows.zip` — 解压后运行 `MediaForge.exe`
-
-            ### 使用说明
-
-            1. 解压/安装后，首次运行前请拷贝 `.env.example` 为 `.env` 并配置
-            2. 如需微信发布功能，请额外运行 `playwright install chromium`
-          files: |
-            MediaForge-macOS-unsigned.dmg
+          gh release upload "${{ steps.after.outputs.tag }}" \
+            MediaForge-macOS-unsigned.dmg \
             MediaForge-Windows.zip
-          draft: true
-          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
