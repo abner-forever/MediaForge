@@ -38,6 +38,35 @@ python3 -m compileall .                # Python 语法检查
 cd desktop/web && npx tsc --noEmit     # 前端类型检查
 ```
 
+### 桌面应用打包（PyInstaller）
+```bash
+cd desktop/web && npm ci && npm run build   # 先构建前端
+cd ../..
+pip install pyinstaller pillow              # 安装打包工具
+pyinstaller desktop/build.spec --clean      # 打包
+# macOS → dist/MediaForge.app
+# Windows → dist/MediaForge/MediaForge.exe
+```
+
+### macOS DMG 制作（本地）
+```bash
+hdiutil create -volname "图文工坊" -srcfolder dist/MediaForge.app -ov -format UDZO dist/MediaForge-macOS-unsigned.dmg
+```
+
+## CI/CD
+
+推送到 `main` 分支自动触发 GitHub Actions 构建桌面安装包：
+- **macOS** — PyInstaller 构建 `.app` → `hdiutil` 打包为 `.dmg`（未签名）
+- **Windows** — PyInstaller 构建目录 → `7z` 打包为 `.zip`
+- **Release** — 构建完成后自动创建 **Draft Release**，版本号 `vYYYYMMDD-HHMM`
+
+手动触发：GitHub 仓库 Actions 页面 → "构建桌面安装包" → "Run workflow"
+
+工作流文件：`.github/workflows/build.yml`
+PyInstaller 配置：`desktop/build.spec`
+
+> 注意：Playwright Chromium 浏览器未打包进安装包。如需微信发布功能，用户需手动运行 `playwright install chromium`。
+
 ## 架构
 
 ### 数据流
