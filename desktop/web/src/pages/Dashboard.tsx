@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi, type HealthStatus, type DashboardStats, type OperationItem } from '../api/client';
 
@@ -11,12 +11,8 @@ function timeAgo(iso: string): string {
 }
 
 const ACTION_ICONS: Record<string, string> = {
-  '搜索': '🔍',
-  '下载图片': '⬇️',
-  '加入队列': '📥',
-  'AI 生成': '🤖',
-  '保存草稿': '💾',
-  '发布': '🚀',
+  '搜索': '🔍', '下载图片': '⬇️', '加入队列': '📥',
+  'AI 生成': '🤖', '保存草稿': '💾', '发布': '🚀',
 };
 
 export default function Dashboard() {
@@ -29,127 +25,118 @@ export default function Dashboard() {
   async function load() {
     try {
       const [h, s, o] = await Promise.all([
-        dashboardApi.health(),
-        dashboardApi.stats(),
-        dashboardApi.operations(),
+        dashboardApi.health(), dashboardApi.stats(), dashboardApi.operations(),
       ]);
       setHealth(h); setStats(s); setOps(o);
       setConnError(false);
-    } catch {
-      setConnError(true);
-    }
+    } catch { setConnError(true); }
   }
 
   useEffect(() => { load(); }, []);
 
   if (connError) return (
-    <div className="flex flex-col items-center justify-center py-24 space-y-4">
-      <div className="text-4xl opacity-30">🔌</div>
-      <p className="text-sm text-text-muted">无法连接后端服务</p>
-      <p className="text-xs text-text-muted">请确保已启动：<code className="bg-bg-secondary px-2 py-0.5 rounded text-[12px]">cd desktop && python main.py</code></p>
-      <button className="btn btn-sm" onClick={load}>重试</button>
+    <div className="empty-state py-24 animate-in">
+      <div className="empty-state-icon">🔌</div>
+      <div className="empty-state-title">无法连接后端服务</div>
+      <div className="empty-state-desc mb-4">
+        请确保已启动 <code className="bg-bg-secondary px-1.5 py-0.5 rounded text-xs">cd desktop && python main.py</code>
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={load}>重试连接</button>
     </div>
   );
 
+  const statusItems = [
+    { label: '平台认证', ok: health?.platform_auth },
+    { label: '微博 Cookie', ok: health?.weibo_cookie },
+    { label: 'AI API Key', ok: health?.ai_api_key },
+    { label: 'AI Base URL', ok: health?.ai_base_url },
+  ];
+
+  const statsItems = [
+    { label: '本地图片', value: stats?.local_images ?? 0, path: '/materials' },
+    { label: '待发布', value: stats?.queue_size ?? 0 },
+    { label: '已选图片', value: stats?.selected_count ?? 0 },
+    { label: '搜索结果', value: stats?.discovery_count ?? 0 },
+  ];
+
+  const quickActions = [
+    { icon: '🔍', title: '搜索图文', desc: '从平台搜索优质内容', path: '/discovery' },
+    { icon: '📝', title: '发布队列', desc: '查看和管理待发布内容', path: '/queue' },
+    { icon: '⚙️', title: '系统设置', desc: '配置大模型和平台账号', path: '/settings' },
+  ];
+
   return (
-    <div className="space-y-5">
-      {/* 介绍区块 */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h2 className="text-base font-semibold tracking-tight">欢迎使用图文工坊</h2>
-        <p className="text-xs text-text-muted mt-1 leading-relaxed">
-          自动化内容发布工具：从微博/头条发现优质图文 → AI 生成标题和文案 → 一键发布到微信公众号
+    <div className="space-y-5 animate-in">
+      {/* Hero */}
+      <div className="card relative overflow-hidden">
+        <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-accent" />
+        <h2 className="text-xl font-bold text-text tracking-tight pl-3">欢迎使用图文工坊</h2>
+        <p className="text-sm text-text-secondary mt-1.5 leading-relaxed max-w-2xl">
+          自动化内容发布工具 —— 从微博/头条发现优质图文，
+          <span className="text-accent">AI 生成标题和文案</span>，
+          一键发布到微信公众号
         </p>
       </div>
 
-      {/* 配置状态 */}
-      <div className="grid grid-cols-4 gap-2.5">
-        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
-          <div className="flex justify-center">
-            <span className={`w-2 h-2 rounded-full ${health?.platform_auth ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      {/* Status */}
+      <div className="grid grid-cols-4 gap-3">
+        {statusItems.map((item) => (
+          <div key={item.label} className="card text-center py-4">
+            <div className={`inline-flex items-center justify-center w-3 h-3 rounded-full ${item.ok ? 'bg-accent' : 'bg-danger'} mb-2`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${item.ok ? 'bg-[var(--accent)]/40' : 'bg-danger/40'}`} />
+            </div>
+            <div className="text-xs text-text-muted">{item.label}</div>
           </div>
-          <div className="mt-2 text-[11px] text-text-muted">{health?.platform_name || '平台'} 认证</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
-          <div className="flex justify-center">
-            <span className={`w-2 h-2 rounded-full ${health?.weibo_cookie ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          </div>
-          <div className="mt-2 text-[11px] text-text-muted">微博 Cookie</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
-          <div className="flex justify-center">
-            <span className={`w-2 h-2 rounded-full ${health?.ai_api_key ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          </div>
-          <div className="mt-2 text-[11px] text-text-muted">AI API Key</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-3.5 text-center">
-          <div className="flex justify-center">
-            <span className={`w-2 h-2 rounded-full ${health?.ai_base_url ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          </div>
-          <div className="mt-2 text-[11px] text-text-muted">AI Base URL</div>
-        </div>
+        ))}
       </div>
 
-      {/* 统计数据 */}
-      <div className="grid grid-cols-4 gap-2.5">
-        <div
-          className="bg-bg-card border border-border rounded-xl p-4 text-center cursor-pointer hover:border-accent/50 transition-colors"
-          onClick={() => navigate('/materials')}
-        >
-          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.local_images ?? 0}</div>
-          <div className="text-[11px] text-text-muted mt-1">本地图片</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.queue_size ?? 0}</div>
-          <div className="text-[11px] text-text-muted mt-1">待发布</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.selected_count ?? 0}</div>
-          <div className="text-[11px] text-text-muted mt-1">已选图片</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-2xl font-semibold tabular-nums text-accent">{stats?.discovery_count ?? 0}</div>
-          <div className="text-[11px] text-text-muted mt-1">搜索结果</div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        {statsItems.map((item) => (
+          <div
+            key={item.label}
+            className={`card text-center py-5 ${item.path ? 'card-hover' : ''}`}
+            onClick={() => item.path && navigate(item.path)}
+          >
+            <div className="text-3xl font-bold text-text tabular-nums tracking-tight">{item.value}</div>
+            <div className="text-xs text-text-muted mt-0.5">{item.label}</div>
+          </div>
+        ))}
       </div>
 
-      {/* 快捷操作 */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h3 className="text-xs font-medium text-text-muted mb-4">快捷操作</h3>
-        <div className="grid grid-cols-3 gap-2.5">
-          {[
-            { icon: '🔍', title: '搜图', desc: '从平台搜索优质图文', path: '/discovery' },
-            { icon: '📝', title: '发布队列', desc: '查看和管理待发布内容', path: '/queue' },
-            { icon: '⚙️', title: '设置', desc: '配置大模型和平台账号', path: '/settings' },
-          ].map((a) => (
+      {/* Quick Actions */}
+      <div className="card">
+        <div className="section-header mb-4">快捷操作</div>
+        <div className="grid grid-cols-3 gap-3">
+          {quickActions.map((a) => (
             <div
               key={a.path}
               onClick={() => navigate(a.path)}
-              className="bg-bg-secondary rounded-xl p-4 text-center cursor-pointer hover:border hover:border-accent/50 transition-all group"
+              className="bg-bg-secondary rounded-xl p-5 text-center cursor-pointer transition-all hover:bg-accent-soft hover:shadow-sm"
             >
-              <div className="text-xl mb-1">{a.icon}</div>
-              <div className="text-sm font-medium">{a.title}</div>
-              <div className="text-[11px] text-text-muted mt-0.5">{a.desc}</div>
+              <div className="text-2xl mb-2">{a.icon}</div>
+              <div className="text-sm font-semibold text-text">{a.title}</div>
+              <div className="text-xs text-text-muted mt-0.5">{a.desc}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 最近操作 */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 shadow-sm">
-        <h3 className="text-xs font-medium text-text-muted mb-3">最近操作</h3>
+      {/* Operations */}
+      <div className="card">
+        <div className="section-header mb-4">最近操作</div>
         {ops.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="text-2xl mb-2 opacity-30">📋</div>
-            <p className="text-xs text-text-muted">暂无操作记录</p>
-            <p className="text-[11px] text-text-muted mt-1">搜索图片后将在此显示</p>
+          <div className="empty-state py-8">
+            <div className="empty-state-icon">📋</div>
+            <div className="empty-state-title">暂无操作记录</div>
           </div>
         ) : (
-          <div className="space-y-0 max-h-64 overflow-y-auto">
+          <div className="space-y-0 max-h-64 overflow-y-auto -mx-1">
             {ops.map((op, i) => (
-              <div key={i} className="flex items-center gap-3 text-[13px] py-2.5 border-b border-border-subtle last:border-0">
-                <span className="text-base">{ACTION_ICONS[op.action] || '📌'}</span>
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border-b border-border-subtle last:border-0 text-sm hover:bg-accent-softer transition-colors">
+                <span className="text-base shrink-0">{ACTION_ICONS[op.action] || '📌'}</span>
                 <span className="text-text-secondary flex-1 truncate">{op.detail || op.action}</span>
-                <span className="text-[11px] text-text-muted shrink-0">{timeAgo(op.time)}</span>
+                <span className="text-xs text-text-muted shrink-0">{timeAgo(op.time)}</span>
               </div>
             ))}
           </div>

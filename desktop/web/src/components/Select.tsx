@@ -47,7 +47,7 @@ export default function Select({ value, onChange, options, placeholder }: Select
           w-full flex items-center justify-between
           px-3 py-[9px] rounded-lg border text-[13px] text-left
           transition-[border-color,box-shadow] duration-150 cursor-pointer
-          bg-[var(--bg-secondary)] text-[var(--text)] font-[inherit]
+          bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
           ${open
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)] bg-[var(--bg-card)]'
             : 'border-[var(--border)] hover:border-[var(--accent)]'

@@ -106,6 +106,7 @@ function applyAccentVars(accentId: string, theme: string) {
   const root = document.documentElement;
   root.style.setProperty('--accent', accent);
   root.style.setProperty('--accent-hover', preset.hover);
+  root.style.setProperty('--accent-solid', accent);
   root.style.setProperty('--accent-soft', accent + '14');
   root.style.setProperty('--accent-softer', accent + '0a');
   localStorage.setItem(ACCENT_KEY, accentId);
