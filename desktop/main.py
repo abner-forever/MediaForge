@@ -27,6 +27,23 @@ def start_server(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 
 def main() -> None:
+    try:
+        _start_app()
+    except Exception:
+        import traceback
+        try:
+            crash_log = PROJECT_ROOT / "data" / "logs" / "crash.log"
+            crash_log.parent.mkdir(parents=True, exist_ok=True)
+            crash_log.write_text(
+                f"[{__import__('datetime').datetime.now()}]\n{traceback.format_exc()}",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        raise
+
+
+def _start_app() -> None:
     ensure_dirs()
 
     host = "127.0.0.1"

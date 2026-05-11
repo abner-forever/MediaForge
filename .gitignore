@@ -9,3 +9,4 @@ build/
 *.dmg
 *.zip
 *.exe
+dmg_staging/

@@ -18,12 +18,12 @@ if not _spec_path.is_absolute():
 SPEC_DIR = _spec_path.resolve().parent            # desktop/
 PROJECT_ROOT = SPEC_DIR.parent                     # 项目根目录
 
-# 从 pyproject.toml 读取版本号
-import tomllib
+# 从 pyproject.toml 读取版本号（兼容 Python 3.10，tomllib 需 3.11+）
+import re
 _pyproject_path = PROJECT_ROOT / 'pyproject.toml'
 if _pyproject_path.exists():
-    _pyproject_data = tomllib.loads(_pyproject_path.read_text(encoding='utf-8'))
-    APP_VERSION = _pyproject_data['project']['version']
+    _match = re.search(r'^version\s*=\s*"([^"]+)"', _pyproject_path.read_text('utf-8'), re.M)
+    APP_VERSION = _match.group(1) if _match else '0.0.0'
 else:
     APP_VERSION = '0.0.0'
 
@@ -40,6 +40,8 @@ a = Analysis(
         (str(SPEC_DIR / 'static' / 'logo.png'), 'desktop/static'),
         # .env 模板（首次运行可拷贝）
         (str(PROJECT_ROOT / '.env.example'), '.'),
+        # Windows 调试脚本
+        (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
     ],
     hiddenimports=[
         # ── 项目模块 ──────────────────────────
@@ -66,6 +68,16 @@ a = Analysis(
         # ── GUI ──────────────────────────────
         'webview',
         'webview.menu',
+        # ── pywebview Windows 平台 ─────────────
+        'webview.platforms.edgechromium',
+        'webview.platforms.winforms',
+        'webview.platforms.mshtml',
+        'webview.platforms.cef',
+        'clr',
+        'clr.System',
+        'clr.System.Windows.Forms',
+        'clr.System.Drawing',
+        'winreg',
         # ── ASGI 服务器 ──────────────────────
         'uvicorn',
         'uvicorn.loggers',
@@ -125,7 +137,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 if system == 'Darwin':
     # macOS: .app 包（BUNDLE 自动执行 COLLECT 逻辑）
-    app_icon = SPEC_DIR / 'build' / 'app.icns'
+    app_icon = PROJECT_ROOT / 'build' / 'app.icns'
     exe = EXE(
         pyz,
         a.scripts,
@@ -158,7 +170,10 @@ if system == 'Darwin':
             'CFBundleVersion': APP_VERSION,
             'CFBundleShortVersionString': APP_VERSION,
             'CFBundleDevelopmentRegion': 'zh_CN',
+            'CFBundlePackageType': 'APPL',
+            'LSMinimumSystemVersion': '10.15',
             'NSHighResolutionCapable': True,
+            'NSRequiresAquaSystemAppearance': False,
         },
         version=APP_VERSION,
     )

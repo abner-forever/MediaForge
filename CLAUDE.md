@@ -48,10 +48,29 @@ pyinstaller desktop/build.spec --clean      # 打包
 # Windows → dist/MediaForge/MediaForge.exe
 ```
 
+### 一键本地构建（推荐）
+```bash
+bash build_local.sh   # 自动完成全部步骤：前端 → 图标 → PyInstaller → DMG
+```
+
 ### macOS DMG 制作（本地）
 ```bash
-hdiutil create -volname "图文工坊" -srcfolder dist/MediaForge.app -ov -format UDZO dist/MediaForge-macOS-unsigned.dmg
+bash desktop/build_dmg.sh        # 自动检测当前架构
+bash desktop/build_dmg.sh x86_64 # 强制 Intel 架构
+bash desktop/build_dmg.sh arm64  # 强制 Apple Silicon 架构
 ```
+
+### Windows 安装包制作（本地，需 Windows 环境 + Inno Setup）
+```bash
+pip install -r requirements.txt pyinstaller pillow
+cd desktop/web && npm ci && npm run build && cd ../..
+pyinstaller desktop/build.spec --clean
+iscc /dMyAppVersion="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")" desktop/setup.iss
+# → dist/MediaForge-Windows-Setup.exe
+```
+
+### Windows 调试
+如果安装后 `.exe` 无法运行，可在安装目录运行 `desktop\run_console.bat` 查看错误输出，或检查 `data/logs/crash.log` 文件。
 
 ## CI/CD
 
