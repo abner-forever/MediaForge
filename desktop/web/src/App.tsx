@@ -7,6 +7,7 @@ import Materials from './pages/Materials';
 import Settings from './pages/Settings';
 
 export default function App() {
+  console.log('App build test 1.0');
   return (
     <BrowserRouter>
       <Routes>
