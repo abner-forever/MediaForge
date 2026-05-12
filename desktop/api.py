@@ -25,6 +25,7 @@ from services.ai import generate_content
 from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
 from services.platforms import get_platform, list_platforms
+from services.weibo_login import run_weibo_login
 from utils.env_manager import read_env, update_env
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
@@ -180,6 +181,37 @@ async def get_api_key():
         or ""
     )
     return {"key": key}
+
+
+@app.get("/api/settings/weibo-login-stream")
+async def weibo_login_stream():
+    """SSE 流：打开 Playwright 浏览器让用户扫码登录微博，捕获 Cookie 和 UID 后推送给前端。"""
+    import json as _json
+    from queue import Empty, Queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    msg_queue: Queue = Queue()
+    ThreadPoolExecutor(1).submit(run_weibo_login, msg_queue)
+
+    def event_stream():
+        while True:
+            try:
+                msg = msg_queue.get(timeout=0.5)
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+
+            if msg[0] == "progress":
+                yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg[0] == "done":
+                _, cookie, uid = msg
+                yield f"data: {_json.dumps({'type': 'done', 'cookie': cookie, 'uid': uid}, ensure_ascii=False)}\n\n"
+                break
+            elif msg[0] == "error":
+                yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/api/platforms")

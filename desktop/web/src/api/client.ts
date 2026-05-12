@@ -147,6 +147,13 @@ export interface SearchStreamEvent {
   total_images?: number;
 }
 
+export interface WeiboLoginEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+  cookie?: string;
+  uid?: string;
+}
+
 export interface PlatformMeta {
   id: string;
   name: string;
@@ -177,6 +184,26 @@ export const settingsApi = {
   get: () => get<SettingsData>('/api/settings'),
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
   getKey: () => get<{ key: string }>('/api/settings/api-key'),
+  weiboLogin: (onEvent: (evt: WeiboLoginEvent) => void): Promise<void> => {
+    return fetch('/api/settings/weibo-login-stream').then(async (res) => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)));
+          } catch { /* ignore */ }
+        }
+      }
+    });
+  },
 };
 
 /* ── Discovery API ────────────────────────────── */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, THEME_PRESETS } from '../stores';
-import { settingsApi, type SettingsData } from '../api/client';
+import { settingsApi, type SettingsData, type WeiboLoginEvent } from '../api/client';
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
 import EyeIcon from '../components/EyeIcon';
@@ -171,10 +171,55 @@ function WeiboSection({ data, save }: { data: SettingsData; save: (u: Record<str
   const [tags, setTags] = useState(data.weibo_search_tags);
   const [sceneTags, setSceneTags] = useState(data.weibo_scene_extra_tags);
   const [superTopics, setSuperTopics] = useState(data.weibo_super_topics);
+  const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [loginMessage, setLoginMessage] = useState('');
+  const { addToast } = useStore();
+
+  async function handleWeiboLogin() {
+    setLoginState('loading');
+    setLoginMessage('正在启动浏览器...');
+    try {
+      await settingsApi.weiboLogin((evt: WeiboLoginEvent) => {
+        if (evt.type === 'progress') {
+          setLoginMessage(evt.message || '');
+        } else if (evt.type === 'done') {
+          if (evt.cookie) setCookie(evt.cookie);
+          if (evt.uid) setUid(evt.uid);
+          setLoginState('idle');
+          setLoginMessage('');
+          addToast('微博登录成功，Cookie 已自动填入，请点击保存', 'success');
+        } else if (evt.type === 'error') {
+          setLoginState('error');
+          setLoginMessage(evt.message || '登录失败');
+          addToast(evt.message || '微博登录失败', 'error');
+        }
+      });
+    } catch (err: any) {
+      setLoginState('error');
+      setLoginMessage(err.message || '登录异常');
+      addToast(err.message || '登录异常', 'error');
+    }
+  }
 
   return (
     <div className="card space-y-4">
-      <div className="section-header">微博配置</div>
+      <div className="flex items-center justify-between">
+        <div className="section-header">微博配置</div>
+        <div className="flex items-center gap-2">
+          {loginState === 'loading' && (
+            <span className="text-xs text-text-muted flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-border border-t-accent rounded-full animate-spin" />
+              {loginMessage}
+            </span>
+          )}
+          {loginState === 'error' && (
+            <span className="text-xs text-danger">{loginMessage}</span>
+          )}
+          <button className="btn btn-sm" onClick={handleWeiboLogin} disabled={loginState === 'loading'}>
+            {loginState === 'loading' ? '登录中...' : '微博登录'}
+          </button>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="col-span-2">微博 Cookie<textarea value={cookie} onChange={e => setCookie(e.target.value)} placeholder={data.weibo_cookie_set ? '已设置（留空保持不变）' : ''} rows={2} /></label>
         <label>微博 UID<input type="text" value={uid} onChange={e => setUid(e.target.value)} placeholder="留空自动推断" /></label>
