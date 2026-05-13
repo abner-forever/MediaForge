@@ -81,12 +81,44 @@ def _strip_html(text: str) -> str:
 def _extract_images(item: dict) -> List[str]:
     """从搜索结果项中提取图片 URL 列表。
 
-    头条搜图 API 每项只有单张 img_url。
+    头条不同 API 返回的图片字段不同，依次尝试以下来源：
+      1. image_list  — 标准多图列表（部分接口返回数组）
+      2. all_image_list — 全部图片（部分图集接口）
+      3. img_url / large_img_url — 单张封面图
     """
-    img = item.get("img_url")
-    if isinstance(img, str) and img.startswith("http"):
-        return [img.split("?")[0]]
-    return []
+    urls: List[str] = []
+
+    # 1) image_list — 多图列表
+    image_list = item.get("image_list") or item.get("all_image_list") or []
+    if isinstance(image_list, list):
+        for img_item in image_list:
+            if isinstance(img_item, dict):
+                url = img_item.get("url") or img_item.get("img_url") or ""
+            elif isinstance(img_item, str):
+                url = img_item
+            else:
+                continue
+            if url.startswith("http"):
+                # 头条图片 URL 通常以 list/tos 开头，去掉 query 参数获得原图
+                clean = url.split("?")[0]
+                if clean not in urls:
+                    urls.append(clean)
+
+    # 2) 单张封面图（如仍未获取到）
+    if not urls:
+        for key in ("large_img_url", "img_url"):
+            val = item.get(key)
+            if isinstance(val, str) and val.startswith("http"):
+                urls.append(val.split("?")[0])
+                break
+
+    # 3) 标题图兜底
+    if not urls:
+        thumb = item.get("thumb_url") or item.get("middle_img_url") or ""
+        if isinstance(thumb, str) and thumb.startswith("http"):
+            urls.append(thumb.split("?")[0])
+
+    return urls
 
 
 def _post_from_item(
@@ -158,44 +190,58 @@ def _search_posts(
 ) -> List[Dict]:
     """通过头条搜索 API 获取关键词的图文结果。
 
-    使用 pd=atlas（图文模式），返回含图片的帖子。
+    优先使用 pd=image（纯图片模式），返回的数据包含更丰富的图片信息；
+    降级到 pd=atlas（图文资讯模式）。两者搭配覆盖更多高质量图片。
     """
     url = "https://so.toutiao.com/search"
-    params = {
-        "dvpf": "pc",
-        "keyword": keyword,
-        "pd": "atlas",
-        "page_num": page - 1,  # 头条从 0 开始
-        "rawJSON": "1",
-    }
-    payload = _request_json(url, params=params)
-    if not payload:
-        return []
-
-    # 头条搜图 API 返回的是 rawData.data
-    raw_data = payload.get("rawData", {})
-    if not isinstance(raw_data, dict):
-        raw_data = {}
-    items: List = raw_data.get("data", [])
-    if not isinstance(items, list):
-        items = []
-
     parsed: List[Dict] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        pt = _post_from_item(
-            item,
-            celebrity="关键词搜索",
-            source=f"toutiao_keyword",
-            scene=keyword,
-        )
-        if pt:
-            parsed.append(pt)
 
-    logger.info("头条搜图「%s」第%s页: %s 条原始 → %s 条含图", keyword, page, len(items), len(parsed))
-    if progress_callback:
-        progress_callback(f"✓ 搜索「{keyword}」第{page}页 → {len(parsed)} 条含图帖子")
+    # 按优先级尝试不同的搜索模式
+    for pd_mode in ("image", "atlas"):
+        params = {
+            "keyword": keyword,
+            "pd": pd_mode,
+            "page_num": page - 1,  # 头条从 0 开始
+            "rawJSON": "1",
+        }
+        payload = _request_json(url, params=params)
+        if not payload:
+            continue
+
+        raw_data = payload.get("rawData", {})
+        if not isinstance(raw_data, dict):
+            raw_data = {}
+        items: List = raw_data.get("data", [])
+        if not isinstance(items, list):
+            items = []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            # 跳过已解析的重复项
+            item_id = str(item.get("id") or item.get("group_id") or item.get("item_id") or "")
+            if any(p.get("id") == item_id for p in parsed):
+                continue
+            pt = _post_from_item(
+                item,
+                celebrity="关键词搜索",
+                source=f"toutiao_keyword",
+                scene=keyword,
+            )
+            if pt:
+                parsed.append(pt)
+
+        logger.info(
+            "头条搜图[%s]「%s」第%s页: %s 条原始 → %s 条含图",
+            pd_mode, keyword, page, len(items), len(parsed),
+        )
+        if progress_callback:
+            progress_callback(f"✓ 搜索({pd_mode})「{keyword}」第{page}页 → 累计 {len(parsed)} 条")
+
+        # image 模式结果够多就不再请求 atlas
+        if len(parsed) >= 15:
+            break
+
     return parsed
 
 
@@ -204,6 +250,8 @@ def _search_posts(
 
 def _feed_posts(
     max_pages: int,
+    *,
+    specific_page: int = 0,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """获取推荐流内容。
@@ -212,6 +260,17 @@ def _feed_posts(
     失败时使用已配置的搜索标签做关键词搜索作为降级。
     """
     tags = settings.toutiao_search_tags or ("时尚", "明星", "穿搭")
+
+    # 指定页码时跳过 feed API，直接关键词搜索该页
+    if specific_page > 0:
+        if progress_callback:
+            progress_callback(f"正在搜索推荐标签（第{specific_page}页）…")
+        buckets: List[List[Dict]] = []
+        for tag in tags:
+            fetched = _search_posts(tag, page=specific_page, progress_callback=progress_callback)
+            buckets.append(fetched)
+            time.sleep(0.8)
+        return _merge_posts(buckets)
 
     if progress_callback:
         progress_callback("正在获取头条推荐流…")
@@ -403,9 +462,16 @@ class ToutiaoService:
         mode: str,
         *,
         max_pages: int = 1,
+        specific_page: int = 0,
+        celebrities: Optional[List[str]] = None,
+        search_tags: Optional[List[str]] = None,
+        super_topics: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[str], None]] = None,
     ) -> List[Dict]:
-        """按指定模式抓取今日头条帖子，返回标准化 Post 字典列表。"""
+        """按指定模式抓取今日头条帖子，返回标准化 Post 字典列表。
+
+        specific_page > 0 时仅获取该页数据（代替 max_pages 控制的循环）。
+        """
         resolved = mode or ToutiaoService.meta.default_fetch_mode
 
         if progress_callback:
@@ -415,11 +481,11 @@ class ToutiaoService:
 
         try:
             if resolved == "feed":
-                posts = _feed_posts(max_pages, progress_callback)
+                posts = _feed_posts(max_pages, specific_page=specific_page, progress_callback=progress_callback)
             elif resolved == "user":
                 posts = _user_posts(max_pages, progress_callback)
             elif resolved == "keyword":
-                posts = _keyword_posts(max_pages, progress_callback)
+                posts = _keyword_posts(max_pages, specific_page=specific_page, progress_callback=progress_callback)
             else:
                 logger.warning("未知今日头条模式 %s", resolved)
                 return []
@@ -433,16 +499,19 @@ class ToutiaoService:
 
 def _keyword_posts(
     max_pages: int,
+    *,
+    specific_page: int = 0,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """用配置的搜索标签逐一搜索。"""
     tags = settings.toutiao_search_tags or ("时尚", "明星", "穿搭")
     buckets: List[List[Dict]] = []
+    pages = [specific_page] if specific_page > 0 else range(1, max(1, max_pages) + 1)
 
     for tag in tags:
         if progress_callback:
             progress_callback(f"正在搜索「{tag}」…")
-        for pg in range(1, max(1, max_pages) + 1):
+        for pg in pages:
             fetched = _search_posts(tag, page=pg, progress_callback=progress_callback)
             buckets.append(fetched)
             time.sleep(0.8 + pg * 0.05)

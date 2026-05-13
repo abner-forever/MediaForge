@@ -52,6 +52,10 @@ jobs:
         run: |
           pip install -r requirements.txt pyinstaller pillow
 
+      - name: 安装 Playwright Chromium 浏览器（打包到安装包中）
+        run: |
+          python3 -m playwright install chromium
+
       - name: 生成应用图标（icns）
         run: |
           mkdir -p build
@@ -59,7 +63,7 @@ jobs:
           from PIL import Image
           import os
 
-          img = Image.open('desktop/static/logo.png')
+          img = Image.open('desktop/static/logo-icon.png')
           size = min(img.size)
           left = (img.width - size) // 2
           top = (img.height - size) // 2
@@ -120,13 +124,18 @@ jobs:
         run: |
           pip install -r requirements.txt pyinstaller pillow
 
+      - name: 安装 Playwright Chromium 浏览器（打包到安装包中）
+        shell: bash
+        run: |
+          python -m playwright install chromium
+
       - name: 生成应用图标（ico）
         shell: bash
         run: |
           mkdir -p build build_icon
           python -c "
           from PIL import Image
-          img = Image.open('desktop/static/logo.png')
+          img = Image.open('desktop/static/logo-icon.png')
           size = min(img.size)
           left = (img.width - size) // 2
           top = (img.height - size) // 2

@@ -106,7 +106,7 @@ def _infer_uid_from_all_groups() -> str:
 
 def _mobile_container_id(kind: str, keyword: str) -> str:
     inner = f"type={kind}&q={keyword}"
-    return "100103" + quote(inner, safe="")
+    return "100103" + inner
 
 
 def _mobile_headers(referer: str = "https://m.weibo.cn/") -> dict:
@@ -486,10 +486,11 @@ def fetch_weibo_posts(page: int = 1) -> List[Dict]:
     return fetch_mymblog_for_uid(weibo_uid, page=page, celebrity_hint=celebrity)
 
 
-def fetch_own_timeline_paginated(max_pages: int = 1) -> List[Dict]:
+def fetch_own_timeline_paginated(max_pages: int = 1, *, specific_page: int = 0) -> List[Dict]:
     merged: List[Dict] = []
     seen_ids: Set[str] = set()
-    for page_no in range(1, max(1, max_pages) + 1):
+    pages = [specific_page] if specific_page > 0 else range(1, max(1, max_pages) + 1)
+    for page_no in pages:
         for post in fetch_weibo_posts(page=page_no):
             pid = post.get("id") or ""
             if pid and pid in seen_ids:
@@ -539,16 +540,23 @@ def finalize_posts(posts: List[Dict]) -> List[Dict]:
 
 def fetch_celebrity_discovery_posts(
     max_pages_per_uid: int,
+    *,
+    specific_page: int = 0,
+    celebrities: Optional[List[str]] = None,
+    search_tags: Optional[List[str]] = None,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     buckets: List[List[Dict]] = []
+    celeb_names = celebrities if celebrities is not None else settings.weibo_celebrities
+    tag_list = search_tags if search_tags is not None else settings.weibo_search_tags
 
-    pages_uid = max(1, max_pages_per_uid)
+    pages_uid = specific_page if specific_page > 0 else max(1, max_pages_per_uid)
+    kw_pages = specific_page if specific_page > 0 else max(1, getattr(settings, "weibo_keyword_pages", 1) or 1)
 
-    # 每条明星的关键词页数可与时间线分页分开（避免请求爆炸）
-    kw_pages = max(1, getattr(settings, "weibo_keyword_pages", 1) or 1)
+    page_range = [specific_page] if specific_page > 0 else range(1, pages_uid + 1)
+    kw_page_range = [specific_page] if specific_page > 0 else range(1, kw_pages + 1)
 
-    for name in settings.weibo_celebrities:
+    for name in celeb_names:
         if progress_callback:
             progress_callback(f"正在解析 {name} 的 UID…")
         uid = resolve_uid_for_nickname(name)
@@ -557,7 +565,7 @@ def fetch_celebrity_discovery_posts(
         search_posts: List[Dict] = []
 
         if uid:
-            for pg in range(1, pages_uid + 1):
+            for pg in page_range:
                 if progress_callback:
                     progress_callback(f"正在获取 {name} 的时间线（第{pg}页）…")
                 fetched = fetch_mymblog_for_uid(uid, page=pg, celebrity_hint=name)
@@ -568,9 +576,9 @@ def fetch_celebrity_discovery_posts(
         else:
             logger.error("未能解析昵称「%s」的微博 UID：请手动在控制台确认名称，或稍后补 UID 映射", name)
 
-        for tag in settings.weibo_search_tags or ("美图",):
+        for tag in tag_list or ("美图",):
             keyword = f"{name} {tag}".strip()
-            for pg in range(1, kw_pages + 1):
+            for pg in kw_page_range:
                 if progress_callback:
                     progress_callback(f"正在搜索「{keyword}」（第{pg}页）…")
                 fetched = fetch_keyword_timeline_mobile(
@@ -591,6 +599,7 @@ def fetch_super_topic_posts(
     topic_name: str,
     *,
     max_pages: int = 1,
+    specific_page: int = 0,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """从超话抓取带图片的帖子（通过关键词搜索 API）。
@@ -601,7 +610,8 @@ def fetch_super_topic_posts(
     keyword = f"{topic_name}超话"
     parsed: List[Dict] = []
 
-    for page in range(1, max(1, max_pages) + 1):
+    pages = [specific_page] if specific_page > 0 else range(1, max(1, max_pages) + 1)
+    for page in pages:
         if progress_callback:
             progress_callback(f"正在搜索超话「{topic_name}」（第{page}页）…")
         try:
@@ -639,13 +649,15 @@ def fetch_keyword_only_posts(
     tags: tuple,
     *,
     max_pages_per_tag: int = 1,
+    specific_page: int = 0,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """直接用标签搜索，不带明星名称前缀。"""
     buckets: List[List[Dict]] = []
+    pages = [specific_page] if specific_page > 0 else range(1, max(1, max_pages_per_tag) + 1)
     for tag in tags:
         tag_posts: List[Dict] = []
-        for pg in range(1, max(1, max_pages_per_tag) + 1):
+        for pg in pages:
             if progress_callback:
                 progress_callback(f"正在搜索「{tag}」（第{pg}页）…")
             fetched = fetch_keyword_timeline_mobile(tag, page=pg, celebrity="关键词搜索", scene=tag)
@@ -660,6 +672,8 @@ def fetch_keyword_only_posts(
 def fetch_super_topic_discovery_posts(
     topics: tuple,
     max_pages: int,
+    *,
+    specific_page: int = 0,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """遍历超话列表抓取帖子。"""
@@ -668,7 +682,7 @@ def fetch_super_topic_discovery_posts(
         if progress_callback:
             progress_callback(f"正在搜索超话「{topic}」…")
         buckets.append(
-            fetch_super_topic_posts(topic, max_pages=max_pages, progress_callback=progress_callback)
+            fetch_super_topic_posts(topic, max_pages=max_pages, specific_page=specific_page, progress_callback=progress_callback)
         )
     return _merge_post_lists(buckets)
 
@@ -757,56 +771,64 @@ class WeiboService:
         mode: str,
         *,
         max_pages: int = 1,
+        specific_page: int = 0,
+        celebrities: Optional[List[str]] = None,
+        search_tags: Optional[List[str]] = None,
+        super_topics: Optional[List[str]] = None,
         progress_callback: Optional[Callable[[str], None]] = None,
     ) -> List[Dict]:
-        """按指定模式抓取微博帖子，返回标准化 Post 字典列表。"""
+        """按指定模式抓取微博帖子，返回标准化 Post 字典列表。
+
+        specific_page > 0 时仅获取该页数据（替代 max_pages 控制的循环）。
+        celebrities/search_tags/super_topics 用于直接指定参数（避免读写全局 settings）。
+        """
         from config import resolve_weibo_fetch_mode
 
         # 如果 mode 为空，使用配置的默认模式
         resolved = mode or resolve_weibo_fetch_mode()
-        celebrities = settings.weibo_celebrities
+        celeb_names = celebrities if celebrities is not None else settings.weibo_celebrities
+        search_tags_list = search_tags if search_tags is not None else settings.weibo_search_tags
+        super_topics_list = super_topics if super_topics is not None else settings.weibo_super_topics
 
         logger.info("平台: 微博, 模式: %s", resolved)
 
         if resolved == "own":
             if progress_callback:
                 progress_callback("正在获取本人时间线…")
-            return finalize_posts(fetch_own_timeline_paginated(max_pages))
+            return finalize_posts(fetch_own_timeline_paginated(max_pages, specific_page=specific_page))
 
         if resolved == "celebrities":
-            if not celebrities:
+            if not celeb_names:
                 logger.warning("未配置 WEIBO_CELEBRITIES，回退为本人时间线")
-                return finalize_posts(fetch_own_timeline_paginated(max_pages))
+                return finalize_posts(fetch_own_timeline_paginated(max_pages, specific_page=specific_page))
             return finalize_posts(
-                fetch_celebrity_discovery_posts(max_pages, progress_callback=progress_callback)
+                fetch_celebrity_discovery_posts(max_pages, specific_page=specific_page, celebrities=celeb_names, search_tags=search_tags_list, progress_callback=progress_callback)
             )
 
         if resolved == "mixed":
             parts: List[List[Dict]] = []
-            if celebrities:
-                parts.append(fetch_celebrity_discovery_posts(max_pages, progress_callback=progress_callback))
-            parts.append(fetch_own_timeline_paginated(max_pages))
+            if celeb_names:
+                parts.append(fetch_celebrity_discovery_posts(max_pages, specific_page=specific_page, celebrities=celeb_names, search_tags=search_tags_list, progress_callback=progress_callback))
+            parts.append(fetch_own_timeline_paginated(max_pages, specific_page=specific_page))
             merged = _merge_post_lists(parts)
             logger.info("mixed 模式下合并帖子数（去重后）: %s", len(merged))
             return finalize_posts(merged)
 
         if resolved == "super_topic":
-            topics = settings.weibo_super_topics
-            if not topics:
+            if not super_topics_list:
                 logger.warning("未配置 WEIBO_SUPER_TOPICS")
                 return []
             return finalize_posts(
-                fetch_super_topic_discovery_posts(topics, max_pages, progress_callback=progress_callback)
+                fetch_super_topic_discovery_posts(super_topics_list, max_pages, specific_page=specific_page, progress_callback=progress_callback)
             )
 
         if resolved == "keyword":
-            tags = settings.weibo_search_tags
-            if not tags:
+            if not search_tags_list:
                 logger.warning("未配置 WEIBO_SEARCH_TAGS")
                 return []
             return finalize_posts(
-                fetch_keyword_only_posts(tags, max_pages_per_tag=max_pages, progress_callback=progress_callback)
+                fetch_keyword_only_posts(search_tags_list, max_pages_per_tag=max_pages, specific_page=specific_page, progress_callback=progress_callback)
             )
 
         logger.warning("未知模式 %s，回退为 own", resolved)
-        return finalize_posts(fetch_own_timeline_paginated(max_pages))
+        return finalize_posts(fetch_own_timeline_paginated(max_pages, specific_page=specific_page))

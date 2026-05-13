@@ -43,6 +43,15 @@ if _assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
 
+# ── 图片路径辅助 ─────────────────────────────────────
+def _img_rel(path: str) -> str:
+    """将图片绝对路径转为相对 DOWNLOAD_DIR 的正斜杠路径，用于前端 URL 构建。"""
+    try:
+        return str(Path(path).relative_to(DOWNLOAD_DIR).as_posix())
+    except (ValueError, TypeError):
+        return path
+
+
 # ── Pydantic 模型 ──────────────────────────────────────
 
 
@@ -101,59 +110,97 @@ async def index():
 
 
 def _mask_key(key: str) -> str:
-    """Mask API key: show first 4 and last 4 chars, middle replaced with dots."""
-    if not key or len(key) <= 8:
+    """Mask API key: show first 8 and last 4 chars, middle replaced with asterisks."""
+    if not key or len(key) <= 12:
         return key
-    return f"{key[:4]}{'*' * (len(key) - 8)}{key[-4:]}"
+    return f"{key[:8]}{'*' * (len(key) - 12)}{key[-4:]}"
+
+
+def _get_provider_key(env: dict, provider: str) -> str:
+    """获取当前 AI 服务商对应的 API key：env 覆盖 → 本地存储 → env 兜底。"""
+    # 1. AI_API_KEY env var 作为通用覆盖
+    if env.get("AI_API_KEY"):
+        return env["AI_API_KEY"]
+    # 2. 本地 key 存储
+    from utils.api_key_store import get_api_key
+    local_key = get_api_key(provider)
+    if local_key:
+        return local_key
+    # 3. 供应商专用 env var（向后兼容）
+    key_map = {
+        "mimo": "MIMO_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "glm": "GLM_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+    return env.get(key_map.get(provider, ""), "") or ""
 
 
 @app.get("/api/settings")
 async def get_settings():
+    from utils.weibo_auth_store import read_weibo_auth
+    from utils.settings_store import read_settings as read_json_settings
+
+    # 合并来源：settings.json 优先于 .env
     env = read_env()
+    store = read_json_settings()
+    cfg = {**env, **store}  # store 覆盖 env
+
+    provider = cfg.get("AI_PROVIDER", "mimo").lower()
+    current_key = _get_provider_key(cfg, provider)
+
+    # 收集所有供应商的 masked key，用于前端切换展示
+    all_keys = {}
+    for prov in ("mimo", "deepseek", "glm", "openai"):
+        k = _get_provider_key(cfg, prov)
+        if k:
+            all_keys[prov] = _mask_key(k)
+
+    # 微博鉴权优先读取独立存储（支持清空），再回退
+    auth = read_weibo_auth()
+    weibo_cookie = auth.get("cookie", "") or cfg.get("WEIBO_COOKIE", "")
+    weibo_uid = auth.get("uid", "") or cfg.get("WEIBO_UID", "")
+    weibo_screen_name = auth.get("screen_name", "")
+    weibo_avatar = auth.get("avatar", "")
+
     return {
-        "platform": env.get("PLATFORM", "weibo"),
-        "ai_provider": env.get("AI_PROVIDER", "mimo"),
-        "ai_model": env.get("AI_MODEL", "mimo-chat"),
-        "ai_base_url": env.get("AI_BASE_URL", ""),
-        "ai_api_key_set": bool(
-            env.get("AI_API_KEY")
-            or env.get("MIMO_API_KEY")
-            or env.get("GLM_API_KEY")
-            or env.get("DEEPSEEK_API_KEY")
-            or env.get("OPENAI_API_KEY")
-        ),
-        "ai_api_key_masked": _mask_key(
-            env.get("AI_API_KEY")
-            or env.get("MIMO_API_KEY")
-            or env.get("GLM_API_KEY")
-            or env.get("DEEPSEEK_API_KEY")
-            or env.get("OPENAI_API_KEY")
-            or ""
-        ),
-        "weibo_cookie_set": bool(env.get("WEIBO_COOKIE")),
-        "weibo_uid": env.get("WEIBO_UID", ""),
-        "weibo_fetch_mode": env.get("WEIBO_FETCH_MODE", "celebrities"),
-        "weibo_celebrities": env.get("WEIBO_CELEBRITIES", ""),
-        "weibo_search_tags": env.get("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"),
-        "weibo_scene_extra_tags": env.get("WEIBO_SCENE_EXTRA_TAGS", ""),
-        "weibo_super_topics": env.get("WEIBO_SUPER_TOPICS", ""),
+        "platform": cfg.get("PLATFORM", "weibo"),
+        "ai_provider": provider,
+        "ai_model": cfg.get("AI_MODEL", "mimo-chat"),
+        "ai_base_url": cfg.get("AI_BASE_URL", ""),
+        "ai_api_key_set": bool(current_key),
+        "ai_api_key_masked": _mask_key(current_key) if current_key else "",
+        "ai_api_keys": all_keys,
+        "weibo_uid": weibo_uid,
+        "weibo_cookie_set": bool(weibo_cookie),
+        "weibo_cookie": weibo_cookie,
+        "weibo_screen_name": weibo_screen_name,
+        "weibo_avatar": weibo_avatar,
+        "weibo_fetch_mode": cfg.get("WEIBO_FETCH_MODE", "celebrities"),
+        "weibo_celebrities": cfg.get("WEIBO_CELEBRITIES", ""),
+        "weibo_search_tags": cfg.get("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"),
+        "weibo_scene_extra_tags": cfg.get("WEIBO_SCENE_EXTRA_TAGS", ""),
+        "weibo_super_topics": cfg.get("WEIBO_SUPER_TOPICS", ""),
         # ── 今日头条 ──
-        "toutiao_cookie_set": bool(env.get("TOUTIAO_COOKIE")),
-        "toutiao_user_id": env.get("TOUTIAO_USER_ID", ""),
-        "toutiao_fetch_mode": env.get("TOUTIAO_FETCH_MODE", "feed"),
-        "toutiao_search_tags": env.get("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"),
-        "post_limit": int(env.get("POST_LIMIT", "3")),
-        "weibo_pages": int(env.get("WEIBO_PAGES", "2")),
-        "publish_interval": int(env.get("PUBLISH_INTERVAL_SECONDS", "10")),
-        "request_timeout": int(env.get("REQUEST_TIMEOUT", "20")),
-        "retry_times": int(env.get("RETRY_TIMES", "3")),
-        "require_confirm": env.get("REQUIRE_CONFIRM", "true").lower() == "true",
-        "watermark_filter": env.get("WATERMARK_FILTER", "true").lower() == "true",
-        "watermark_strict_mode": env.get("WATERMARK_STRICT_MODE", "true").lower() == "true",
-        "min_clean_images": int(env.get("MIN_CLEAN_IMAGES", "3")),
-        "watermark_corner_ratio": float(env.get("WATERMARK_CORNER_RATIO", "1.38")),
-        "watermark_bottom_ratio": float(env.get("WATERMARK_BOTTOM_RATIO", "1.48")),
-        "allow_watermark_fallback": env.get("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true",
+        "toutiao_cookie_set": bool(cfg.get("TOUTIAO_COOKIE")),
+        "toutiao_user_id": cfg.get("TOUTIAO_USER_ID", ""),
+        "toutiao_fetch_mode": cfg.get("TOUTIAO_FETCH_MODE", "feed"),
+        "toutiao_search_tags": cfg.get("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"),
+        "post_limit": int(cfg.get("POST_LIMIT", "3")),
+        "weibo_pages": int(cfg.get("WEIBO_PAGES", "2")),
+        "publish_interval": int(cfg.get("PUBLISH_INTERVAL_SECONDS", "10")),
+        "request_timeout": int(cfg.get("REQUEST_TIMEOUT", "20")),
+        "retry_times": int(cfg.get("RETRY_TIMES", "3")),
+        "require_confirm": cfg.get("REQUIRE_CONFIRM", "true").lower() == "true",
+        "watermark_filter": cfg.get("WATERMARK_FILTER", "true").lower() == "true",
+        "watermark_strict_mode": cfg.get("WATERMARK_STRICT_MODE", "true").lower() == "true",
+        "min_clean_images": int(cfg.get("MIN_CLEAN_IMAGES", "3")),
+        "watermark_corner_ratio": float(cfg.get("WATERMARK_CORNER_RATIO", "1.38")),
+        "watermark_bottom_ratio": float(cfg.get("WATERMARK_BOTTOM_RATIO", "1.48")),
+        "allow_watermark_fallback": cfg.get("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true",
+        # ── 素材保存路径 ──
+        "materials_path": cfg.get("MATERIALS_PATH", ""),
+        "download_dir": str(DOWNLOAD_DIR),
     }
 
 
@@ -165,27 +212,60 @@ async def save_settings(data: Dict[str, Any]):
             updates[k] = "true" if v else "false"
         else:
             updates[k] = str(v)
-    update_env(updates)
+
+    # 拦截供应商专用 API key → 写入本地存储，不写 .env
+    _API_KEY_ENV_NAMES = {"MIMO_API_KEY", "DEEPSEEK_API_KEY", "GLM_API_KEY", "OPENAI_API_KEY"}
+    local_keys = {}
+    for key in _API_KEY_ENV_NAMES:
+        if key in updates:
+            provider = key.replace("_API_KEY", "").lower()
+            local_keys[provider] = updates.pop(key)
+
+    if local_keys:
+        from utils.api_key_store import save_api_keys
+        save_api_keys(local_keys)
+
+    # 微博鉴权信息 → 写入独立存储（可清空）
+    _WEIBO_AUTH_KEYS = {"WEIBO_COOKIE", "WEIBO_UID", "WEIBO_SCREEN_NAME", "WEIBO_AVATAR"}
+    weibo_auth = {}
+    for key in _WEIBO_AUTH_KEYS:
+        if key in updates:
+            weibo_auth[key] = updates.pop(key)
+
+    if weibo_auth:
+        from utils.weibo_auth_store import write_weibo_auth
+        write_weibo_auth(
+            cookie=weibo_auth.get("WEIBO_COOKIE", ""),
+            uid=weibo_auth.get("WEIBO_UID", ""),
+            screen_name=weibo_auth.get("WEIBO_SCREEN_NAME", ""),
+            avatar=weibo_auth.get("WEIBO_AVATAR", ""),
+        )
+
+    # 其余配置项 → settings.json（替代 .env）
+    if updates:
+        from utils.settings_store import write_settings
+        write_settings(updates)
+    from config import reload_settings
+    reload_settings()
+
+    # sync module-level DOWNLOAD_DIR reference after path change
+    import config as _cfg
+    globals()["DOWNLOAD_DIR"] = _cfg.DOWNLOAD_DIR
+
     return {"success": True, "message": "配置已保存"}
 
 
 @app.get("/api/settings/api-key")
-async def get_api_key():
+async def get_api_key(provider: str = Query("")):
     env = read_env()
-    key = (
-        env.get("AI_API_KEY")
-        or env.get("MIMO_API_KEY")
-        or env.get("GLM_API_KEY")
-        or env.get("DEEPSEEK_API_KEY")
-        or env.get("OPENAI_API_KEY")
-        or ""
-    )
+    prov = (provider or env.get("AI_PROVIDER", "mimo")).lower()
+    key = _get_provider_key(env, prov)
     return {"key": key}
 
 
 @app.get("/api/settings/weibo-login-stream")
 async def weibo_login_stream():
-    """SSE 流：打开 Playwright 浏览器让用户扫码登录微博，捕获 Cookie 和 UID 后推送给前端。"""
+    """SSE 流：打开系统 WebView 弹出窗口让用户登录微博，捕获 Cookie 和 UID 后推送给前端。"""
     import json as _json
     from queue import Empty, Queue
     from concurrent.futures import ThreadPoolExecutor
@@ -204,14 +284,129 @@ async def weibo_login_stream():
             if msg[0] == "progress":
                 yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
             elif msg[0] == "done":
-                _, cookie, uid = msg
-                yield f"data: {_json.dumps({'type': 'done', 'cookie': cookie, 'uid': uid}, ensure_ascii=False)}\n\n"
+                _, cookie, uid, screen_name, avatar = msg if len(msg) >= 5 else (*msg, "", "", "")
+                if cookie:
+                    from utils.weibo_auth_store import write_weibo_auth
+                    write_weibo_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                    # 清除 .env 中可能残留的旧 cookie，防止其覆盖新 cookie
+                    from utils.env_manager import read_env, update_env
+                    env = read_env()
+                    if env.get("WEIBO_COOKIE"):
+                        update_env({"WEIBO_COOKIE": ""})
+                    # 重新加载配置使新 cookie 立即生效
+                    from config import reload_settings
+                    reload_settings()
+                yield f"data: {_json.dumps({'type': 'done', 'cookie': cookie, 'uid': uid, 'screen_name': screen_name, 'avatar': avatar}, ensure_ascii=False)}\n\n"
                 break
             elif msg[0] == "error":
                 yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
                 break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/pick-folder")
+async def pick_folder():
+    """打开原生访达文件夹选择对话框，返回选中路径。"""
+    import asyncio, subprocess, json as _json
+
+    def _pick():
+        script = (
+            'set folderPath to POSIX path of '
+            '(choose folder with prompt "选择素材保存目录")\n'
+            'return folderPath'
+        )
+        try:
+            ret = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=30,
+            )
+            path = ret.stdout.strip()
+            return {"path": path if path else ""}
+        except Exception:
+            return {"path": ""}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _pick)
+
+
+@app.post("/api/settings/weibo-verify")
+async def weibo_verify(body: dict = {}):
+    """验证微博 Cookie 是否有效，返回用户信息。"""
+    import asyncio, requests
+
+    cookie = body.get("cookie", "")
+    if not cookie:
+        from config import settings
+        cookie = settings.weibo_cookie
+
+    if not cookie:
+        return {"valid": False, "message": "未设置微博 Cookie"}
+
+    def _verify():
+        try:
+            # 尝试用 Cookie 访问用户信息 API
+            from services.weibo_login import _fetch_user_info
+            import re
+
+            # 先从 cookie 中提取 uid
+            uid = ""
+            for part in cookie.split(";"):
+                kv = part.strip().split("=", 1)
+                if len(kv) == 2 and kv[0].strip() == "uid":
+                    uid = kv[1].strip()
+                    break
+
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+                ),
+                "Cookie": cookie,
+                "Referer": "https://weibo.com/",
+                "Accept": "application/json, text/plain, */*",
+            }
+
+            # 1) 如果有 uid，直接查 profile
+            screen_name = ""
+            avatar = ""
+            if uid:
+                screen_name, avatar = _fetch_user_info(cookie, uid)
+
+            # 2) 如果没有 uid 或没查到，尝试从 allGroups 推断
+            if not screen_name:
+                resp = requests.get(
+                    "https://weibo.com/ajax/feed/allGroups",
+                    headers=headers, timeout=10,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    matched = re.search(r'"uid"\s*:\s*"(\d+)"', resp.text)
+                    if matched:
+                        uid = matched.group(1)
+                        screen_name, avatar = _fetch_user_info(cookie, uid)
+
+            if screen_name:
+                # 验证通过，同步保存到鉴权存储
+                from utils.weibo_auth_store import write_weibo_auth
+                write_weibo_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar}
+            return {"valid": False, "message": "Cookie 无效或已过期", "uid": uid or "", "screen_name": "", "avatar": ""}
+        except Exception as exc:
+            return {"valid": False, "message": str(exc)}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _verify)
+
+
+@app.post("/api/settings/weibo-clear")
+async def clear_weibo():
+    """清空微博鉴权信息（Cookie、UID、用户名）。"""
+    from utils.weibo_auth_store import clear_weibo_auth
+    from config import reload_settings
+    clear_weibo_auth()
+    reload_settings()
+    return {"success": True}
 
 
 @app.get("/api/platforms")
@@ -344,10 +539,14 @@ async def discovery_search_stream(
     celebrities: str = Query(""),
     search_tags: str = Query(""),
     super_topics: str = Query(""),
-    max_pages: int = Query(2),
+    max_pages: int = Query(1),
     post_limit: int = Query(5),
+    page: int = Query(1),
 ):
-    """SSE 流式搜索，逐条推送进度消息。"""
+    """SSE 流式搜索，逐条推送进度消息。
+
+    page 参数支持分页：page=1 获取第一页，page=2 获取第二页并追加。
+    """
     import asyncio
     import json as _json
     from queue import Empty, Queue
@@ -370,21 +569,36 @@ async def discovery_search_stream(
 
     def run_search():
         try:
-            # 临时更新平台专属配置
-            settings.weibo_celebrities = tuple(celeb_list)
-            settings.weibo_search_tags = tuple(tag_list)
-            settings.weibo_super_topics = tuple(topic_list)
-
-            progress_callback(f"开始 {platform_svc.meta.name} 搜索…")
-            posts = platform_svc.fetch_posts(
+            progress_callback(f"开始 {platform_svc.meta.name} 搜索（第{page}页）…")
+            new_posts = platform_svc.fetch_posts(
                 mode=mode,
-                max_pages=max_pages,
+                max_pages=1,
+                specific_page=page,
+                celebrities=celeb_list,
+                search_tags=tag_list,
+                super_topics=topic_list,
                 progress_callback=progress_callback,
             )
-            posts = posts[:post_limit]
+            new_posts = new_posts[:post_limit]
+
+            if page > 1:
+                # 追加到已有结果，按 id 去重
+                existing = app_state.get_discovery_results()
+                seen = {str(p.get("id", "")) for p in existing if p.get("id")}
+                for p in new_posts:
+                    pid = str(p.get("id", ""))
+                    if pid and pid in seen:
+                        continue
+                    if pid:
+                        seen.add(pid)
+                    existing.append(p)
+                posts = existing
+            else:
+                posts = new_posts
+
             app_state.set_discovery_results(posts)
             total_images = sum(len(p.get("images", [])) for p in posts)
-            app_state.add_operation("搜索", f"平台={platform} 模式={mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图")
+            app_state.add_operation("搜索", f"平台={platform} 模式={mode}，发现 {len(posts)} 篇帖子共 {total_images} 张图（第{page}页）")
             progress_callback(f"搜索完成！共 {len(posts)} 条帖子，{total_images} 张图片")
 
             safe_posts = []
@@ -437,17 +651,19 @@ async def discovery_download(req: Optional[DownloadRequest] = None):
         post = posts[i]
         celebrity = post.get("celebrity", "未命名")
         scene = post.get("scene", "日常")
-        post_id = str(post.get("id") or "")[:12]
+        post_text = (post.get("text") or "").strip()
+        slug = post_text[:12] if post_text else str(post.get("id") or "")[:12]
+        print(f"[下载] text={post_text[:20]!r} post_id={post.get('id')} -> slug={slug}", flush=True)
         try:
             images, dropped = download_images(
                 post["images"],
                 celebrity=celebrity,
                 scene=scene,
-                post_slug=post_id,
-                prefix=post_id[:8],
+                post_slug=slug,
+                prefix=slug[:8],
                 overwrite=False,
             )
-            post["local_images"] = images
+            post["local_images"] = [_img_rel(p) for p in images]
             post["dropped_count"] = dropped
             results.append({
                 "celebrity": celebrity,
@@ -491,19 +707,23 @@ async def discovery_score(req: ScoreRequest):
     if not paths:
         # 自动从 discovery results 收集
         posts = app_state.get_discovery_results()
-        paths = [img for p in posts for img in p.get("local_images", [])]
+        paths = [str(DOWNLOAD_DIR / img) for p in posts for img in p.get("local_images", [])]
+    else:
+        paths = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in paths]
     if not paths:
         raise HTTPException(400, "没有可评分的图片")
 
     scores = score_images_batch(paths, use_vision=req.use_vision)
-    app_state.set_image_scores(scores)
+    # 评分结果 key 转回相对路径后返回前端
+    scores_rel = {_img_rel(k): v for k, v in scores.items()}
+    app_state.set_image_scores(scores_rel)
 
     vision_count = sum(1 for v in scores.values() if v["method"] == "vision")
     heuristic_count = sum(1 for v in scores.values() if v["method"] == "heuristic")
 
     return {
         "success": True,
-        "scores": scores,
+        "scores": scores_rel,
         "vision_count": vision_count,
         "heuristic_count": heuristic_count,
     }
@@ -591,17 +811,35 @@ async def generate_queue_content(index: int):
     if index >= len(queue):
         raise HTTPException(404, "队列项不存在")
     item = queue[index]
-    sample_text = item.get("desc", "") or "明星美图分享"
-    from services.ai import generate_content
-    _, desc = generate_content(sample_text)
     celebrity = item.get("celebrity", "")
-    title = f"{celebrity} | {desc}" if celebrity else desc
-    app_state.update_queue_item(index, {"title": title, "desc": desc})
-    message = ""
-    if desc == "精选高清美图，欢迎查看":
-        message = "AI 生成失败，已使用默认文案"
-    app_state.add_operation("AI 生成", f"为「{celebrity or '未知'}」生成文案")
-    return {"success": True, "title": title, "desc": desc, "message": message}
+    original_title = item.get("title", "")
+    original_desc = item.get("desc", "")
+
+    if not settings.ai_api_key:
+        return {"success": False, "title": original_title, "desc": original_desc, "message": "暂未配置APIKey"}
+
+    # 以当前标题作为 AI 上下文
+    context = original_title or original_desc
+
+    if not context:
+        new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
+        app_state.update_queue_item(index, {"title": new_title})
+        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
+        return {"success": True, "title": new_title, "desc": "", "message": ""}
+
+    from services.ai import generate_content
+
+    ai_title, _ = generate_content(context)
+
+    if not ai_title or ai_title == "今日美图分享":
+        msg = "AI 润色失败，已使用原标题"
+        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题失败")
+        return {"success": False, "title": original_title, "desc": "", "message": msg}
+
+    new_title = f"{celebrity} | {ai_title}" if celebrity else ai_title
+    app_state.update_queue_item(index, {"title": new_title})
+    app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题")
+    return {"success": True, "title": new_title, "desc": "", "message": ""}
 
 
 @app.post("/api/queue/{index}/publish")
@@ -626,13 +864,16 @@ async def publish_from_queue(index: int, req: PublishRequest):
     def _on_log(msg: str) -> None:
         app_state.add_publish_log(msg)
 
+    # Playwright 需要绝对路径，相对路径转为绝对
+    abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
+
     # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
     import asyncio
     result = await asyncio.to_thread(
         publish_article,
         title=title,
         content=content,
-        images=images,
+        images=abs_images,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
         on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
@@ -676,9 +917,16 @@ async def enqueue_selected(req: EnqueueRequest):
             celebrity = post.get("celebrity", "") or post.get("screen_name", "")
             break
 
-    title, desc = generate_content(sample_text or "明星美图分享")
-    if celebrity and not title.startswith(celebrity):
-        title = f"{celebrity} | {desc}"
+    truncated_text = (sample_text or "").strip()[:20]
+    if celebrity and truncated_text:
+        title = f"{celebrity} | {truncated_text}"
+    elif celebrity:
+        title = celebrity
+    elif truncated_text:
+        title = truncated_text
+    else:
+        title = "美图分享"
+    desc = ""
     cover = select_cover(selected)
 
     app_state.add_to_queue({
@@ -802,6 +1050,193 @@ async def delete_materials(req: MaterialsDeleteRequest):
     return {"success": True, "deleted": deleted}
 
 
+# ── 素材文件夹管理 API ────────────────────────────────
+
+
+_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _count_images(dir_path: Path) -> int:
+    count = 0
+    for f in dir_path.rglob("*"):
+        if f.is_file() and f.suffix.lower() in _IMAGE_EXT:
+            count += 1
+    return count
+
+
+def _build_tree_node(dir_path: Path, root: Path) -> Optional[dict]:
+    name = dir_path.name
+    rel = dir_path.relative_to(root)
+    rel_str = str(rel.as_posix())
+    children: list[dict] = []
+    item_count = 0
+    for child in sorted(dir_path.iterdir()):
+        if child.is_dir():
+            node = _build_tree_node(child, root)
+            if node:
+                children.append(node)
+                item_count += node["item_count"]
+        elif child.suffix.lower() in _IMAGE_EXT:
+            item_count += 1
+    return {
+        "name": name,
+        "path": rel_str,
+        "type": "folder",
+        "item_count": item_count,
+        "children": children,
+    }
+
+
+@app.get("/api/materials/tree")
+async def materials_tree():
+    """返回完整文件夹树结构（用于左侧面板）。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    if not root.exists():
+        return {"tree": []}
+    tree: list[dict] = []
+    for child in sorted(root.iterdir()):
+        if child.is_dir():
+            node = _build_tree_node(child, root)
+            if node:
+                tree.append(node)
+    return {"tree": tree}
+
+
+def _build_breadcrumb(rel_path: Path) -> list[dict]:
+    parts = list(rel_path.parts) if str(rel_path) != "." else []
+    items = [{"name": "全部素材", "path": ""}]
+    cur = ""
+    for p in parts:
+        cur = f"{cur}/{p}" if cur else p
+        items.append({"name": p, "path": cur})
+    return items
+
+
+@app.get("/api/materials/browse")
+async def materials_browse(path: str = Query("")):
+    """浏览指定文件夹内容，返回子目录 + 文件列表 + 面包屑。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    if not root.exists():
+        return {"folders": [], "files": [], "breadcrumb": _build_breadcrumb(Path("."))}
+
+    target = (root / path).resolve() if path else root
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, f"文件夹不存在: {path}")
+    if not str(target).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+
+    folders: list[dict] = []
+    files: list[dict] = []
+    for child in sorted(target.iterdir()):
+        if child.is_dir():
+            folders.append({
+                "name": child.name,
+                "path": child.relative_to(root).as_posix(),
+                "type": "folder",
+                "item_count": _count_images(child),
+            })
+        elif child.suffix.lower() in _IMAGE_EXT:
+            files.append({
+                "name": child.name,
+                "path": child.relative_to(root).as_posix(),
+                "type": "file",
+                "size": child.stat().st_size,
+            })
+
+    rel_path = target.relative_to(root)
+    return {
+        "folders": folders,
+        "files": files,
+        "breadcrumb": _build_breadcrumb(rel_path),
+    }
+
+
+class FolderCreateRequest(BaseModel):
+    parent_path: str = ""
+    name: str = "新建文件夹"
+
+
+@app.post("/api/materials/folder")
+async def materials_create_folder(req: FolderCreateRequest):
+    """在当前目录下创建子文件夹。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    parent = (root / req.parent_path).resolve() if req.parent_path else root
+    if not parent.exists() or not parent.is_dir():
+        raise HTTPException(404, f"父文件夹不存在: {req.parent_path}")
+    if not str(parent).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+    new_dir = parent / req.name
+    new_dir.mkdir(parents=True, exist_ok=True)
+    return {"success": True, "path": new_dir.relative_to(root).as_posix()}
+
+
+class FolderRenameRequest(BaseModel):
+    path: str
+    new_name: str
+
+
+@app.put("/api/materials/folder")
+async def materials_rename_folder(req: FolderRenameRequest):
+    """重命名文件夹。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    target = (root / req.path).resolve()
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, f"文件夹不存在: {req.path}")
+    if not str(target).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+    new_path = target.parent / req.new_name
+    target.rename(new_path)
+    return {"success": True, "path": new_path.relative_to(root).as_posix()}
+
+
+@app.delete("/api/materials/folder")
+async def materials_delete_folder(path: str = Query(...)):
+    """递归删除文件夹及其内容。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    target = (root / path).resolve()
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, f"文件夹不存在: {path}")
+    if not str(target).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+    if target == root:
+        raise HTTPException(400, "不能删除根目录")
+    import shutil
+    shutil.rmtree(target)
+    return {"success": True}
+
+
+class MoveItemsRequest(BaseModel):
+    items: List[str] = []
+    destination: str = ""
+
+
+@app.post("/api/materials/move")
+async def materials_move_items(req: MoveItemsRequest):
+    """移动文件/文件夹到目标目录。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    dest = (root / req.destination).resolve() if req.destination else root
+    if not dest.exists() or not dest.is_dir():
+        raise HTTPException(404, f"目标文件夹不存在: {req.destination}")
+    if not str(dest).startswith(str(root)):
+        raise HTTPException(403, "目标路径越界")
+
+    moved = 0
+    for item in req.items:
+        fp = Path(item)
+        if not fp.exists():
+            continue
+        if not str(fp.resolve()).startswith(str(root)):
+            continue
+        dest_path = dest / fp.name
+        if dest_path.exists():
+            stem = fp.stem
+            suffix = fp.suffix if fp.is_file() else ""
+            dest_path = dest / f"{stem}_{datetime.now().strftime('%H%M%S')}{suffix}"
+        fp.rename(dest_path)
+        moved += 1
+    return {"success": True, "moved": moved}
+
+
 @app.get("/api/discovery/download-stream")
 async def download_stream(indices: str = Query(""), filter_watermark: bool = Query(True)):
     """SSE 流式下载图片，逐图推送进度。"""
@@ -832,15 +1267,16 @@ async def download_stream(indices: str = Query(""), filter_watermark: bool = Que
             post = posts[i]
             celebrity = post.get("celebrity", "未命名")
             scene = post.get("scene", "日常")
-            post_id = str(post.get("id") or "")[:12]
+            post_text = (post.get("text") or "").strip()
+            slug = post_text[:12] if post_text else str(post.get("id") or "")[:12]
             images = post.get("images", [])
             if not images:
                 continue
 
             celeb_dir = sanitize_segment(str(celebrity).strip() or "未命名艺人")
             scene_dir = sanitize_segment(str(scene).strip() or "未分类选题")
-            slug_dir = sanitize_segment(str(post_id).strip() or "post")
-            pref = sanitize_segment(str(post_id)[:8] or "img")
+            slug_dir = sanitize_segment(str(slug).strip() or "post")
+            pref = sanitize_segment(str(slug)[:8] or "img")
             base_dir = DOWNLOAD_DIR.expanduser().resolve() / celeb_dir / scene_dir / slug_dir
             base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -860,7 +1296,7 @@ async def download_stream(indices: str = Query(""), filter_watermark: bool = Que
                     total_dropped += 1
                 yield f"data: {_json.dumps({'type': 'progress', 'current': current, 'total': total, 'celebrity': celebrity, 'scene': scene, 'downloaded': total_downloaded, 'dropped': total_dropped}, ensure_ascii=False)}\n\n"
 
-            post["local_images"] = [str(f) for f in sorted(base_dir.iterdir()) if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif")]
+            post["local_images"] = [_img_rel(str(f)) for f in sorted(base_dir.iterdir()) if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif")]
             post["dropped_count"] = total_dropped
 
         app_state.set_discovery_results(posts)

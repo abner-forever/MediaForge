@@ -92,6 +92,40 @@ export interface MaterialsData {
   total_images: number;
 }
 
+/* ── 文件夹管理类型 ─────────────────────────── */
+
+export interface TreeNode {
+  name: string;
+  path: string;
+  type: 'folder';
+  item_count: number;
+  children: TreeNode[];
+}
+
+export interface BrowseFolder {
+  name: string;
+  path: string;
+  type: 'folder';
+  item_count: number;
+}
+
+export interface BrowseFile {
+  name: string;
+  path: string;
+  type: 'file';
+  size: number;
+}
+
+export interface BrowseResult {
+  folders: BrowseFolder[];
+  files: BrowseFile[];
+  breadcrumb: { name: string; path: string }[];
+}
+
+export interface TreeResult {
+  tree: TreeNode[];
+}
+
 export interface SettingsData {
   platform: string;
   ai_provider: string;
@@ -99,8 +133,12 @@ export interface SettingsData {
   ai_base_url: string;
   ai_api_key_set: boolean;
   ai_api_key_masked: string;
+  ai_api_keys: Record<string, string>;
   weibo_cookie_set: boolean;
+  weibo_cookie: string;
   weibo_uid: string;
+  weibo_screen_name: string;
+  weibo_avatar: string;
   weibo_fetch_mode: string;
   weibo_celebrities: string;
   weibo_search_tags: string;
@@ -122,6 +160,8 @@ export interface SettingsData {
   watermark_corner_ratio: number;
   watermark_bottom_ratio: number;
   allow_watermark_fallback: boolean;
+  materials_path: string;
+  download_dir: string;
 }
 
 export interface OperationItem {
@@ -152,6 +192,16 @@ export interface WeiboLoginEvent {
   message?: string;
   cookie?: string;
   uid?: string;
+  screen_name?: string;
+  avatar?: string;
+}
+
+export interface WeiboVerifyResult {
+  valid: boolean;
+  uid?: string;
+  screen_name?: string;
+  avatar?: string;
+  message?: string;
 }
 
 export interface PlatformMeta {
@@ -183,7 +233,9 @@ export const dashboardApi = {
 export const settingsApi = {
   get: () => get<SettingsData>('/api/settings'),
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
-  getKey: () => get<{ key: string }>('/api/settings/api-key'),
+  getKey: (provider?: string) => get<{ key: string }>(`/api/settings/api-key${provider ? `?provider=${provider}` : ''}`),
+  verifyWeibo: (cookie?: string) => post<WeiboVerifyResult>('/api/settings/weibo-verify', { cookie }),
+  clearWeibo: () => post<{ success: boolean }>('/api/settings/weibo-clear'),
   weiboLogin: (onEvent: (evt: WeiboLoginEvent) => void): Promise<void> => {
     return fetch('/api/settings/weibo-login-stream').then(async (res) => {
       const reader = res.body!.getReader();
@@ -270,6 +322,7 @@ export async function searchStream(
     super_topics: string[];
     max_pages: number;
     post_limit: number;
+    page?: number;
   },
   onEvent: (evt: SearchStreamEvent) => void,
   signal?: AbortSignal,
@@ -283,6 +336,7 @@ export async function searchStream(
     max_pages: String(params.max_pages),
     post_limit: String(params.post_limit),
   });
+  if (params.page) q.set('page', String(params.page));
   const res = await fetch(`/api/discovery/search-stream?${q}`, { signal });
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
@@ -317,6 +371,17 @@ export const selectionApi = {
 export const materialsApi = {
   list: () => get<MaterialsData>('/api/materials'),
   delete: (paths: string[]) => del<{ success: boolean; deleted: number }>('/api/materials', { paths }),
+
+  // 文件夹管理
+  tree: () => get<TreeResult>('/api/materials/tree'),
+  browse: (path: string) => get<BrowseResult>(`/api/materials/browse?path=${encodeURIComponent(path)}`),
+  createFolder: (parentPath: string, name: string) =>
+    post<{ success: boolean; path: string }>('/api/materials/folder', { parent_path: parentPath, name }),
+  renameFolder: (path: string, newName: string) =>
+    put<{ success: boolean; path: string }>('/api/materials/folder', { path, new_name: newName }),
+  deleteFolder: (path: string) => del<{ success: boolean }>(`/api/materials/folder?path=${encodeURIComponent(path)}`),
+  moveItems: (items: string[], destination: string) =>
+    post<{ success: boolean; moved: number }>('/api/materials/move', { items, destination }),
 };
 
 /* ── Publish Log Polling ──────────────────────── */

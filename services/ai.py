@@ -11,17 +11,12 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-PROMPT_TEMPLATE = """你是公众号运营专家，请生成：
-1. 吸引点击的标题（20字以内）
-2. 简短文案（30字以内）
+PROMPT_TEMPLATE = """你是公众号运营专家，请润色以下内容，生成吸引点击的标题（20字以内）：
 
-风格：
-- 轻松
-- 有吸引力
-- 不违规
+风格：轻松、有吸引力、不违规
 
-请严格返回 JSON：{{"title":"...", "desc":"..."}}
-微博内容：{text}
+请严格返回 JSON：{{"title":"..."}}
+参考内容：{text}
 """
 
 
@@ -61,7 +56,7 @@ def _resolve_chat_url_candidates() -> List[str]:
 def generate_content(text: str) -> Tuple[str, str]:
     if not settings.ai_api_key:
         logger.error("未配置 AI_API_KEY/MIMO_API_KEY/DEEPSEEK_API_KEY，使用降级文案")
-        return "今日美图分享", "精选高清美图，欢迎查看"
+        return "今日美图分享", ""
 
     last_err = None
     prompt = PROMPT_TEMPLATE.format(text=text[:500])
@@ -100,8 +95,7 @@ def generate_content(text: str) -> Tuple[str, str]:
                     )
                     data = json.loads(raw)
                     title = str(data.get("title", "")).strip()[:20] or "今日美图分享"
-                    desc = str(data.get("desc", "")).strip()[:30] or "精选高清美图，欢迎查看"
-                    return title, desc
+                    return title, ""
                 except Exception as inner_err:
                     last_err = inner_err
                     continue
@@ -113,4 +107,4 @@ def generate_content(text: str) -> Tuple[str, str]:
             time.sleep(1.2 * (i + 1))
 
     logger.error("AI 接口失败，使用兜底文案: %s", last_err)
-    return "今日美图分享", "精选高清美图，欢迎查看"
+    return "今日美图分享", ""

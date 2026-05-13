@@ -25,20 +25,20 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   return (
-    <aside className="flex flex-col w-56 h-full shrink-0 border-r border-white/[0.08]" style={{ background: 'var(--bg-sidebar)' }}>
+    <aside className="flex flex-col w-56 h-full shrink-0 border-r border-white/[0.06]" style={{ background: 'linear-gradient(180deg, var(--bg-sidebar) 0%, #0a0a14 100%)' }}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white text-xs font-bold shrink-0">
-          <img src="/static/logo.png" alt="图文工坊" className="w-full h-full object-contain rounded-lg" onError={(e) => { e.currentTarget.style.display = 'none'; (e.currentTarget.parentElement!.textContent = 'M') }} />
+      <div className="flex items-center gap-3 px-5 pt-5 pb-5">
+        <div className="w-14 h-14 flex items-center justify-center shrink-0 overflow-hidden">
+          <img src="/static/logo.png" alt="图文工坊" className="w-full h-full object-contain" />
         </div>
         <div>
-          <div className="text-sm font-bold text-white tracking-tight">图文工坊</div>
-          <div className="text-[10px] text-white/30 tracking-widest uppercase">MediaForge</div>
+          <div className="text-base font-bold text-white tracking-tight">图文工坊</div>
+          <div className="text-[11px] text-white/30 tracking-[0.15em] uppercase">MediaForge</div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-1 space-y-0.5">
+      <nav className="flex-1 px-3 py-2 space-y-0.5">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
@@ -47,7 +47,7 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-accent text-white shadow-sm'
+                  ? 'bg-accent text-white shadow-md shadow-accent/20'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06]'
               }`
             }
@@ -59,14 +59,14 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 py-4 border-t border-white/[0.06] space-y-2">
+      <div className="px-3 py-4 border-t border-white/[0.06] space-y-3">
         <NavLink
           to="/settings"
           end
           className={({ isActive }) =>
             `flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
               isActive
-                ? 'bg-accent text-white shadow-sm'
+                ? 'bg-accent text-white shadow-md shadow-accent/20'
                 : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
             }`
           }
@@ -75,7 +75,7 @@ export default function Sidebar() {
           <span>系统设置</span>
         </NavLink>
         <div className="text-center">
-          <span className="text-[9px] text-zinc-700 tracking-widest">v{__APP_VERSION__}</span>
+          <span className="text-[9px] text-zinc-700 tracking-[0.15em]">v{__APP_VERSION__}</span>
         </div>
       </div>
     </aside>

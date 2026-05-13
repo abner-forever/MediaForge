@@ -39,17 +39,17 @@ export default function Select({ value, onChange, options, placeholder }: Select
   }, [open, close]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative field-control">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={`
           w-full flex items-center justify-between
           px-3 py-[9px] rounded-lg border text-[13px] text-left
-          transition-[border-color,box-shadow] duration-150 cursor-pointer
+          transition-all duration-150 cursor-pointer
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
           ${open
-            ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)] bg-[var(--bg-card)]'
+            ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
             : 'border-[var(--border)] hover:border-[var(--accent)]'
           }
         `}
@@ -58,7 +58,7 @@ export default function Select({ value, onChange, options, placeholder }: Select
           {selected ? selected.label : placeholder ?? '请选择'}
         </span>
         <svg
-          className={`w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         >
           <path d="m6 9 6 6 6-6" />
@@ -67,8 +67,8 @@ export default function Select({ value, onChange, options, placeholder }: Select
 
       {open && (
         <div
-          className="absolute z-50 mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden animate-[dropdownIn_0.12s_ease]"
-          style={{ maxHeight: 240, overflowY: 'auto' }}
+          className="absolute z-50 mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden"
+          style={{ maxHeight: 240, overflowY: 'auto', animation: 'dropdownIn 0.12s cubic-bezier(0.16, 1, 0.3, 1) both' }}
         >
           {options.map((opt) => {
             const isActive = opt.value === value;
@@ -90,13 +90,6 @@ export default function Select({ value, onChange, options, placeholder }: Select
           })}
         </div>
       )}
-
-      <style>{`
-        @keyframes dropdownIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

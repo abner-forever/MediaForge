@@ -5,6 +5,7 @@ macOS: pyinstaller desktop/build.spec  →  dist/MediaForge.app
 Windows: pyinstaller desktop/build.spec →  dist/MediaForge/MediaForge.exe
 """
 
+import os
 import sys
 import platform
 from pathlib import Path
@@ -29,20 +30,62 @@ else:
 
 block_cipher = None
 
+# ── Playwright 浏览器打包 ─────────────────────────────
+# 检测已安装的 Playwright 浏览器并包含到安装包中，用户无需手动 playwright install chromium
+_all_datas = [
+    # 前端静态资源（Vite 构建产物）
+    (str(SPEC_DIR / 'static' / 'assets'), 'desktop/static/assets'),
+    (str(SPEC_DIR / 'static' / 'index.html'), 'desktop/static'),
+    (str(SPEC_DIR / 'static' / 'logo.png'), 'desktop/static'),
+    (str(SPEC_DIR / 'static' / 'logo-icon.png'), 'desktop/static'),
+    # .env 模板（首次运行可拷贝）
+    (str(PROJECT_ROOT / '.env.example'), '.'),
+    # Windows 调试脚本
+    (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
+]
+
+# 自动检测 Playwright 浏览器缓存
+_playwright_cache = None
+if system == 'Darwin':
+    _playwright_cache = Path.home() / 'Library' / 'Caches' / 'ms-playwright'
+elif system == 'Windows':
+    _playwright_cache = Path.home() / 'AppData' / 'Local' / 'ms-playwright'
+elif system == 'Linux':
+    _playwright_cache = Path.home() / '.cache' / 'ms-playwright'
+
+# 优先使用 PLAYWRIGHT_BROWSERS_PATH 环境变量
+_env_pw_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH')
+if _env_pw_path:
+    _playwright_cache = Path(_env_pw_path)
+
+if _playwright_cache and _playwright_cache.exists():
+    _found_any = False
+    for _entry in sorted(_playwright_cache.iterdir()):
+        if _entry.is_dir():
+            # 只打包 chromium（firefox/webkit 不需要）
+            if 'chromium' in _entry.name:
+                _target = 'ms-playwright/' + _entry.name
+                _all_datas.append((str(_entry), _target))
+                _found_any = True
+                print(f"[build.spec] ✓ 打包 Playwright: {_entry.name}")
+    if not _found_any:
+        print("[build.spec] ⚠ 未找到 Playwright Chromium 浏览器，跳过打包（微信发布需 playwright install chromium）")
+else:
+    print("[build.spec] ⚠ Playwright 浏览器缓存不存在，跳过打包（微信发布需 playwright install chromium）")
+
+# 运行时 hook：在冻结应用中设置 PLAYWRIGHT_BROWSERS_PATH
+_runtime_hook_path = str(SPEC_DIR / 'runtime_hook.py')
+_runtime_hooks = [_runtime_hook_path] if os.path.exists(_runtime_hook_path) else []
+if _runtime_hooks:
+    print(f"[build.spec] ✓ 使用运行时 hook: {_runtime_hook_path}")
+else:
+    print(f"[build.spec] ⚠ 运行时 hook 不存在: {_runtime_hook_path}")
+
 a = Analysis(
     [str(SPEC_DIR / 'main.py')],
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
-    datas=[
-        # 前端静态资源（Vite 构建产物）
-        (str(SPEC_DIR / 'static' / 'assets'), 'desktop/static/assets'),
-        (str(SPEC_DIR / 'static' / 'index.html'), 'desktop/static'),
-        (str(SPEC_DIR / 'static' / 'logo.png'), 'desktop/static'),
-        # .env 模板（首次运行可拷贝）
-        (str(PROJECT_ROOT / '.env.example'), '.'),
-        # Windows 调试脚本
-        (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
-    ],
+    datas=_all_datas,
     hiddenimports=[
         # ── 项目模块 ──────────────────────────
         'config',
@@ -59,6 +102,7 @@ a = Analysis(
         'services.watermark',
         'services.wechat',
         'services.weibo',
+        'services.weibo_login',
         'utils',
         'utils.audit',
         'utils.env_manager',
@@ -115,7 +159,7 @@ a = Analysis(
         'tenacity',
     ],
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=_runtime_hooks,
     excludes=[
         # 不需要的庞大模块
         'matplotlib',
@@ -167,6 +211,8 @@ if system == 'Darwin':
         info_plist={
             'CFBundleName': '图文工坊',
             'CFBundleDisplayName': '图文工坊',
+            'CFBundleExecutable': 'MediaForge',
+            'CFBundleIdentifier': 'com.mediaforge.app',
             'CFBundleVersion': APP_VERSION,
             'CFBundleShortVersionString': APP_VERSION,
             'CFBundleDevelopmentRegion': 'zh_CN',

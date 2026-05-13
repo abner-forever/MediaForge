@@ -22,10 +22,10 @@ export default function ContextMenu({ items, position, onClose }: Props) {
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h); }, [onClose]);
 
   return (
-    <div ref={ref} className="fixed z-[9500] min-w-[160px] py-1 bg-bg-card border border-border rounded-lg shadow-lg animate-in" style={{ left: pos.x, top: pos.y }}>
+    <div ref={ref} className="fixed z-[9500] min-w-[170px] py-1.5 bg-bg-card border border-border rounded-xl shadow-xl animate-scale" style={{ left: pos.x, top: pos.y }}>
       {items.map((item, i) => (
         <div key={i} onClick={() => { if (!item.disabled && item.onClick) { item.onClick(); onClose(); } }}
-          className={`flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded text-sm cursor-pointer transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : item.danger ? 'text-danger hover:bg-danger/10' : 'text-text hover:bg-accent-soft'}`}
+          className={`flex items-center gap-2.5 px-3 py-2 mx-1.5 rounded-lg text-sm cursor-pointer transition-colors ${item.disabled ? 'opacity-40 cursor-not-allowed' : item.danger ? 'text-danger hover:bg-danger/10' : 'text-text hover:bg-accent-soft'}`}
         >
           {item.icon && <span className="w-4 h-4 flex items-center justify-center shrink-0">{item.icon}</span>}
           {item.label}

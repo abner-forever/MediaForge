@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Post, ScoreInfo, QueueItem, MaterialsData } from '../api/client';
+import type { Post, ScoreInfo, QueueItem, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
 
 /* ── Theme Presets ──────────────────────────── */
 export interface ThemePreset {
@@ -71,15 +71,25 @@ interface AppState {
   selectAllImages: (paths: string[]) => void;
   clearSelectedImages: () => void;
 
-  // Materials
-  materialsData: MaterialsData;
-  matFilter: string;
+  // Materials — 文件夹管理模式
+  folderTree: TreeNode[];
+  currentPath: string;
+  currentFolders: BrowseFolder[];
+  currentFiles: BrowseFile[];
+  breadcrumb: { name: string; path: string }[];
+  expandedFolders: Set<string>;
   matSelected: Set<string>;
-  setMaterialsData: (data: MaterialsData) => void;
-  setMatFilter: (f: string) => void;
+  viewMode: 'grid' | 'list';
+  setFolderTree: (tree: TreeNode[]) => void;
+  setCurrentPath: (path: string) => void;
+  setCurrentFolders: (folders: BrowseFolder[]) => void;
+  setCurrentFiles: (files: BrowseFile[]) => void;
+  setBreadcrumb: (items: { name: string; path: string }[]) => void;
+  toggleFolderExpanded: (path: string) => void;
   matToggleSelect: (path: string) => void;
-  matSelectAll: () => void;
+  matSelectAll: (paths: string[]) => void;
   matClearSelection: () => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
 
   // Queue
   queue: QueueItem[];
@@ -197,12 +207,27 @@ export const useStore = create<AppState>((set, get) => ({
       return { selectedImages: isAll ? [] : [...paths] };
     }),
 
-  // Materials
-  materialsData: { groups: [], total_images: 0 },
-  matFilter: '',
+  // Materials — 文件夹管理模式
+  folderTree: [],
+  currentPath: '',
+  currentFolders: [],
+  currentFiles: [],
+  breadcrumb: [{ name: '全部素材', path: '' }],
+  expandedFolders: new Set(),
   matSelected: new Set(),
-  setMaterialsData: (data) => set({ materialsData: data }),
-  setMatFilter: (f) => set({ matFilter: f }),
+  viewMode: 'grid',
+  setFolderTree: (tree) => set({ folderTree: tree }),
+  setCurrentPath: (path) => set({ currentPath: path }),
+  setCurrentFolders: (folders) => set({ currentFolders: folders }),
+  setCurrentFiles: (files) => set({ currentFiles: files }),
+  setBreadcrumb: (items) => set({ breadcrumb: items }),
+  toggleFolderExpanded: (path) =>
+    set((s) => {
+      const next = new Set(s.expandedFolders);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return { expandedFolders: next };
+    }),
   matToggleSelect: (path) =>
     set((s) => {
       const next = new Set(s.matSelected);
@@ -210,17 +235,14 @@ export const useStore = create<AppState>((set, get) => ({
       else next.add(path);
       return { matSelected: next };
     }),
-  matSelectAll: () =>
+  matSelectAll: (paths) =>
     set((s) => {
-      const all = new Set<string>();
-      s.materialsData.groups.forEach((g) =>
-        g.scenes.forEach((sc) =>
-          sc.posts.forEach((p) => p.images.forEach((img) => all.add(img)))
-        )
-      );
-      return { matSelected: all };
+      const all = new Set(paths);
+      const isAll = s.matSelected.size === all.size && [...all].every((p) => s.matSelected.has(p));
+      return { matSelected: isAll ? new Set() : all };
     }),
   matClearSelection: () => set({ matSelected: new Set() }),
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   // Queue
   queue: [],

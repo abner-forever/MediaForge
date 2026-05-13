@@ -118,14 +118,18 @@ def _start_app() -> None:
         localization=localization,
     )
 
-    # macOS: 通过 AppKit 设置应用图标和名称
+    # macOS: 设置 Dock 图标和显示名称
     try:
-        from AppKit import NSImage, NSApplication, NSBundle
-        icon_path = Path(__file__).parent / "static" / "logo.png"
+        from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo
+        # 设置 Dock 图标
+        icon_path = Path(__file__).parent / "static" / "logo-icon.png"
         if icon_path.exists():
             img = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
             if img:
                 NSApplication.sharedApplication().setApplicationIconImage_(img)
+        # 设置进程名称（影响 Dock hover 显示）
+        NSProcessInfo.processInfo().setProcessName_("图文工坊")
+        # 设置 bundle 显示名称
         bundle = NSBundle.mainBundle()
         info = bundle.infoDictionary()
         if info is not None:

@@ -45,6 +45,9 @@ pip3 install -q pyinstaller pillow 2>/dev/null
 pip3 install -q -r "$PROJECT_ROOT/requirements.txt" 2>/dev/null
 ok "Python 依赖已安装"
 
+# 安装 Playwright 浏览器（用于打包到安装包）
+python3 -m playwright install chromium 2>/dev/null && ok "Playwright Chromium 已就绪" || warn "Playwright Chromium 安装失败，跳过（微信发布功能不可用）"
+
 # ── 2. 构建前端 ──────────────────────────────────────
 log "${YELLOW}[3/5]${NC} 构建前端..."
 cd "$PROJECT_ROOT/desktop/web"
@@ -66,7 +69,7 @@ if [ "$OS_TYPE" = "macos" ]; then
   python3 -c "
 from PIL import Image
 import os
-img = Image.open('desktop/static/logo.png')
+img = Image.open('desktop/static/logo-icon.png')
 size = min(img.size)
 left = (img.width - size) // 2
 top = (img.height - size) // 2
@@ -75,7 +78,7 @@ os.makedirs('build/icon.iconset', exist_ok=True)
 for s in [16, 32, 64, 128, 256, 512, 1024]:
     resized = img.resize((s, s), Image.LANCZOS)
     resized.save(f'build/icon.iconset/icon_{s}x{s}.png')
-    if s * 2 <= 1024: 
+    if s * 2 <= 1024:
         resized.save(f'build/icon.iconset/icon_{s}x{s}@2x.png')
 import subprocess
 subprocess.run(['iconutil', '-c', 'icns', 'build/icon.iconset', '-o', 'build/app.icns'], check=True)
@@ -87,7 +90,7 @@ elif [ "$OS_TYPE" = "windows" ]; then
   # Windows: .ico
   python3 -c "
 from PIL import Image
-img = Image.open('desktop/static/logo.png')
+img = Image.open('desktop/static/logo-icon.png')
 size = min(img.size)
 left = (img.width - size) // 2
 top = (img.height - size) // 2

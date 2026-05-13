@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi, type HealthStatus, type DashboardStats, type OperationItem } from '../api/client';
+import { useLoading } from '../hooks/useLoading';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -21,15 +22,18 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ops, setOps] = useState<OperationItem[]>([]);
   const [connError, setConnError] = useState(false);
+  const { loading: loadingDashboard, withLoading: withLoad } = useLoading();
 
   async function load() {
-    try {
-      const [h, s, o] = await Promise.all([
-        dashboardApi.health(), dashboardApi.stats(), dashboardApi.operations(),
-      ]);
-      setHealth(h); setStats(s); setOps(o);
-      setConnError(false);
-    } catch { setConnError(true); }
+    await withLoad(async () => {
+      try {
+        const [h, s, o] = await Promise.all([
+          dashboardApi.health(), dashboardApi.stats(), dashboardApi.operations(),
+        ]);
+        setHealth(h); setStats(s); setOps(o);
+        setConnError(false);
+      } catch { setConnError(true); }
+    });
   }
 
   useEffect(() => { load(); }, []);
@@ -39,9 +43,11 @@ export default function Dashboard() {
       <div className="empty-state-icon">🔌</div>
       <div className="empty-state-title">无法连接后端服务</div>
       <div className="empty-state-desc mb-4">
-        请确保已启动 <code className="bg-bg-secondary px-1.5 py-0.5 rounded text-xs">cd desktop && python main.py</code>
+        请确保已启动 <code className="bg-bg-secondary px-2 py-0.5 rounded text-xs">cd desktop && python main.py</code>
       </div>
-      <button className="btn btn-primary btn-sm" onClick={load}>重试连接</button>
+      <button className="btn btn-primary btn-sm" onClick={load} disabled={loadingDashboard}>
+        {loadingDashboard ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 连接中</> : '重试连接'}
+      </button>
     </div>
   );
 
@@ -66,32 +72,33 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-5 animate-in">
+    <div className="space-y-6 animate-in">
       {/* Hero */}
       <div className="card relative overflow-hidden">
-        <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-accent" />
-        <h2 className="text-xl font-bold text-text tracking-tight pl-3">欢迎使用图文工坊</h2>
-        <p className="text-sm text-text-secondary mt-1.5 leading-relaxed max-w-2xl">
-          自动化内容发布工具 —— 从微博/头条发现优质图文，
-          <span className="text-accent">AI 生成标题和文案</span>，
-          一键发布到微信公众号
-        </p>
+        <div className="absolute inset-0 bg-gradient-to-r from-accent-soft/60 via-transparent to-transparent" />
+        <div className="relative">
+          <h1 className="text-2xl font-bold text-text tracking-tight">欢迎回来</h1>
+          <p className="text-sm text-text-secondary mt-1.5 leading-relaxed max-w-xl">
+            自动化内容发布工具 —— 从微博/头条发现优质图文，
+            <span className="text-accent font-medium">AI 生成标题和文案</span>，
+            一键发布到微信公众号
+          </p>
+        </div>
       </div>
 
-      {/* Status */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Status + Stats */}
+      <div className="grid grid-cols-4 gap-4">
         {statusItems.map((item) => (
           <div key={item.label} className="card text-center py-4">
-            <div className={`inline-flex items-center justify-center w-3 h-3 rounded-full ${item.ok ? 'bg-accent' : 'bg-danger'} mb-2`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${item.ok ? 'bg-[var(--accent)]/40' : 'bg-danger/40'}`} />
+            <div className="mb-2.5 flex justify-center">
+              <span className={`status-dot ${item.ok ? 'online' : 'offline'}`} />
             </div>
-            <div className="text-xs text-text-muted">{item.label}</div>
+            <div className="text-[11px] text-text-muted font-medium uppercase tracking-wider">{item.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-4">
         {statsItems.map((item) => (
           <div
             key={item.label}
@@ -99,7 +106,7 @@ export default function Dashboard() {
             onClick={() => item.path && navigate(item.path)}
           >
             <div className="text-3xl font-bold text-text tabular-nums tracking-tight">{item.value}</div>
-            <div className="text-xs text-text-muted mt-0.5">{item.label}</div>
+            <div className="text-xs text-text-muted mt-1">{item.label}</div>
           </div>
         ))}
       </div>
@@ -112,7 +119,7 @@ export default function Dashboard() {
             <div
               key={a.path}
               onClick={() => navigate(a.path)}
-              className="bg-bg-secondary rounded-xl p-5 text-center cursor-pointer transition-all hover:bg-accent-soft hover:shadow-sm"
+              className="relative overflow-hidden rounded-xl bg-bg-secondary p-5 text-center cursor-pointer transition-all duration-200 hover:bg-accent-soft hover:shadow-sm hover:-translate-y-0.5 active:translate-y-0"
             >
               <div className="text-2xl mb-2">{a.icon}</div>
               <div className="text-sm font-semibold text-text">{a.title}</div>
@@ -135,8 +142,10 @@ export default function Dashboard() {
             {ops.map((op, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border-b border-border-subtle last:border-0 text-sm hover:bg-accent-softer transition-colors">
                 <span className="text-base shrink-0">{ACTION_ICONS[op.action] || '📌'}</span>
-                <span className="text-text-secondary flex-1 truncate">{op.detail || op.action}</span>
-                <span className="text-xs text-text-muted shrink-0">{timeAgo(op.time)}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-text-secondary truncate block">{op.detail || op.action}</span>
+                </div>
+                <span className="text-xs text-text-muted shrink-0 tabular-nums">{timeAgo(op.time)}</span>
               </div>
             ))}
           </div>

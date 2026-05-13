@@ -1,10 +1,11 @@
 # 发布检查清单
 
 ## 运行前
-- [ ] `.env` 已配置微博 Cookie 与模型配置
+- [ ] `.env` 已配置微博 Cookie / 模型配置 / 平台选择
 - [ ] `python3 -m compileall .` 通过
 - [ ] `cd desktop/web && npx tsc --noEmit` 通过
-- [ ] `python3 main.py --dry-run` 通过
+- [ ] `python3 main.py --dry-run` 通过（微博默认模式）
+- [ ] `python3 main.py --platform toutiao --mode keyword --dry-run` 通过（头条模式）
 
 ## 桌面端
 - [ ] `cd desktop/web && npm ci && npm run build` 成功

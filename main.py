@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Dict, Set
 
-from config import POSTS_CACHE_PATH, ensure_dirs, settings
+from config import POSTS_CACHE_PATH, ensure_dirs, reload_settings, settings
 from services.ai import generate_content
 from services.downloader import download_images
 from services.extensions import build_html, select_cover
@@ -64,6 +64,7 @@ def _save_cache(cache: Dict[str, Set[str]]) -> None:
 
 
 def main() -> None:
+    reload_settings()
     ensure_dirs()
     args = parse_args()
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -127,7 +128,8 @@ def main() -> None:
                 logger.info("帖子已处理（按hash命中缓存），跳过")
                 continue
         try:
-            folder_id = (post.get("id") or "").strip() or post_key[:12]
+            post_text = (post.get("text") or "").strip()
+            folder_id = post_text[:12] if post_text else (post.get("id") or "").strip() or post_key[:12]
             images, dropped_count = download_images(
                 post["images"],
                 celebrity=post.get("celebrity") or "未命名",

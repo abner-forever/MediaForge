@@ -97,31 +97,40 @@ iscc /dMyAppVersion="$(python -c "import tomllib; print(tomllib.load(open('pypro
 工作流文件：`.github/workflows/build.yml`
 PyInstaller 配置：`desktop/build.spec`
 
-> 注意：Playwright Chromium 浏览器未打包进安装包。如需微信发布功能，用户需手动运行 `playwright install chromium`。
+> 注意：Playwright Chromium 浏览器已打包进安装包（约 350MB），开箱即用。微博扫码登录已改用系统 WebView，无需 Playwright。
 
 ## 架构
 
 ### 数据流
 ```
-微博抓取 -> 图片下载（线程池 + 水印过滤）
-  -> AI 评分（Vision / 启发式）-> AI 生成标题文案
+微博/头条抓取 -> 图片下载（线程池 + 水印过滤）
+  -> AI 评分（Vision / 启发式）-> AI 生成标题
   -> HTML 排版 -> Playwright 自动化发布到微信公众号
 ```
 
 ### 服务层（`services/`）
-- **weibo.py** — 微博抓取，支持五种模式（`own`/`celebrities`/`mixed`/`super_topic`/`keyword`）。名人昵称自动解析 UID，处理 pics/pic_infos/mix_media_info/retweeted 多种响应格式。
+- **platforms/** — 平台插件架构，基类 `base.py` 定义 `PlatformService` 协议。内置微博（`weibo.py`）和今日头条（`toutiao.py`）实现。
+- **weibo_login.py** — 内置 WebView 微博扫码登录，自动获取 Cookie。
 - **downloader.py** — 并发下载图片到 `data/images/<celebrity>/<scene>/<post_id>/`，每张独立水印过滤。
-- **ai.py** — OpenAI 兼容 chat completions 生成标题（≤20字）+ 描述（≤30字）。支持 Mimo/DeepSeek/GLM/OpenAI 多供应商，失败时回退硬编码。
+- **ai.py** — OpenAI 兼容 chat completions 生成标题（≤20字）。支持 Mimo/DeepSeek/GLM/OpenAI 多供应商，失败时回退硬编码。
 - **wechat.py** — Playwright Chromium 自动化，处理扫码登录、文章编辑、图片上传、封面选择、发布。
 - **extensions.py** — 图片评分（Vision API + 启发式回退）、封面选取（最高分或首图）、HTML 排版生成。
 - **watermark.py** — 基于 PIL 的启发式水印检测，分析角部/底部与中心的边缘强度比。
+
+### 工具层（`utils/`）
+- **audit.py** — 审计日志，记录操作到 `data/state/operations.json`
+- **env_manager.py** — .env 文件读写管理（供桌面 API 使用）
+- **api_key_store.py** — API Key 本地加密存储（避免明文写在 .env 中）
+- **file.py** — 文件读取/写入，JSON 缓存，文本 hash
+- **pathsafe.py** — 安全路径处理
+- **logger.py** — 日志配置，按天轮转
 
 ### 桌面 API（`desktop/api.py`）
 FastAPI 路由，约 30 个端点：
 - 设置 CRUD（读写 .env）
 - 仪表盘（健康检查、统计、操作记录）
 - 发现（搜索、下载、评分、水印检测、SSE 流式下载进度）
-- 队列（增删改、AI 生成文案、发布、发布日志轮询）
+- 队列（增删改、AI 润色、发布、发布日志轮询）
 - 素材（列表浏览、批量删除）
 - 图片代理（本地图片静态服务、远程图片 proxy）
 
@@ -129,7 +138,7 @@ FastAPI 路由，约 30 个端点：
 React 单页应用，5 个页面：
 - **Dashboard** — 健康状态、统计数据、快捷操作、最近操作记录
 - **Discovery** — 搜索参数配置、帖子列表、本地图片画廊、AI 评分
-- **Queue** — 发布队列管理、AI 生成文案、保存草稿/直接发布/预览
+- **Queue** — 发布队列管理、AI 润色、保存草稿/直接发布/删除
 - **Materials** — 按艺人+场景分组的本地素材管理、右键菜单
 - **Settings** — 主题切换（3 种模式 + 4 套配色）、大模型配置、微博配置、水印参数
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 
-from config import BASE_DIR
+from config import DOT_ENV_PATH
 
-ENV_PATH = BASE_DIR / ".env"
+ENV_PATH = DOT_ENV_PATH
 
 
 def read_env() -> Dict[str, str]:

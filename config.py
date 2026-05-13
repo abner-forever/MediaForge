@@ -1,5 +1,6 @@
 import os
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Tuple
 
@@ -9,9 +10,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-DOWNLOAD_DIR = DATA_DIR / "images"
+# ── 路径配置 ──────────────────────────────────────────
+# 打包模式下使用系统标准应用数据目录（可写），开发模式使用项目根目录
+def _get_data_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        if sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support" / "com.mediaforge.app"
+        elif sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", "")) / "MediaForge"
+        else:
+            base = Path.home() / ".local" / "share" / "MediaForge"
+        return base / "data"
+    else:
+        return Path(__file__).resolve().parent / "data"
+
+
+def _get_env_path() -> Path:
+    """打包模式下 .env 随数据目录迁移，开发模式在项目根目录。"""
+    if getattr(sys, "frozen", False):
+        return _get_data_dir() / ".env"
+    return Path(__file__).resolve().parent / ".env"
+
+
+BASE_DIR = Path(__file__).resolve().parent  # 项目根目录（开发模式）
+DATA_DIR = _get_data_dir()
+DOT_ENV_PATH = _get_env_path()
+
+# 素材（图片）目录：可通过 MATERIALS_PATH 环境变量自定义
+_materials_override = os.getenv("MATERIALS_PATH", "").strip()
+if _materials_override:
+    DOWNLOAD_DIR = Path(_materials_override)
+else:
+    DOWNLOAD_DIR = DATA_DIR / "images"
 POSTS_CACHE_PATH = DATA_DIR / "posts.json"
 QUEUE_CACHE_PATH = DATA_DIR / "queue.json"
 WECHAT_STATE_PATH = DATA_DIR / "state" / "wechat.json"
@@ -34,50 +64,75 @@ def _effective_weibo_fetch_mode(raw_mode: str, celebrities: Tuple[str, ...]) -> 
     return "celebrities" if celebrities else "own"
 
 
+def _resolve_api_key_from_store(provider: str) -> str:
+    """从本地 key 存储中读取当前供应商的 API key（无依赖导入，避免循环引用）。"""
+    from utils.api_key_store import get_api_key
+    return get_api_key(provider)
+
+
+def _resolve_weibo_cookie_from_store() -> str:
+    from utils.weibo_auth_store import get_weibo_cookie
+    return get_weibo_cookie()
+
+
+def _resolve_weibo_uid_from_store() -> str:
+    from utils.weibo_auth_store import get_weibo_uid
+    return get_weibo_uid()
+
+
 @dataclass
 class Settings:
-    weibo_cookie: str = os.getenv("WEIBO_COOKIE", "")
-    weibo_uid: str = os.getenv("WEIBO_UID", "")
-    weibo_fetch_mode: str = os.getenv("WEIBO_FETCH_MODE", "")
+    weibo_cookie: str = field(default_factory=lambda: (
+        os.getenv("WEIBO_COOKIE", "")
+        or _resolve_weibo_cookie_from_store()
+    ))
+    weibo_uid: str = field(default_factory=lambda: (
+        os.getenv("WEIBO_UID", "")
+        or _resolve_weibo_uid_from_store()
+    ))
+    weibo_fetch_mode: str = field(default_factory=lambda: os.getenv("WEIBO_FETCH_MODE", ""))
     weibo_celebrities: Tuple[str, ...] = ()
-    weibo_search_tags: Tuple[str, ...] = _csv_tuple(
-        os.getenv("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭")
+    weibo_search_tags: Tuple[str, ...] = field(
+        default_factory=lambda: _csv_tuple(os.getenv("WEIBO_SEARCH_TAGS", "美图,日常,时装周,美妆,穿搭"))
     )
-    weibo_keyword_pages: int = int(os.getenv("WEIBO_KEYWORD_PAGES", "1"))
-    weibo_scene_extra_tags: Tuple[str, ...] = _csv_tuple(os.getenv("WEIBO_SCENE_EXTRA_TAGS", ""))
-    weibo_super_topics: Tuple[str, ...] = _csv_tuple(os.getenv("WEIBO_SUPER_TOPICS", ""))
-    ai_provider: str = os.getenv("AI_PROVIDER", "mimo").lower()
-    ai_model: str = os.getenv("AI_MODEL", "mimo-chat")
-    ai_api_key: str = (
+    weibo_keyword_pages: int = field(default_factory=lambda: int(os.getenv("WEIBO_KEYWORD_PAGES", "1")))
+    weibo_scene_extra_tags: Tuple[str, ...] = field(default_factory=lambda: _csv_tuple(os.getenv("WEIBO_SCENE_EXTRA_TAGS", "")))
+    weibo_super_topics: Tuple[str, ...] = field(default_factory=lambda: _csv_tuple(os.getenv("WEIBO_SUPER_TOPICS", "")))
+    ai_provider: str = field(default_factory=lambda: os.getenv("AI_PROVIDER", "mimo").lower())
+    ai_model: str = field(default_factory=lambda: os.getenv("AI_MODEL", "mimo-chat"))
+    ai_api_key: str = field(default_factory=lambda: (
         os.getenv("AI_API_KEY", "")
-        or os.getenv("MIMO_API_KEY", "")
-        or os.getenv("GLM_API_KEY", "")
-        or os.getenv("DEEPSEEK_API_KEY", "")
-        or os.getenv("OPENAI_API_KEY", "")
-    )
-    ai_base_url: str = os.getenv("AI_BASE_URL", "")
-    post_limit: int = int(os.getenv("POST_LIMIT", "3"))
-    weibo_pages: int = int(os.getenv("WEIBO_PAGES", "2"))
-    request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "20"))
-    retry_times: int = int(os.getenv("RETRY_TIMES", "3"))
-    min_publish_interval: int = int(os.getenv("PUBLISH_INTERVAL_SECONDS", "10"))
-    no_publish_without_confirm: bool = os.getenv("REQUIRE_CONFIRM", "true").lower() == "true"
-    watermark_filter: bool = os.getenv("WATERMARK_FILTER", "true").lower() == "true"
-    watermark_corner_ratio: float = float(os.getenv("WATERMARK_CORNER_RATIO", "1.38"))
-    watermark_bottom_ratio: float = float(os.getenv("WATERMARK_BOTTOM_RATIO", "1.48"))
-    watermark_strict_mode: bool = os.getenv("WATERMARK_STRICT_MODE", "true").lower() == "true"
-    min_clean_images: int = int(os.getenv("MIN_CLEAN_IMAGES", "3"))
-    allow_watermark_fallback: bool = os.getenv("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true"
+        or _resolve_api_key_from_store(os.getenv("AI_PROVIDER", "mimo").lower())
+        or {
+            "mimo": os.getenv("MIMO_API_KEY", ""),
+            "deepseek": os.getenv("DEEPSEEK_API_KEY", ""),
+            "glm": os.getenv("GLM_API_KEY", ""),
+            "openai": os.getenv("OPENAI_API_KEY", ""),
+        }.get(os.getenv("AI_PROVIDER", "mimo").lower(), "")
+    ))
+    ai_base_url: str = field(default_factory=lambda: os.getenv("AI_BASE_URL", ""))
+    post_limit: int = field(default_factory=lambda: int(os.getenv("POST_LIMIT", "3")))
+    weibo_pages: int = field(default_factory=lambda: int(os.getenv("WEIBO_PAGES", "2")))
+    request_timeout: int = field(default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT", "20")))
+    retry_times: int = field(default_factory=lambda: int(os.getenv("RETRY_TIMES", "3")))
+    min_publish_interval: int = field(default_factory=lambda: int(os.getenv("PUBLISH_INTERVAL_SECONDS", "10")))
+    no_publish_without_confirm: bool = field(default_factory=lambda: os.getenv("REQUIRE_CONFIRM", "true").lower() == "true")
+    watermark_filter: bool = field(default_factory=lambda: os.getenv("WATERMARK_FILTER", "true").lower() == "true")
+    watermark_corner_ratio: float = field(default_factory=lambda: float(os.getenv("WATERMARK_CORNER_RATIO", "1.38")))
+    watermark_bottom_ratio: float = field(default_factory=lambda: float(os.getenv("WATERMARK_BOTTOM_RATIO", "1.48")))
+    watermark_strict_mode: bool = field(default_factory=lambda: os.getenv("WATERMARK_STRICT_MODE", "true").lower() == "true")
+    min_clean_images: int = field(default_factory=lambda: int(os.getenv("MIN_CLEAN_IMAGES", "3")))
+    allow_watermark_fallback: bool = field(default_factory=lambda: os.getenv("ALLOW_WATERMARK_FALLBACK", "false").lower() == "true")
     # ── 平台选择 ──
-    platform: str = os.getenv("PLATFORM", "weibo")
+    platform: str = field(default_factory=lambda: os.getenv("PLATFORM", "weibo"))
     # ── 今日头条 ──
-    toutiao_cookie: str = os.getenv("TOUTIAO_COOKIE", "")
-    toutiao_user_id: str = os.getenv("TOUTIAO_USER_ID", "")
-    toutiao_fetch_mode: str = os.getenv("TOUTIAO_FETCH_MODE", "feed")
-    toutiao_search_tags: Tuple[str, ...] = _csv_tuple(
-        os.getenv("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭")
+    toutiao_cookie: str = field(default_factory=lambda: os.getenv("TOUTIAO_COOKIE", ""))
+    toutiao_user_id: str = field(default_factory=lambda: os.getenv("TOUTIAO_USER_ID", ""))
+    toutiao_fetch_mode: str = field(default_factory=lambda: os.getenv("TOUTIAO_FETCH_MODE", "feed"))
+    toutiao_search_tags: Tuple[str, ...] = field(
+        default_factory=lambda: _csv_tuple(os.getenv("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"))
     )
-    toutiao_keyword_pages: int = int(os.getenv("TOUTIAO_KEYWORD_PAGES", "1"))
+    toutiao_keyword_pages: int = field(default_factory=lambda: int(os.getenv("TOUTIAO_KEYWORD_PAGES", "1")))
 
 
 CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))
@@ -85,13 +140,32 @@ settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
 
 
 def reload_settings() -> None:
-    """重新从 .env 文件加载配置到全局 settings 单例（原地更新字段，保留已有引用）。"""
-    global CELEBRITY_NAMES
+    """重新从 .env + settings.json 加载配置到全局 settings 单例。
+
+    合并顺序：.env → settings.json（后者优先级更高，覆盖同名 key）。
+    """
+    global CELEBRITY_NAMES, DOWNLOAD_DIR
     load_dotenv(override=True)
+
+    # 从 settings.json 加载并注入环境变量（覆盖 .env）
+    try:
+        from utils.settings_store import read_settings
+        store = read_settings()
+        for k, v in store.items():
+            os.environ[k] = v
+    except Exception:
+        pass
+
     CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))
+    # 重新计算素材目录（支持运行时修改 MATERIALS_PATH）
+    _materials_override = os.getenv("MATERIALS_PATH", "").strip()
+    if _materials_override:
+        DOWNLOAD_DIR = Path(_materials_override)
+    else:
+        DOWNLOAD_DIR = DATA_DIR / "images"
     new_settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
-    for field in new_settings.__dataclass_fields__:
-        setattr(settings, field, getattr(new_settings, field))
+    for field_name in new_settings.__dataclass_fields__:
+        setattr(settings, field_name, getattr(new_settings, field_name))
 
 
 def resolve_weibo_fetch_mode() -> str:
