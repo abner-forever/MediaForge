@@ -16,6 +16,40 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# macOS: 尽早设置 Dock 图标和进程名称，在 uvicorn/webview 等加载前执行
+try:
+    from AppKit import NSProcessInfo, NSApplication, NSString, NSImage
+    import ctypes, ctypes.util
+
+    NSApplication.sharedApplication()
+
+    # 设置 Dock 图标
+    _icon_candidates = [
+        Path(__file__).parent / "static" / "logo-icon.png",
+        Path(__file__).parent.parent / "build" / "app.icns",
+    ]
+    for _icon_path in _icon_candidates:
+        if _icon_path.exists():
+            _img = NSImage.alloc().initWithContentsOfFile_(str(_icon_path))
+            if _img:
+                NSApplication.sharedApplication().setApplicationIconImage_(_img)
+            break
+
+    # 设置进程名称（Dock hover tooltip）
+    NSProcessInfo.processInfo().setProcessName_("图文工坊")
+
+    # Carbon CPSSetProcessName 兜底
+    carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
+
+    class _PSN(ctypes.Structure):
+        _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
+
+    _psn = _PSN(0, 0)
+    carbon.GetCurrentProcess(ctypes.byref(_psn))
+    carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
+except Exception:
+    pass
+
 from config import ensure_dirs
 
 
@@ -44,6 +78,43 @@ def main() -> None:
 
 
 def _start_app() -> None:
+    # macOS Dock 标识设置（非 frozen 模式的兜底，frozen 模式由 runtime_hook 处理）
+    try:
+        from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo, NSString
+        import ctypes, ctypes.util
+
+        NSApplication.sharedApplication()
+        NSProcessInfo.processInfo().setProcessName_("图文工坊")
+
+        # Carbon CPSSetProcessName 兜底，直接更新 Dock/Launch Services 名称
+        carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
+        class _PSN(ctypes.Structure):
+            _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
+        _psn = _PSN(0, 0)
+        carbon.GetCurrentProcess(ctypes.byref(_psn))
+        carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
+
+        # 设置 Dock 图标
+        icon_candidates = [
+            Path(__file__).parent / "static" / "logo-icon.png",
+            Path(__file__).parent.parent / "build" / "app.icns",
+        ]
+        for icon_path in icon_candidates:
+            if icon_path.exists():
+                img = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+                if img:
+                    NSApplication.sharedApplication().setApplicationIconImage_(img)
+                break
+
+        # 更新 bundle info 显示名称
+        bundle = NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "图文工坊"
+            info["CFBundleDisplayName"] = "图文工坊"
+    except Exception:
+        pass
+
     ensure_dirs()
 
     host = "127.0.0.1"
@@ -118,23 +189,14 @@ def _start_app() -> None:
         localization=localization,
     )
 
-    # macOS: 设置 Dock 图标和显示名称
+    # PyWebView create_window 内部可能重置 Dock 图标，在此重新设置
     try:
-        from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo
-        # 设置 Dock 图标
-        icon_path = Path(__file__).parent / "static" / "logo-icon.png"
-        if icon_path.exists():
-            img = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
-            if img:
-                NSApplication.sharedApplication().setApplicationIconImage_(img)
-        # 设置进程名称（影响 Dock hover 显示）
-        NSProcessInfo.processInfo().setProcessName_("图文工坊")
-        # 设置 bundle 显示名称
-        bundle = NSBundle.mainBundle()
-        info = bundle.infoDictionary()
-        if info is not None:
-            info["CFBundleName"] = "图文工坊"
-            info["CFBundleDisplayName"] = "图文工坊"
+        _icon_path = Path(__file__).parent / "static" / "logo-icon.png"
+        if _icon_path.exists():
+            from AppKit import NSImage, NSApplication
+            _img = NSImage.alloc().initWithContentsOfFile_(str(_icon_path))
+            if _img:
+                NSApplication.sharedApplication().setApplicationIconImage_(_img)
     except Exception:
         pass
 

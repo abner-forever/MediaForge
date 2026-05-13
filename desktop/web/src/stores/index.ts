@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Post, ScoreInfo, QueueItem, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
+import { settingsApi } from '../api/client';
 
 /* ── Theme Presets ──────────────────────────── */
 export interface ThemePreset {
@@ -41,6 +42,7 @@ interface AppState {
   setTheme: (t: string) => void;
   accentId: string;
   setAccentId: (id: string) => void;
+  syncTheme: () => Promise<void>;
 
   // Toast
   toasts: ToastItem[];
@@ -134,11 +136,20 @@ export const useStore = create<AppState>((set, get) => ({
   setTheme: (t) => {
     applyThemeVars(t);
     set({ theme: t });
+    settingsApi.save({ APP_THEME: t }).catch(() => {});
   },
   accentId: getInitialAccent(),
   setAccentId: (id) => {
     applyAccentVars(id, get().theme);
     set({ accentId: id });
+    settingsApi.save({ APP_ACCENT: id }).catch(() => {});
+  },
+  syncTheme: async () => {
+    try {
+      const { theme, accent } = await settingsApi.getTheme();
+      if (theme) { applyThemeVars(theme); set({ theme }); }
+      if (accent) { applyAccentVars(accent, theme || get().theme); set({ accentId: accent }); }
+    } catch { /* ignore */ }
   },
 
   // Toast

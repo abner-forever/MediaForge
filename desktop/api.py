@@ -201,6 +201,9 @@ async def get_settings():
         # ── 素材保存路径 ──
         "materials_path": cfg.get("MATERIALS_PATH", ""),
         "download_dir": str(DOWNLOAD_DIR),
+        # ── 主题设置 ──
+        "theme": store.get("APP_THEME", ""),
+        "accent": store.get("APP_ACCENT", ""),
     }
 
 
@@ -253,6 +256,14 @@ async def save_settings(data: Dict[str, Any]):
     globals()["DOWNLOAD_DIR"] = _cfg.DOWNLOAD_DIR
 
     return {"success": True, "message": "配置已保存"}
+
+
+@app.get("/api/settings/theme")
+async def get_theme():
+    """轻量主题设置接口，避免加载全部配置"""
+    from utils.settings_store import read_settings
+    s = read_settings()
+    return {"theme": s.get("APP_THEME", ""), "accent": s.get("APP_ACCENT", "")}
 
 
 @app.get("/api/settings/api-key")
@@ -433,16 +444,22 @@ async def get_platforms():
 
 @app.get("/api/dashboard/health")
 async def health_check():
+    """从 os.environ / api_key_store 直接读取配置，绕过 Settings dataclass 缓存问题。"""
+    from utils.api_key_store import get_api_key
+
     active_platform = settings.platform or "weibo"
     platform_svc = get_platform(active_platform)
+    provider = os.environ.get("AI_PROVIDER", "mimo").lower()
+    api_key = os.environ.get("AI_API_KEY", "") or get_api_key(provider) or ""
+    base_url = os.environ.get("AI_BASE_URL", "")
     return {
         "platform": active_platform,
         "platform_name": platform_svc.meta.name if platform_svc else active_platform,
         "platform_auth": platform_svc.check_auth() if platform_svc else False,
         "weibo_cookie": bool(settings.weibo_cookie),
         "weibo_uid_or_celebrities": bool(settings.weibo_uid or settings.weibo_celebrities),
-        "ai_api_key": bool(settings.ai_api_key),
-        "ai_base_url": bool(settings.ai_base_url),
+        "ai_api_key": bool(api_key),
+        "ai_base_url": bool(base_url),
     }
 
 
@@ -489,6 +506,17 @@ async def recent_runs():
 @app.get("/api/dashboard/operations")
 async def recent_operations():
     return app_state.get_operations()
+
+
+@app.post("/api/dashboard/operations/delete")
+async def delete_operations(data: Dict[str, Any]):
+    """批量删除操作记录。data = {indices: [0, 2, 5]} 或 {clear: true}。"""
+    if data.get("clear"):
+        app_state.clear_all_operations()
+        return {"success": True, "deleted": -1}
+    indices = data.get("indices", [])
+    deleted = app_state.delete_operations(indices)
+    return {"success": True, "deleted": deleted}
 
 
 # ── Discovery API ──────────────────────────────────────

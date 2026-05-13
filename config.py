@@ -168,6 +168,10 @@ def reload_settings() -> None:
         setattr(settings, field_name, getattr(new_settings, field_name))
 
 
+# 启动时加载 settings.json 合并到 settings 单例，确保桌面 UI 保存的配置立即生效
+reload_settings()
+
+
 def resolve_weibo_fetch_mode() -> str:
     return _effective_weibo_fetch_mode(settings.weibo_fetch_mode, settings.weibo_celebrities)
 

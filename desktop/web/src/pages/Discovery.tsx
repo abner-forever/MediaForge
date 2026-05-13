@@ -32,7 +32,7 @@ export default function Discovery() {
   const [platforms, setPlatforms] = useState<Record<string, PlatformMeta>>({});
   const [mode, setMode] = useState('celebrities');
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(5);
+  const [limit, setLimit] = useState(20);
   const [celebs, setCelebs] = useState('');
   const [tags, setTags] = useState('');
   const [superTopics, setSuperTopics] = useState('');

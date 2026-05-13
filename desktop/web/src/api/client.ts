@@ -75,6 +75,7 @@ export interface QueueItem {
   cover: string;
   celebrity?: string;
   publish_logs?: string[];
+  time?: string;
 }
 
 export interface MaterialsGroup {
@@ -226,6 +227,8 @@ export const dashboardApi = {
   stats: () => get<DashboardStats>('/api/dashboard/stats'),
   runs: () => get<RunInfo[]>('/api/dashboard/runs'),
   operations: () => get<OperationItem[]>('/api/dashboard/operations'),
+  deleteOperations: (indices: number[]) => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { indices }),
+  clearOperations: () => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { clear: true }),
 };
 
 /* ── Settings API ─────────────────────────────── */
@@ -234,6 +237,7 @@ export const settingsApi = {
   get: () => get<SettingsData>('/api/settings'),
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
   getKey: (provider?: string) => get<{ key: string }>(`/api/settings/api-key${provider ? `?provider=${provider}` : ''}`),
+  getTheme: () => get<{ theme: string; accent: string }>('/api/settings/theme'),
   verifyWeibo: (cookie?: string) => post<WeiboVerifyResult>('/api/settings/weibo-verify', { cookie }),
   clearWeibo: () => post<{ success: boolean }>('/api/settings/weibo-clear'),
   weiboLogin: (onEvent: (evt: WeiboLoginEvent) => void): Promise<void> => {

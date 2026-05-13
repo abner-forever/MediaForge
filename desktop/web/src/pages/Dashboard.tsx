@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi, type HealthStatus, type DashboardStats, type OperationItem } from '../api/client';
 import { useLoading } from '../hooks/useLoading';
+import { useStore } from '../stores';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -18,11 +19,13 @@ const ACTION_ICONS: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { addToast } = useStore();
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ops, setOps] = useState<OperationItem[]>([]);
   const [connError, setConnError] = useState(false);
   const { loading: loadingDashboard, withLoading: withLoad } = useLoading();
+  const { loading: deleting, withLoading: withDelete } = useLoading();
 
   async function load() {
     await withLoad(async () => {
@@ -37,6 +40,22 @@ export default function Dashboard() {
   }
 
   useEffect(() => { load(); }, []);
+
+  const handleDeleteOp = useCallback(async (index: number) => {
+    await withDelete(async () => {
+      await dashboardApi.deleteOperations([index]);
+      setOps(await dashboardApi.operations());
+      addToast('已删除', 'info');
+    });
+  }, [addToast, withDelete]);
+
+  const handleClearOps = useCallback(async () => {
+    await withDelete(async () => {
+      await dashboardApi.clearOperations();
+      setOps([]);
+      addToast('已清空操作记录', 'info');
+    });
+  }, [addToast, withDelete]);
 
   if (connError) return (
     <div className="empty-state py-24 animate-in">
@@ -131,7 +150,14 @@ export default function Dashboard() {
 
       {/* Operations */}
       <div className="card">
-        <div className="section-header mb-4">最近操作</div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="section-header">最近操作</div>
+          {ops.length > 0 && (
+            <button className="btn btn-ghost btn-xs text-text-muted" onClick={handleClearOps} disabled={deleting}>
+              清空
+            </button>
+          )}
+        </div>
         {ops.length === 0 ? (
           <div className="empty-state py-8">
             <div className="empty-state-icon">📋</div>
@@ -140,12 +166,19 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-0 max-h-64 overflow-y-auto -mx-1">
             {ops.map((op, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border-b border-border-subtle last:border-0 text-sm hover:bg-accent-softer transition-colors">
+              <div key={i} className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border-b border-border-subtle last:border-0 text-sm hover:bg-accent-softer transition-colors">
                 <span className="text-base shrink-0">{ACTION_ICONS[op.action] || '📌'}</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-text-secondary truncate block">{op.detail || op.action}</span>
                 </div>
                 <span className="text-xs text-text-muted shrink-0 tabular-nums">{timeAgo(op.time)}</span>
+                <button
+                  onClick={() => handleDeleteOp(i)}
+                  className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-text-muted opacity-0 group-hover:opacity-100 hover:bg-danger/10 hover:text-danger transition-all"
+                  title="删除"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
               </div>
             ))}
           </div>

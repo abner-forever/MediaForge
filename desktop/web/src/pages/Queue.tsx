@@ -15,6 +15,24 @@ const imgSrc = (p: string) => {
   return `/images/${encodeURIComponent(rel).replace(/%2F/g, '/')}`;
 };
 
+function formatTime(timeStr?: string): string {
+  if (!timeStr) return '';
+  const now = Date.now();
+  const time = new Date(timeStr).getTime();
+  if (isNaN(time)) return '';
+  const diff = now - time;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return '刚刚';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}天前`;
+  const months = Math.floor(days / 30);
+  return `${months}个月前`;
+}
+
 export default function Queue() {
   const { queue, setQueue, addToast } = useStore();
   useEffect(() => { queueApi.get().then(d => setQueue(d.queue)); }, [setQueue]);
@@ -35,9 +53,30 @@ export default function Queue() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          {queue.map((item, i) => <QueueCard key={i} item={item} index={i} />)}
-        </div>
+        (() => {
+          const sortedIndices = queue
+            .map((item, i) => ({ item, i }))
+            .sort((a, b) => {
+              const tA = a.item.time || '';
+              const tB = b.item.time || '';
+              return tB.localeCompare(tA);
+            });
+          return sortedIndices.map(({ i }, idx) => (
+            <div key={i} className="flex gap-5 items-stretch">
+              {/* Timeline */}
+              <div className="flex flex-col items-center w-14 shrink-0">
+                <div className="h-6 shrink-0" />
+                {idx > 0 && <div className="w-px h-4 bg-border shrink-0" />}
+                <div className="w-3 h-3 rounded-full bg-accent ring-2 ring-accent/20 shrink-0" />
+                <span className="text-[10px] text-text-muted mt-1 whitespace-nowrap shrink-0">{formatTime(queue[i].time)}</span>
+                {idx < sortedIndices.length - 1 && <div className="w-px flex-1 bg-border mt-1.5" />}
+              </div>
+              <div className={`flex-1 min-w-0 ${idx < sortedIndices.length - 1 ? 'pb-6' : ''}`}>
+                <QueueCard item={queue[i]} index={i} />
+              </div>
+            </div>
+          ));
+        })()
       )}
     </div>
   );
@@ -53,8 +92,15 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { loading: generating, withLoading: withGenerating } = useLoading();
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logsLenRef = useRef(logs.length);
 
-  useEffect(() => { if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
+  useEffect(() => {
+    // 只在日志追加时（发布过程中）滚动到底部，挂载时已有的日志不触发
+    if (logEndRef.current && logs.length > logsLenRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+    logsLenRef.current = logs.length;
+  }, [logs]);
 
   async function updateField(field: string, value: string) { await queueApi.update(index, { [field]: value } as any); }
   async function deleteItem() { await queueApi.remove(index); setQueue((await queueApi.get()).queue); addToast('已删除', 'info'); }

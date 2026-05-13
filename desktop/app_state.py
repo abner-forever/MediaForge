@@ -50,6 +50,7 @@ class AppState:
 
     # ── 发布队列 ──────────────────────────────────────
     def add_to_queue(self, item: Dict[str, Any]) -> None:
+        item["time"] = datetime.now().isoformat()
         self.publish_queue.append(item)
         self._save_queue()
 
@@ -88,6 +89,26 @@ class AppState:
 
     def get_operations(self, limit: int = 20) -> List[Dict[str, Any]]:
         return list(self._operations[-limit:])
+
+    def delete_operations(self, indices: List[int]) -> int:
+        """删除指定索引（从末尾数起）的操作记录，返回删除数量。"""
+        if not indices:
+            return 0
+        valid = set()
+        total = len(self._operations)
+        for i in indices:
+            if 0 <= i < total:
+                valid.add(i)
+        if not valid:
+            return 0
+        self._operations = [op for idx, op in enumerate(self._operations) if idx not in valid]
+        self._save_operations()
+        return len(valid)
+
+    def clear_all_operations(self) -> None:
+        """清空所有操作记录。"""
+        self._operations.clear()
+        self._save_operations()
 
     # ── 发布日志 ──────────────────────────────────────
     def clear_publish_logs(self) -> None:
