@@ -92,7 +92,7 @@ PYEOF
 # 2. 创建空白读写 DMG
 # ══════════════════════════════════════════════════════
 echo "  2/5 创建空白 DMG..."
-hdiutil create -size 700m -volname "$VOLNAME" \
+hdiutil create -size 1500m -volname "$VOLNAME" \
     -fs HFS+ "$DMG_TEMP" >/dev/null
 
 # ══════════════════════════════════════════════════════

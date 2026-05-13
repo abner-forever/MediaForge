@@ -65,19 +65,19 @@ if _playwright_cache and _playwright_cache.exists():
                 _target = 'ms-playwright/' + _entry.name
                 _all_datas.append((str(_entry), _target))
                 _found_any = True
-                print(f"[build.spec] ✓ 打包 Playwright: {_entry.name}")
+                print(f"[build.spec] [OK] 打包 Playwright: {_entry.name}")
     if not _found_any:
-        print("[build.spec] ⚠ 未找到 Playwright Chromium 浏览器，跳过打包（微信发布需 playwright install chromium）")
+        print("[build.spec] [WARN] 未找到 Playwright Chromium 浏览器，跳过打包（微信发布需 playwright install chromium）")
 else:
-    print("[build.spec] ⚠ Playwright 浏览器缓存不存在，跳过打包（微信发布需 playwright install chromium）")
+    print("[build.spec] [WARN] Playwright 浏览器缓存不存在，跳过打包（微信发布需 playwright install chromium）")
 
 # 运行时 hook：在冻结应用中设置 PLAYWRIGHT_BROWSERS_PATH
 _runtime_hook_path = str(SPEC_DIR / 'runtime_hook.py')
 _runtime_hooks = [_runtime_hook_path] if os.path.exists(_runtime_hook_path) else []
 if _runtime_hooks:
-    print(f"[build.spec] ✓ 使用运行时 hook: {_runtime_hook_path}")
+    print(f"[build.spec] [OK] 使用运行时 hook: {_runtime_hook_path}")
 else:
-    print(f"[build.spec] ⚠ 运行时 hook 不存在: {_runtime_hook_path}")
+    print(f"[build.spec] [WARN] 运行时 hook 不存在: {_runtime_hook_path}")
 
 a = Analysis(
     [str(SPEC_DIR / 'main.py')],
@@ -168,6 +168,8 @@ a = Analysis(
         'pandas',
         'tensorflow',
         'torch',
+        'numpy',
+        'pyarrow',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
