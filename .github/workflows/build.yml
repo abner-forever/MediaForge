@@ -132,7 +132,7 @@ jobs:
       - name: 生成应用图标（ico）
         shell: bash
         run: |
-          mkdir -p build build_icon
+          mkdir -p desktop/build
           python -c "
           from PIL import Image
           img = Image.open('desktop/static/logo-icon.png')
@@ -140,8 +140,8 @@ jobs:
           left = (img.width - size) // 2
           top = (img.height - size) // 2
           img = img.crop((left, top, left + size, top + size))
-          img.save('build/app.ico', sizes=[(256, 256)])
-          print('icon created: build/app.ico')
+          img.save('desktop/build/app.ico', sizes=[(256, 256)])
+          print('icon created: desktop/build/app.ico')
           "
 
       - name: PyInstaller 构建 Windows 应用

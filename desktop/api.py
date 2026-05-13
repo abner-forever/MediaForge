@@ -902,14 +902,19 @@ async def publish_from_queue(index: int, req: PublishRequest):
         on_log=_on_log,
     )
     app_state.finish_publish()
-    # 将发布日志持久化到队列项，切换页面后不丢失
-    app_state.update_queue_item(index, {"publish_logs": app_state.get_publish_logs()})
     if result.get("success"):
         action = "保存草稿" if req.save_draft else "发布"
         app_state.add_operation(action, f"「{title}」")
-    # 保存草稿不移除队列项，发布成功才移除
-    if result.get("success") and not req.save_draft:
-        app_state.remove_from_queue(index)
+        # 标记状态标签（已保存/已发布），不删除队列项
+        status = "saved" if req.save_draft else "published"
+        app_state.update_queue_item(index, {
+            "publish_logs": app_state.get_publish_logs(),
+            "status": status,
+        })
+    else:
+        app_state.update_queue_item(index, {
+            "publish_logs": app_state.get_publish_logs(),
+        })
     return result
 
 

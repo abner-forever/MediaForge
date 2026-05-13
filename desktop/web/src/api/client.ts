@@ -75,6 +75,7 @@ export interface QueueItem {
   cover: string;
   celebrity?: string;
   publish_logs?: string[];
+  status?: 'saved' | 'published';
   time?: string;
 }
 

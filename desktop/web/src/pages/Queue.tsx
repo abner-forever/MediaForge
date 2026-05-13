@@ -62,16 +62,17 @@ export default function Queue() {
               return tB.localeCompare(tA);
             });
           return sortedIndices.map(({ i }, idx) => (
-            <div key={i} className="flex gap-5 items-stretch">
-              {/* Timeline */}
-              <div className="flex flex-col items-center w-14 shrink-0">
-                <div className="h-6 shrink-0" />
-                {idx > 0 && <div className="w-px h-4 bg-border shrink-0" />}
-                <div className="w-3 h-3 rounded-full bg-accent ring-2 ring-accent/20 shrink-0" />
-                <span className="text-[10px] text-text-muted mt-1 whitespace-nowrap shrink-0">{formatTime(queue[i].time)}</span>
-                {idx < sortedIndices.length - 1 && <div className="w-px flex-1 bg-border mt-1.5" />}
+            <div key={i} className="flex gap-3">
+              {/* Timeline track */}
+              <div className="relative w-4 flex flex-col items-center shrink-0">
+                {sortedIndices.length > 1 && (
+                  <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border -translate-x-1/2" />
+                )}
+                <div className="relative z-10 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-accent/20 shrink-0 mt-0.5" />
               </div>
+              {/* Content */}
               <div className={`flex-1 min-w-0 ${idx < sortedIndices.length - 1 ? 'pb-6' : ''}`}>
+                <div className="text-[11px] text-text-muted leading-none mb-2 pt-px">{formatTime(queue[i].time)}</div>
                 <QueueCard item={queue[i]} index={i} />
               </div>
             </div>
@@ -90,6 +91,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishing, setPublishing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const isPublished = item.status === 'published';
   const { loading: generating, withLoading: withGenerating } = useLoading();
   const logEndRef = useRef<HTMLDivElement>(null);
   const logsLenRef = useRef(logs.length);
@@ -173,31 +175,41 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               <span className="font-medium text-text-secondary">{item.celebrity}</span>
             </div>
           )}
+          {item.status === 'saved' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">保存成功</span>
+          )}
+          {item.status === 'published' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">发布成功</span>
+          )}
           <label>标题
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" />
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" disabled={isPublished} />
           </label>
           <label>正文
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} onBlur={() => updateField('desc', desc)} rows={3} placeholder="正文内容（可选）…" />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} onBlur={() => updateField('desc', desc)} rows={3} placeholder="正文内容（可选）…" disabled={isPublished} />
           </label>
           <label>封面
-            <Select value={cover} onChange={v => { setCover(v); updateField('cover', v); }} options={images.map(img => ({ label: img.split('/').pop() || img, value: img }))} />
+            <Select value={cover} onChange={v => { setCover(v); updateField('cover', v); }} options={images.map(img => ({ label: img.split('/').pop() || img, value: img }))} disabled={isPublished} />
           </label>
 
           {/* Actions */}
           <div className="flex gap-2 flex-wrap pt-1">
-            <button className="btn btn-primary" onClick={() => publish({ save_draft: true })} disabled={publishing || generating}>
-              {publishing ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 处理中</> : '保存草稿'}
-            </button>
-            <button className="btn" onClick={() => publish({ save_draft: false })} disabled={publishing || generating}>
-              {publishing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 处理中</> : '直接发布'}
-            </button>
-            <button className="btn" onClick={generateContent} disabled={publishing || generating}>
-              {generating ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 润色中</> : (
-                <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 2v4"/><path d="M12 22a10 10 0 0 1-10-10"/><path d="M12 22v-4"/><path d="M22 12h-4"/><path d="M2 12h4"/></svg>
-                AI 润色</>
-              )}
-            </button>
-            <button className="btn btn-ghost text-danger" onClick={() => setShowDeleteConfirm(true)} disabled={publishing}>删除</button>
+            {!isPublished && (
+              <>
+                <button className="btn btn-primary" onClick={() => publish({ save_draft: true })} disabled={publishing || generating}>
+                  {publishing ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 处理中</> : '保存草稿'}
+                </button>
+                <button className="btn" onClick={() => publish({ save_draft: false })} disabled={publishing || generating}>
+                  {publishing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 处理中</> : '直接发布'}
+                </button>
+                <button className="btn" onClick={generateContent} disabled={publishing || generating}>
+                  {generating ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 润色中</> : (
+                    <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 2v4"/><path d="M12 22a10 10 0 0 1-10-10"/><path d="M12 22v-4"/><path d="M22 12h-4"/><path d="M2 12h4"/></svg>
+                    AI 润色</>
+                  )}
+                </button>
+                <button className="btn btn-ghost text-danger" onClick={() => setShowDeleteConfirm(true)} disabled={publishing}>删除</button>
+              </>
+            )}
           </div>
 
           <ConfirmDialog open={showDeleteConfirm} title="删除队列项" message={`确认删除《${title || '无标题'}》？`} confirmText="删除" danger onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }} onCancel={() => setShowDeleteConfirm(false)} />

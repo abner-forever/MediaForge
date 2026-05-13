@@ -36,6 +36,7 @@ export default {
           DEFAULT: 'var(--border)',
           subtle: 'var(--border-subtle)',
         },
+        success: 'var(--success)',
         danger: 'var(--danger)',
         warning: 'var(--warning)',
       },

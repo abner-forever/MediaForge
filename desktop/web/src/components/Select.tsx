@@ -10,9 +10,10 @@ interface SelectProps {
   onChange: (value: string) => void;
   options: SelectOption[];
   placeholder?: string;
+  disabled?: boolean;
 }
 
-export default function Select({ value, onChange, options, placeholder }: SelectProps) {
+export default function Select({ value, onChange, options, placeholder, disabled }: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,17 +43,21 @@ export default function Select({ value, onChange, options, placeholder }: Select
     <div ref={ref} className="relative field-control">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => !disabled && setOpen((v) => !v)}
         className={`
           w-full flex items-center justify-between
           px-3 py-[9px] rounded-lg border text-[13px] text-left
-          transition-all duration-150 cursor-pointer
+          transition-all duration-150
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           ${open
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
-            : 'border-[var(--border)] hover:border-[var(--accent)]'
+            : disabled
+              ? 'border-[var(--border)]'
+              : 'border-[var(--border)] hover:border-[var(--accent)]'
           }
         `}
+        disabled={disabled}
       >
         <span className={!selected ? 'text-[var(--text-muted)]' : ''}>
           {selected ? selected.label : placeholder ?? '请选择'}

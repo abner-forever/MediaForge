@@ -87,7 +87,8 @@ subprocess.run(['iconutil', '-c', 'icns', 'build/icon.iconset', '-o', 'build/app
   ok "图标已生成: build/app.icns"
 
 elif [ "$OS_TYPE" = "windows" ]; then
-  # Windows: .ico
+  # Windows: .ico（保存到 desktop/build/，与 setup.iss 路径一致）
+  mkdir -p desktop/build
   python3 -c "
 from PIL import Image
 img = Image.open('desktop/static/logo-icon.png')
@@ -95,9 +96,9 @@ size = min(img.size)
 left = (img.width - size) // 2
 top = (img.height - size) // 2
 img = img.crop((left, top, left + size, top + size))
-img.save('build/app.ico', sizes=[(256, 256)])
+img.save('desktop/build/app.ico', sizes=[(256, 256)])
 "
-  ok "图标已生成: build/app.ico"
+  ok "图标已生成: desktop/build/app.ico"
 fi
 
 # ── 4. PyInstaller 打包 ──────────────────────────────

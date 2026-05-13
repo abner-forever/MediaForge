@@ -200,6 +200,25 @@ def _start_app() -> None:
     except Exception:
         pass
 
+    # 注册窗口关闭前检查
+    def _before_close() -> bool:
+        from desktop.app_state import app_state
+        if app_state.publish_active:
+            try:
+                from AppKit import NSAlert, NSApplication
+                NSApplication.sharedApplication()
+                alert = NSAlert.alloc().init()
+                alert.addButtonWithTitle_("退出")
+                alert.addButtonWithTitle_("取消")
+                alert.setMessageText_("正在发布公众号文章，确定要退出吗？")
+                alert.setAlertStyle_(0)  # NSWarningAlertStyle
+                return alert.runModal() == 1000  # NSAlertFirstButtonReturn
+            except Exception:
+                return True
+        return True
+
+    window.events.closing += _before_close
+
     webview.start(debug=False)
 
 
