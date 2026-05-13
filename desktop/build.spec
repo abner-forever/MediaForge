@@ -38,8 +38,6 @@ _all_datas = [
     (str(SPEC_DIR / 'static' / 'index.html'), 'desktop/static'),
     (str(SPEC_DIR / 'static' / 'logo.png'), 'desktop/static'),
     (str(SPEC_DIR / 'static' / 'logo-icon.png'), 'desktop/static'),
-    # .env 模板（首次运行可拷贝）
-    (str(PROJECT_ROOT / '.env.example'), '.'),
     # Windows 调试脚本
     (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
 ]
