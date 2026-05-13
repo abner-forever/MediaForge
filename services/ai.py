@@ -39,7 +39,7 @@ def _resolve_chat_url_candidates() -> List[str]:
         elif settings.ai_provider == "glm":
             base = "https://open.bigmodel.cn/api/paas/v4"
         elif settings.ai_provider == "mimo":
-            # 小米 Mimo 走 OpenAI 兼容接口时，请在 .env 显式填写 AI_BASE_URL
+            # 小米 Mimo 走 OpenAI 兼容接口时，需显式设置 AI_BASE_URL
             return []
         else:
             base = "https://api.openai.com/v1"

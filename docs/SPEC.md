@@ -37,7 +37,6 @@ MediaForge 自动化内容发布系统
 - openai / DeepSeek / GLM / Mimo 多供应商 AI API
 - pillow（图片处理）
 - PyWebView（桌面壳）
-- python-dotenv（环境变量）
 
 > 初始设计仅计划 CLI + requests，实际已扩展为 CLI + 桌面 GUI 双模式。
 
@@ -49,7 +48,6 @@ MediaForge 自动化内容发布系统
 MediaForge/
 ├── main.py                # CLI 入口（调度流程）
 ├── config.py              # 配置管理（dataclass 单例）
-├── .env                   # 环境变量
 ├── services/
 │   ├── platforms/         # 平台插件架构（weibo/toutiao）
 │   ├── ai.py              # AI 文案生成
@@ -268,15 +266,9 @@ for post in posts:
 
 ---
 
-# 六、配置设计（config.py / .env）
+# 六、配置设计（config.py）
 
-```env
-WEIBO_COOKIE=xxx
-AI_API_KEY=xxx
-AI_BASE_URL=https://api.xxx.com/v1
-```
-
-完整配置项参见 `.env.example`。
+通过环境变量配置：
 
 ---
 

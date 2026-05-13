@@ -4,11 +4,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Tuple
 
-from dotenv import load_dotenv
-
-
-load_dotenv()
-
 
 # ── 路径配置 ──────────────────────────────────────────
 # 打包模式下使用系统标准应用数据目录（可写），开发模式使用项目根目录
@@ -25,16 +20,8 @@ def _get_data_dir() -> Path:
         return Path(__file__).resolve().parent / "data"
 
 
-def _get_env_path() -> Path:
-    """打包模式下 .env 随数据目录迁移，开发模式在项目根目录。"""
-    if getattr(sys, "frozen", False):
-        return _get_data_dir() / ".env"
-    return Path(__file__).resolve().parent / ".env"
-
-
 BASE_DIR = Path(__file__).resolve().parent  # 项目根目录（开发模式）
 DATA_DIR = _get_data_dir()
-DOT_ENV_PATH = _get_env_path()
 
 # 素材（图片）目录：可通过 MATERIALS_PATH 环境变量自定义
 _materials_override = os.getenv("MATERIALS_PATH", "").strip()
@@ -140,14 +127,10 @@ settings = Settings(weibo_celebrities=CELEBRITY_NAMES)
 
 
 def reload_settings() -> None:
-    """重新从 .env + settings.json 加载配置到全局 settings 单例。
-
-    合并顺序：.env → settings.json（后者优先级更高，覆盖同名 key）。
-    """
+    """重新从 settings.json 加载配置到全局 settings 单例。"""
     global CELEBRITY_NAMES, DOWNLOAD_DIR
-    load_dotenv(override=True)
 
-    # 从 settings.json 加载并注入环境变量（覆盖 .env）
+    # 从 settings.json 加载并注入环境变量
     try:
         from utils.settings_store import read_settings
         store = read_settings()

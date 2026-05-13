@@ -26,7 +26,6 @@ from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
 from services.platforms import get_platform, list_platforms
 from services.weibo_login import run_weibo_login
-from utils.env_manager import read_env, update_env
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
 
@@ -141,10 +140,8 @@ async def get_settings():
     from utils.weibo_auth_store import read_weibo_auth
     from utils.settings_store import read_settings as read_json_settings
 
-    # 合并来源：settings.json 优先于 .env
-    env = read_env()
     store = read_json_settings()
-    cfg = {**env, **store}  # store 覆盖 env
+    cfg = store
 
     provider = cfg.get("AI_PROVIDER", "mimo").lower()
     current_key = _get_provider_key(cfg, provider)
@@ -268,9 +265,10 @@ async def get_theme():
 
 @app.get("/api/settings/api-key")
 async def get_api_key(provider: str = Query("")):
-    env = read_env()
-    prov = (provider or env.get("AI_PROVIDER", "mimo")).lower()
-    key = _get_provider_key(env, prov)
+    from utils.settings_store import read_settings
+    store = read_settings()
+    prov = (provider or store.get("AI_PROVIDER", "mimo")).lower()
+    key = _get_provider_key(store, prov)
     return {"key": key}
 
 
@@ -299,11 +297,6 @@ async def weibo_login_stream():
                 if cookie:
                     from utils.weibo_auth_store import write_weibo_auth
                     write_weibo_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
-                    # 清除 .env 中可能残留的旧 cookie，防止其覆盖新 cookie
-                    from utils.env_manager import read_env, update_env
-                    env = read_env()
-                    if env.get("WEIBO_COOKIE"):
-                        update_env({"WEIBO_COOKIE": ""})
                     # 重新加载配置使新 cookie 立即生效
                     from config import reload_settings
                     reload_settings()

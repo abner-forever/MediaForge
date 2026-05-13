@@ -1,7 +1,7 @@
 # 发布检查清单
 
 ## 运行前
-- [ ] `.env` 已配置微博 Cookie / 模型配置 / 平台选择
+- [ ] 微博 Cookie / 模型配置 / 平台选择 已就绪
 - [ ] `python3 -m compileall .` 通过
 - [ ] `cd desktop/web && npx tsc --noEmit` 通过
 - [ ] `python3 main.py --dry-run` 通过（微博默认模式）

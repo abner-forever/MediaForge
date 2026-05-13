@@ -2,7 +2,8 @@
 
 ## 配置
 
-- 项目根目录编辑 `.env`，所有配置项参见 `.env.example`
+- 在桌面 GUI 的设置页面配置各项参数
+- 或通过环境变量设置：`WEIBO_COOKIE`、`AI_API_KEY` 等
 - 核心配置：微博 Cookie（或扫码登录）、AI API Key、Base URL
 
 ## CLI 模式

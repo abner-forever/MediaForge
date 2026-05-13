@@ -480,7 +480,7 @@ def fetch_mymblog_for_uid(uid: str, *, page: int, celebrity_hint: str) -> List[D
 def fetch_weibo_posts(page: int = 1) -> List[Dict]:
     weibo_uid = settings.weibo_uid or _infer_uid_from_all_groups()
     if not weibo_uid:
-        raise RuntimeError("缺少 WEIBO_UID，且无法从 allGroups 自动推断，请在 .env 中配置")
+        raise RuntimeError("缺少 WEIBO_UID，且无法从 allGroups 自动推断，请设置 WEIBO_UID 环境变量")
 
     celebrity = "本人"
     return fetch_mymblog_for_uid(weibo_uid, page=page, celebrity_hint=celebrity)

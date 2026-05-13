@@ -38,7 +38,7 @@ export default function Settings() {
     <div className="space-y-6 animate-in">
       <div>
         <h1 className="text-2xl font-bold text-text tracking-tight">系统设置</h1>
-        <p className="text-sm text-text-secondary mt-1">修改后点击保存，配置将写入 .env 文件并立即生效</p>
+        <p className="text-sm text-text-secondary mt-1">修改后点击保存，配置将立即生效</p>
       </div>
 
       {/* Tabs */}

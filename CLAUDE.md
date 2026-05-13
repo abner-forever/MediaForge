@@ -16,7 +16,6 @@
 ```bash
 pip install -r requirements.txt
 playwright install chromium
-cp .env.example .env  # 配置 WEIBO_COOKIE、AI_API_KEY 等
 python3 main.py --dry-run --ignore-post-cache   # 试运行
 python3 main.py --limit 3 --pages 2             # 正式运行
 ```
@@ -119,15 +118,14 @@ PyInstaller 配置：`desktop/build.spec`
 
 ### 工具层（`utils/`）
 - **audit.py** — 审计日志，记录操作到 `data/state/operations.json`
-- **env_manager.py** — .env 文件读写管理（供桌面 API 使用）
-- **api_key_store.py** — API Key 本地加密存储（避免明文写在 .env 中）
+- **api_key_store.py** — API Key 本地加密存储
 - **file.py** — 文件读取/写入，JSON 缓存，文本 hash
 - **pathsafe.py** — 安全路径处理
 - **logger.py** — 日志配置，按天轮转
 
 ### 桌面 API（`desktop/api.py`）
 FastAPI 路由，约 30 个端点：
-- 设置 CRUD（读写 .env）
+- 设置 CRUD（读写配置）
 - 仪表盘（健康检查、统计、操作记录）
 - 发现（搜索、下载、评分、水印检测、SSE 流式下载进度）
 - 队列（增删改、AI 润色、发布、发布日志轮询）
@@ -145,7 +143,7 @@ React 单页应用，5 个页面：
 全局 Zustand store 管理：toast、lightbox、进度浮层、选中状态。
 
 ### 配置
-`config.py` 是 `Settings` dataclass 单例，通过 python-dotenv 从 `.env` 加载。调用 `reload_settings()` 重新加载。所有变量参见 `.env.example`。
+`config.py` 是 `Settings` dataclass 单例。
 
 ### 主题系统
 支持浅色/深色/跟随系统三种模式，4 套主题配色（蓝/红/绿/紫），通过 CSS 变量动态切换。

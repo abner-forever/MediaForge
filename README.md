@@ -10,7 +10,7 @@
 ## 功能特性
 
 - **多平台图文发现** — 支持微博（明星列表、本人时间线、超话、关键词五种模式）和今日头条
-- **微博扫码登录** — 内置 WebView 扫码获取 Cookie，无需手动复制
+- **微博扫码登录 (TODO)** — 内置 WebView 扫码获取 Cookie（跨平台 Cookie 获取不稳定，待完善）
 - **智能水印过滤** — 基于边缘检测的启发式算法，自动识别并过滤水印图片
 - **AI 图片评分** — Vision API + 启发式回退，多维度评分筛选优质图片
 - **AI 文案生成** — 自动生成标题，支持 Mimo / DeepSeek / GLM / OpenAI 多供应商
@@ -26,14 +26,13 @@
 ```bash
 pip install -r requirements.txt
 playwright install chromium   # 微信发布需要浏览器引擎；安装包已内置，开发环境需手动安装
-cp .env.example .env
 ```
 
-编辑 `.env`，配置必填项：
+配置可通过桌面 GUI 的设置页面进行管理，或设置环境变量：
 
 | 变量 | 说明 |
 |------|------|
-| `WEIBO_COOKIE` | 微博登录 Cookie（也可在 GUI 中扫码获取） |
+| `WEIBO_COOKIE` | 微博登录 Cookie |
 | `AI_API_KEY` | AI 模型 API Key |
 | `AI_BASE_URL` | OpenAI 兼容 API 地址 |
 | `WEIBO_CELEBRITIES` | 明星列表（逗号分隔） |
@@ -91,7 +90,7 @@ pyinstaller desktop/build.spec --clean
 | 平台 | 模式 | 说明 |
 |------|------|------|
 | **微博** (`weibo`) | `own` / `celebrities` / `mixed` / `super_topic` / `keyword` | 明星时间线聚合、超话、关键词搜索 |
-| **今日头条** (`toutiao`) | `feed` / `user` / `keyword` | 信息流推荐、用户主页、关键词搜索 |
+| **今日头条** (`toutiao`) | `feed` / `user` / `keyword` | feed 模式因签名限制会回退到关键词搜索 |
 
 采用 `services/platforms/` 插件架构，新增平台只需实现 `PlatformService` 协议。
 
@@ -101,8 +100,6 @@ pyinstaller desktop/build.spec --clean
 MediaForge/
 ├── main.py                 # CLI 入口（调度流程）
 ├── config.py               # 配置管理（dataclass 单例）
-├── .env                    # 环境变量
-├── .env.example            # 配置模板
 ├── requirements.txt        # Python 依赖
 ├── services/
 │   ├── platforms/          # 平台插件架构
@@ -119,7 +116,6 @@ MediaForge/
 │   ├── logger.py           # 日志
 │   ├── file.py             # 文件与缓存
 │   ├── audit.py            # 审计日志（操作记录）
-│   ├── env_manager.py      # .env 管理
 │   ├── api_key_store.py    # API Key 本地加密存储
 │   └── pathsafe.py         # 安全路径处理
 ├── desktop/
@@ -167,10 +163,40 @@ MediaForge/
 
 ## 配置说明
 
-完整配置项参见 `.env.example`。核心配置分组：
+核心配置分组（在桌面 GUI 的设置页面配置，或通过环境变量设置）：
 
-- **微博抓取** — Cookie、UID、抓取模式、明星列表、搜索标签、超话
-- **今日头条** — Cookie、用户 ID、抓取模式、搜索标签
-- **水印过滤** — 开关、阈值、严格模式、最少干净图数、降级开关
-- **AI 模型** — 供应商、模型名、API Key、Base URL
-- **发布控制** — 每次处理条数、发布间隔、确认发布
+| 分组 | 变量 | 说明 | 默认值 |
+|------|------|------|--------|
+| **微博** | `WEIBO_COOKIE` | 登录 Cookie | — |
+| | `WEIBO_UID` | 用户 UID | — |
+| | `WEIBO_FETCH_MODE` | 抓取模式: `own` / `celebrities` / `mixed` / `super_topic` / `keyword` | 自动 |
+| | `WEIBO_CELEBRITIES` | 明星列表（逗号分隔） | — |
+| | `WEIBO_SEARCH_TAGS` | 搜索标签 | 美图,日常,时装周,美妆,穿搭 |
+| | `WEIBO_KEYWORD_PAGES` | 关键词搜索页数 | 1 |
+| | `WEIBO_SUPER_TOPICS` | 超话列表（逗号分隔） | — |
+| **今日头条** | `TOUTIAO_COOKIE` | 登录 Cookie | — |
+| | `TOUTIAO_USER_ID` | 用户 ID | — |
+| | `TOUTIAO_FETCH_MODE` | 抓取模式: `feed` / `user` / `keyword` | feed |
+| | `TOUTIAO_SEARCH_TAGS` | 搜索标签 | 时尚,明星,穿搭 |
+| **AI 模型** | `AI_PROVIDER` | 供应商: `mimo` / `deepseek` / `glm` / `openai` | mimo |
+| | `AI_MODEL` | 模型名 | mimo-chat |
+| | `AI_API_KEY` | 通用 API Key | — |
+| | `AI_BASE_URL` | 自定义 API 地址 | — |
+| | `MIMO_API_KEY` | Mimo 专用 Key | — |
+| | `DEEPSEEK_API_KEY` | DeepSeek 专用 Key | — |
+| | `GLM_API_KEY` | GLM 专用 Key | — |
+| | `OPENAI_API_KEY` | OpenAI 专用 Key | — |
+| **水印过滤** | `WATERMARK_FILTER` | 启用过滤 | true |
+| | `WATERMARK_CORNER_RATIO` | 角部边缘强度阈值 | 1.38 |
+| | `WATERMARK_BOTTOM_RATIO` | 底部边缘强度阈值 | 1.48 |
+| | `WATERMARK_STRICT_MODE` | 严格模式 | true |
+| | `MIN_CLEAN_IMAGES` | 最少干净图数 | 3 |
+| | `ALLOW_WATERMARK_FALLBACK` | 无水印图时降级使用 | false |
+| **发布控制** | `PLATFORM` | 数据源: `weibo` / `toutiao` | weibo |
+| | `POST_LIMIT` | 每次处理条数 | 3 |
+| | `WEIBO_PAGES` | 微博翻页数 | 2 |
+| | `PUBLISH_INTERVAL_SECONDS` | 发布间隔（秒） | 10 |
+| | `REQUIRE_CONFIRM` | 发布前确认 | true |
+| **通用** | `REQUEST_TIMEOUT` | HTTP 请求超时（秒） | 20 |
+| | `RETRY_TIMES` | 失败重试次数 | 3 |
+| | `MATERIALS_PATH` | 自定义素材目录（默认 `data/images`） | — |
