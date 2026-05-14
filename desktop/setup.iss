@@ -34,7 +34,6 @@ PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
@@ -56,4 +55,4 @@ Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppDisplayName}"; Fl
 Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeName} 2>nul"; Flags: runhidden
 
 [Messages]
-ChineseSimplified.BeveledLabel=中文
+English.BeveledLabel=MediaForge Setup
