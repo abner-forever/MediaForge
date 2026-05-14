@@ -41,7 +41,6 @@ jobs:
           path: tests/reports/coverage_html/
 
   build-macos:
-  build-macos:
     runs-on: macos-latest
     env:
       PYTHON_VERSION: '3.11.9'
