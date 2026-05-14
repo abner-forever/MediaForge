@@ -16,16 +16,9 @@ permissions:
 
 jobs:
   build-macos:
-    strategy:
-      matrix:
-        include:
-          - runner: macos-13
-            arch: x86_64
-            pretty_name: Intel
-          - runner: macos-latest
-            arch: arm64
-            pretty_name: Apple-Silicon
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
+    env:
+      PYTHON_VERSION: '3.11.15'
     steps:
       - uses: actions/checkout@v4
 
@@ -42,11 +35,20 @@ jobs:
           npm ci
           npm run build
 
-      - name: 设置 Python
-        uses: actions/setup-python@v5
+      - name: 安装 universal2 Python（支持 Intel + Apple Silicon）
+        run: |
+          curl -L -o python.pkg "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos11.pkg"
+          sudo installer -pkg python.pkg -target /
+          echo "/usr/local/bin" >> $GITHUB_PATH
+          python3 --version
+
+      - name: 缓存 pip
+        uses: actions/cache@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          path: ~/Library/Caches/pip
+          key: ${{ runner.os }}-pip-universal2-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-universal2-
 
       - name: 安装 Python 依赖
         run: |
@@ -81,18 +83,18 @@ jobs:
           print('icon created: build/app.icns')
           "
 
-      - name: PyInstaller 构建 macOS 应用
+      - name: PyInstaller 构建 macOS 通用应用（universal2）
         run: pyinstaller desktop/build.spec --clean
 
       - name: 创建 DMG（拖拽安装）
         run: |
-          bash desktop/build_dmg.sh ${{ matrix.arch }}
+          bash desktop/build_dmg.sh universal2
 
       - name: 上传 DMG 构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: MediaForge-macOS-${{ matrix.arch }}
-          path: MediaForge-macOS-${{ matrix.arch }}.dmg
+          name: MediaForge-macOS-Universal
+          path: MediaForge-macOS-universal2.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -233,8 +235,7 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.after.outputs.tag }}" \
-            MediaForge-macOS-x86_64.dmg \
-            MediaForge-macOS-arm64.dmg \
+            MediaForge-macOS-universal2.dmg \
             MediaForge-Windows-Setup-*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
