@@ -565,6 +565,107 @@ label > .field-control {
   background-clip: text;
 }
 
+/* ── Cyberpunk / Neon Additions ──────────────────── */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+[data-theme="dark"] .cyber-card {
+  background: #141418;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme="dark"] .cyber-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px rgba(96, 165, 250, 0.03);
+}
+
+[data-theme="dark"] .cyber-card-hero {
+  background: #0e0e12;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cyber-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.cyber-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.cyber-header-bar::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent);
+}
+
+.gradient-text-cyber {
+  background: linear-gradient(135deg, #fff 20%, var(--accent) 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.neon-glow {
+  text-shadow: 0 0 40px var(--accent-glow), 0 0 80px var(--accent-glow);
+}
+
+.cyber-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.cyber-scanline {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255,255,255,0.012) 2px,
+    rgba(255,255,255,0.012) 4px
+  );
+}
+
+/* 卡片顶部霓虹线 */
+.cyber-accent-bar {
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  right: 1.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.cyber-card:hover .cyber-accent-bar { opacity: 0.7; }
+
+/* 卡片装饰光晕 */
+.cyber-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  transition: opacity 0.6s, transform 0.6s;
+}
+.cyber-card:hover .cyber-orb {
+  opacity: 0.15;
+  transform: scale(1.2);
+}
+
 /* ── Animations ───────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; }

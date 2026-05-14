@@ -51,38 +51,35 @@ def download_images(
     overwrite: bool = False,
     max_workers: int = 4,
 ) -> Tuple[List[str], int]:
-    """保存路径：data/images/<艺人>/<场景>/<帖子目录>/文件名。"""
+    """保存路径：data/images/<艺人>/<帖子目录>/文件名。"""
     saved_paths: List[str] = []
     dropped_by_watermark = 0
     if not images:
         return saved_paths, dropped_by_watermark
 
     celeb_raw = _coerce_folder_label(celebrity, "未命名艺人")
-    scene_raw = _coerce_folder_label(scene, "未分类选题")
     slug_raw = _coerce_folder_label(post_slug, _coerce_folder_label(prefix, "post"))
 
     celeb_dir = sanitize_segment(celeb_raw)
-    scene_dir = sanitize_segment(scene_raw)
     slug_dir = sanitize_segment(slug_raw)
     pref = sanitize_segment(_coerce_folder_label(prefix, "img"))
 
     img_root = DOWNLOAD_DIR.expanduser().resolve()
-    base_dir = (img_root / celeb_dir / scene_dir / slug_dir).resolve()
+    base_dir = (img_root / celeb_dir / slug_dir).resolve()
 
     try:
         rel_parts = base_dir.relative_to(img_root).parts
     except ValueError:
         rel_parts = ()
 
-    if len(rel_parts) < 3:
+    if len(rel_parts) < 2:
         logger.error(
-            "下载路径层级异常(%s)，将强制归入未命名子目录 celebrity=%s scene=%s slug=%s",
+            "下载路径层级异常(%s)，将强制归入未命名子目录 celebrity=%s slug=%s",
             base_dir,
             celeb_raw,
-            scene_raw,
             slug_raw,
         )
-        base_dir = (img_root / "未命名艺人" / "未分类选题" / slug_dir).resolve()
+        base_dir = (img_root / "未命名艺人" / slug_dir).resolve()
 
     base_dir.mkdir(parents=True, exist_ok=True)
     logger.info("图片保存目录: %s", base_dir)

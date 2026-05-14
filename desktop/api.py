@@ -1300,10 +1300,9 @@ async def download_stream(indices: str = Query(""), filter_watermark: bool = Que
                 continue
 
             celeb_dir = sanitize_segment(str(celebrity).strip() or "未命名艺人")
-            scene_dir = sanitize_segment(str(scene).strip() or "未分类选题")
             slug_dir = sanitize_segment(str(slug).strip() or "post")
             pref = sanitize_segment(str(slug)[:8] or "img")
-            base_dir = DOWNLOAD_DIR.expanduser().resolve() / celeb_dir / scene_dir / slug_dir
+            base_dir = DOWNLOAD_DIR.expanduser().resolve() / celeb_dir / slug_dir
             base_dir.mkdir(parents=True, exist_ok=True)
 
             for idx, url in enumerate(images, start=1):

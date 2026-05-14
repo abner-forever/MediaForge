@@ -94,11 +94,13 @@ class AppState:
         """删除指定索引（从末尾数起）的操作记录，返回删除数量。"""
         if not indices:
             return 0
-        valid = set()
         total = len(self._operations)
+        offset = max(0, total - 20)  # get_operations 的 limit=20
+        valid = set()
         for i in indices:
-            if 0 <= i < total:
-                valid.add(i)
+            real_idx = offset + i
+            if 0 <= real_idx < total:
+                valid.add(real_idx)
         if not valid:
             return 0
         self._operations = [op for idx, op in enumerate(self._operations) if idx not in valid]

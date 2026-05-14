@@ -4,6 +4,7 @@ import { materialsApi, queueApi } from '../api/client';
 import type { TreeNode, BrowseFolder, BrowseFile } from '../api/client';
 import ContextMenu, { type MenuItem } from '../components/ContextMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Loading from '../components/Loading';
 import { useLoading } from '../hooks/useLoading';
 
 const imgSrc = (p: string) => {
@@ -41,45 +42,6 @@ export default function Materials() {
   const { loading: creating, withLoading: withCreating } = useLoading();
   const { loading: enqueuing, withLoading: withEnqueuing } = useLoading();
   const { loading: deleting, withLoading: withDeleting } = useLoading();
-
-  // 按帖子分组展示
-  const [postContents, setPostContents] = useState<Record<string, BrowseFile[]>>({});
-  const [loadingPosts, setLoadingPosts] = useState(false);
-  const isGroupView = currentFolders.length > 0 && !loading && breadcrumb.length >= 3;
-
-  // 进入分组层时加载各帖子的图片
-  useEffect(() => {
-    if (!loading && currentFolders.length > 0 && breadcrumb.length >= 3) {
-      loadPostContents();
-    } else if (!loading) {
-      setPostContents({});
-    }
-  }, [currentPath, loading]);
-
-  async function loadPostContents() {
-    setLoadingPosts(true);
-    const contents: Record<string, BrowseFile[]> = {};
-    for (const folder of currentFolders) {
-      try {
-        const r = await materialsApi.browse(folder.path);
-        contents[folder.path] = r.files;
-      } catch { /* ignore */ }
-    }
-    setPostContents(contents);
-    setLoadingPosts(false);
-  }
-
-  // 选中一个帖子下的全部图片
-  function toggleSelectPost(folderPath: string) {
-    const files = postContents[folderPath] || [];
-    const paths = files.map(f => f.path);
-    const allSelected = paths.every(p => matSelected.has(p));
-    const next = new Set(matSelected);
-    for (const p of paths) {
-      if (allSelected) next.delete(p); else next.add(p);
-    }
-    useStore.setState({ matSelected: next });
-  }
 
   // 初始化加载
   useEffect(() => {
@@ -257,7 +219,7 @@ export default function Materials() {
     return (
       <div className="space-y-6 animate-in">
         <h1 className="text-2xl font-bold text-text tracking-tight">本地素材</h1>
-        <div className="card flex items-center justify-center py-20 text-text-muted">加载中...</div>
+        <div className="card flex items-center justify-center min-h-[200px]"><Loading text="加载中" /></div>
       </div>
     );
   }
@@ -349,7 +311,7 @@ export default function Materials() {
 
           {/* 内容区 */}
           {loading ? (
-            <div className="card flex items-center justify-center py-20 text-text-muted">加载中...</div>
+            <div className="card flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
           ) : currentFolders.length === 0 && currentFiles.length === 0 ? (
             <div className="card">
               <div className="empty-state py-16">
@@ -357,53 +319,6 @@ export default function Materials() {
                 <div className="empty-state-title">此文件夹为空</div>
                 <div className="empty-state-desc">新建文件夹或上传图片</div>
               </div>
-            </div>
-          ) : isGroupView ? (
-            <div className="space-y-6">
-              {loadingPosts ? (
-                <div className="card flex items-center justify-center py-12 text-text-muted">加载中...</div>
-              ) : (
-                currentFolders.map(folder => {
-                  const files = postContents[folder.path] || [];
-                  const selectedCount = files.filter(f => matSelected.has(f.path)).length;
-                  const allSelected = files.length > 0 && selectedCount === files.length;
-                  return (
-                    <div key={folder.path} className="card overflow-hidden">
-                      {/* 帖子标题栏 */}
-                      <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 bg-bg-secondary/30">
-                        <input type="checkbox" checked={allSelected}
-                          onChange={() => toggleSelectPost(folder.path)}
-                          className="w-4 h-4 accent-accent rounded shrink-0" />
-                        <svg className="w-4 h-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                        <span className="text-sm font-medium text-text truncate">{folder.name}</span>
-                        <span className="text-xs text-text-muted ml-auto tabular-nums">{folder.item_count} 张{files.length > 0 && ` · 已选 ${selectedCount}`}</span>
-                        <button className="btn btn-sm" onClick={() => navigateTo(folder.path)}>
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
-                        </button>
-                      </div>
-                      {/* 帖子内图片网格 */}
-                      {files.length > 0 && (
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2 p-3">
-                          {files.map(file => (
-                            <ImageCard
-                              key={file.path}
-                              file={file}
-                              selected={matSelected.has(file.path)}
-                              onToggleSelect={() => matToggleSelect(file.path)}
-                              onOpenLightbox={() => openLightboxFor(file.path)}
-                              onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                              onDragStart={(e) => handleDragStart(e, file.path)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {files.length === 0 && (
-                        <div className="px-4 py-6 text-sm text-text-muted text-center">此帖子暂无图片</div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">

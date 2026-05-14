@@ -94,12 +94,16 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const isPublished = item.status === 'published';
   const { loading: generating, withLoading: withGenerating } = useLoading();
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const logsLenRef = useRef(logs.length);
 
   useEffect(() => {
     // 只在日志追加时（发布过程中）滚动到底部，挂载时已有的日志不触发
-    if (logEndRef.current && logs.length > logsLenRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (logs.length > logsLenRef.current) {
+      const el = logContainerRef.current;
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }
     }
     logsLenRef.current = logs.length;
   }, [logs]);
@@ -169,18 +173,21 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
         {/* Content */}
         <div className="flex-1 p-4 space-y-3">
-          {item.celebrity && (
-            <div className="flex items-center gap-2 text-sm">
-              <svg className="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span className="font-medium text-text-secondary">{item.celebrity}</span>
-            </div>
-          )}
-          {item.status === 'saved' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">保存成功</span>
-          )}
-          {item.status === 'published' && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">发布成功</span>
-          )}
+          {/* Header: celebrity name + status tag */}
+          <div className="flex items-center gap-2 flex-wrap text-sm">
+            {item.celebrity && (
+              <>
+                <svg className="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span className="font-medium text-text-secondary">{item.celebrity}</span>
+              </>
+            )}
+            {item.status === 'saved' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">保存成功</span>
+            )}
+            {item.status === 'published' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">已发布</span>
+            )}
+          </div>
           <label>标题
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" disabled={isPublished} />
           </label>
@@ -216,7 +223,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
           {/* Logs */}
           {(logs.length > 0 || publishing) && (
-            <div className="bg-bg-secondary border border-border rounded-xl p-3 max-h-44 overflow-y-auto">
+            <div ref={logContainerRef} className="bg-bg-secondary border border-border rounded-xl p-3 max-h-44 overflow-y-auto">
               <div className="flex items-center gap-2 mb-2">
                 {publishing && <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />}
                 <span className="text-xs font-medium text-text-muted">{publishing ? '发布中...' : '发布日志'}</span>

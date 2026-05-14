@@ -4,6 +4,7 @@ import { settingsApi, type SettingsData, type WeiboLoginEvent } from '../api/cli
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
 import EyeIcon from '../components/EyeIcon';
+import Loading from '../components/Loading';
 import { useLoading } from '../hooks/useLoading';
 
 const TABS = [
@@ -27,7 +28,7 @@ export default function Settings() {
   useEffect(() => { load(); }, []);
 
   if (error) return <div className="empty-state py-24 animate-in"><p className="text-sm text-danger">{error}</p><button className="btn btn-sm mt-3" onClick={load} disabled={retrying}>{retrying ? '重试中...' : '重试'}</button></div>;
-  if (!data) return <div className="empty-state py-24 animate-in"><div className="w-6 h-6 border-2 border-border border-t-accent rounded-full animate-spin mb-3" /><span className="text-sm text-text-muted">加载中...</span></div>;
+  if (!data) return <div className="empty-state py-24 animate-in"><Loading text="加载中" /></div>;
 
   async function save(updates: Record<string, string>) {
     try { await settingsApi.save(updates); addToast('配置已保存', 'success'); settingsApi.get().then(setData); }
