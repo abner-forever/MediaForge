@@ -55,4 +55,4 @@ Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppDisplayName}"; Fl
 Filename: "{cmd}"; Parameters: "/c taskkill /f /im {#MyAppExeName} 2>nul"; Flags: runhidden
 
 [Messages]
-English.BeveledLabel=MediaForge Setup
+BeveledLabel=图文工坊
