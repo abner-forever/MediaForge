@@ -40,9 +40,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式:"; Flags: checkedonce
 
 [Files]
-Source: "dist\MediaForge\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "dist\MediaForge\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "desktop\run_console.bat"; DestDir: "{app}\desktop"; Flags: ignoreversion
+Source: "..\dist\MediaForge\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\MediaForge\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "run_console.bat"; DestDir: "{app}\desktop"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#MyAppDisplayName}"; Filename: "{app}\{#MyAppExeName}"
