@@ -55,7 +55,7 @@ def download_images(
     saved_paths: List[str] = []
     dropped_by_watermark = 0
     if not images:
-        return saved_paths
+        return saved_paths, dropped_by_watermark
 
     celeb_raw = _coerce_folder_label(celebrity, "未命名艺人")
     scene_raw = _coerce_folder_label(scene, "未分类选题")

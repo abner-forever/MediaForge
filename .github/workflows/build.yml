@@ -15,6 +15,32 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          pip install -r requirements.txt pytest pytest-cov pytest-mock
+
+      - name: 运行测试
+        run: python -m pytest --cov -v
+
+      - name: 上传覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: tests/reports/coverage_html/
+
+  build-macos:
   build-macos:
     runs-on: macos-latest
     env:

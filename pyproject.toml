@@ -15,5 +15,51 @@ commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.c
 [tool.semantic_release.branches.main]
 match = "(main|master)"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--cov=services",
+    "--cov=utils",
+    "--cov=config",
+    "--cov=desktop",
+    "--cov=main",
+    "--cov-report=term-missing",
+    "--cov-report=html:tests/reports/coverage_html",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "network: marks tests that mock network calls",
+    "integration: marks integration tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["config", "services", "utils", "desktop", "main"]
+omit = [
+    "*/tests/*",
+    "*/dist/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 35
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "except Exception:",
+    "except:",
+    "raise NotImplementedError",
+    "if getattr(sys, .frozen., False):",
+]
+
 [tool.semantic_release.publish]
 dist_glob_patterns = []

@@ -10,3 +10,6 @@ build/
 *.zip
 *.exe
 dmg_staging/
+coverage.xml
+.coverage
+tests/reports/
