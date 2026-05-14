@@ -113,13 +113,14 @@ jobs:
 
       - name: 创建 DMG（拖拽安装）
         run: |
-          bash desktop/build_dmg.sh universal2
+          ARCH="$(uname -m)"
+          bash desktop/build_dmg.sh "${ARCH}"
 
       - name: 上传 DMG 构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: MediaForge-macOS-Universal
-          path: MediaForge-macOS-universal2.dmg
+          name: MediaForge-macOS-${{ runner.arch }}
+          path: MediaForge-macOS-*.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -260,7 +261,7 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.after.outputs.tag }}" \
-            MediaForge-macOS-universal2.dmg \
+            MediaForge-macOS-*.dmg \
             MediaForge-Windows-Setup-*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
