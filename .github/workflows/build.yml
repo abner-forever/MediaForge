@@ -77,7 +77,7 @@ jobs:
 
       - name: 安装 Python 依赖
         run: |
-          pip install -r requirements.txt pyinstaller pillow
+          python3 -m pip install -r requirements.txt pyinstaller pillow
 
       - name: 安装 Playwright Chromium 浏览器（打包到安装包中）
         run: |
