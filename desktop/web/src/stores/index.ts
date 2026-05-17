@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Post, ScoreInfo, QueueItem, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
+import type { Post, ScoreInfo, QueueItem, ArticleItem, InspirationTopic, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
 import { settingsApi } from '../api/client';
 
 /* ── Theme Presets ──────────────────────────── */
@@ -96,6 +96,16 @@ interface AppState {
   // Queue
   queue: QueueItem[];
   setQueue: (q: QueueItem[]) => void;
+
+  // Articles
+  articles: ArticleItem[];
+  currentArticle: ArticleItem | null;
+  articleFilter: 'all' | 'draft' | 'queued' | 'published';
+  inspirationResults: InspirationTopic[];
+  setArticles: (articles: ArticleItem[]) => void;
+  setCurrentArticle: (article: ArticleItem | null) => void;
+  setArticleFilter: (filter: 'all' | 'draft' | 'queued' | 'published') => void;
+  setInspirationResults: (results: InspirationTopic[]) => void;
 }
 
 const THEME_KEY = 'w2w-theme';
@@ -258,6 +268,16 @@ export const useStore = create<AppState>((set, get) => ({
   // Queue
   queue: [],
   setQueue: (q) => set({ queue: q }),
+
+  // Articles
+  articles: [],
+  currentArticle: null,
+  articleFilter: 'all',
+  inspirationResults: [],
+  setArticles: (articles) => set({ articles }),
+  setCurrentArticle: (article) => set({ currentArticle: article }),
+  setArticleFilter: (filter) => set({ articleFilter: filter }),
+  setInspirationResults: (results) => set({ inspirationResults: results }),
 }));
 
 // Apply initial theme

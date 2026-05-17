@@ -5,6 +5,7 @@ import type { TreeNode, BrowseFolder, BrowseFile } from '../api/client';
 import ContextMenu, { type MenuItem } from '../components/ContextMenu';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Loading from '../components/Loading';
+import Checkbox from '../components/Checkbox';
 import { useLoading } from '../hooks/useLoading';
 
 const imgSrc = (p: string) => {
@@ -42,6 +43,7 @@ export default function Materials() {
   const { loading: creating, withLoading: withCreating } = useLoading();
   const { loading: enqueuing, withLoading: withEnqueuing } = useLoading();
   const { loading: deleting, withLoading: withDeleting } = useLoading();
+  const { loading: renaming, withLoading: withRenaming } = useLoading();
 
   // 初始化加载
   useEffect(() => {
@@ -101,16 +103,18 @@ export default function Materials() {
   // 重命名文件夹
   const handleRename = async () => {
     if (!renameTarget || !renameValue.trim()) return;
-    try {
-      await materialsApi.renameFolder(renameTarget.path, renameValue.trim());
-      addToast('已重命名', 'success');
-      setRenameTarget(null);
-      await refreshCurrent();
-      const tree = await materialsApi.tree();
-      setFolderTree(tree.tree);
-    } catch (err: any) {
-      addToast(err.message, 'error');
-    }
+    await withRenaming(async () => {
+      try {
+        await materialsApi.renameFolder(renameTarget.path, renameValue.trim());
+        addToast('已重命名', 'success');
+        setRenameTarget(null);
+        await refreshCurrent();
+        const tree = await materialsApi.tree();
+        setFolderTree(tree.tree);
+      } catch (err: any) {
+        addToast(err.message, 'error');
+      }
+    });
   };
 
   // 删除文件夹
@@ -144,7 +148,7 @@ export default function Materials() {
     });
   };
 
-  // 批量加入队列
+  // 批量加入发布队列
   const handleBatchEnqueue = async () => {
     if (!matSelected.size) return;
     await withEnqueuing(async () => {
@@ -152,7 +156,7 @@ export default function Materials() {
       try {
         await queueApi.add({ title: '', desc: '', images: paths, cover: paths[0] });
         matClearSelection();
-        addToast(`已加入队列`, 'success');
+        addToast(`已加入发布队列`, 'success');
       } catch (err: any) {
         addToast(err.message, 'error');
       }
@@ -183,7 +187,13 @@ export default function Materials() {
     try {
       await materialsApi.moveItems([sourcePath], folderPath);
       addToast('已移动', 'success');
-      await refreshCurrent();
+      // 如果当前路径是被移动的文件夹或其子路径，回到父级
+      if (currentPath && (currentPath === sourcePath || currentPath.startsWith(sourcePath + '/'))) {
+        const parent = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : '';
+        await navigateTo(parent);
+      } else {
+        await refreshCurrent();
+      }
       const tree = await materialsApi.tree();
       setFolderTree(tree.tree);
     } catch (err: any) {
@@ -209,7 +219,7 @@ export default function Materials() {
     }
     return [
       { label: '查看大图', onClick: () => openLightboxFor(target) },
-      { label: '加入发布队列', onClick: async () => { try { await queueApi.add({ title: '', desc: '', images: [target], cover: target }); addToast('已加入队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); } } },
+      { label: '加入发布队列', onClick: async () => { try { await queueApi.add({ title: '', desc: '', images: [target], cover: target }); addToast('已加入发布队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); } } },
       { label: name, disabled: true },
       { label: '删除此图片', danger: true, onClick: async () => { try { await materialsApi.delete([target]); addToast('已删除', 'success'); await refreshCurrent(); const t = await materialsApi.tree(); setFolderTree(t.tree); } catch (err: any) { addToast(err.message, 'error'); } } },
     ];
@@ -231,7 +241,6 @@ export default function Materials() {
       {/* 顶部 */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text tracking-tight">本地素材</h1>
-        <span className="text-xs text-text-muted">拖拽图片到左侧文件夹即可移动</span>
       </div>
 
       {/* 面包屑 */}
@@ -298,7 +307,7 @@ export default function Materials() {
               </button>
               <button className="btn btn-sm" onClick={matClearSelection} disabled={!matSelected.size}>取消选择</button>
               <button className="btn btn-sm" onClick={handleBatchEnqueue} disabled={!matSelected.size || enqueuing}>
-                {enqueuing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 加入中</> : '加入队列'}
+                {enqueuing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 加入中</> : '加入发布队列'}
               </button>
               <button className="btn btn-sm btn-danger" onClick={() => setShowBatchDeleteConfirm(true)} disabled={!matSelected.size || deleting}>删除</button>
 
@@ -364,6 +373,8 @@ export default function Materials() {
                     <tr key={folder.path} className="border-b border-border/50 hover:bg-bg-base/50 cursor-pointer"
                       onDoubleClick={() => navigateTo(folder.path)}
                       onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                      onDrop={(e) => handleDropOnFolder(e, folder.path)}
                     >
                       <td className="py-2 px-3 flex items-center gap-2">
                         <svg className="w-5 h-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
@@ -380,10 +391,11 @@ export default function Materials() {
                     <tr key={file.path}
                       className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
                       onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, file.path)}
                     >
                       <td className="py-2 px-3 flex items-center gap-2">
-                        <input type="checkbox" checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)}
-                          className="w-3.5 h-3.5 accent-accent rounded shrink-0" />
+                        <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
                         <img src={imgSrc(file.path)} alt="" className="w-8 h-8 object-cover rounded shrink-0" loading="lazy" />
                         <span className="truncate">{file.name}</span>
                       </td>
@@ -449,8 +461,10 @@ export default function Materials() {
               onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenameTarget(null); }}
               autoFocus />
             <div className="flex gap-2 justify-end">
-              <button className="btn btn-sm" onClick={() => setRenameTarget(null)}>取消</button>
-              <button className="btn btn-sm btn-primary" onClick={handleRename}>确定</button>
+              <button className="btn btn-sm" onClick={() => setRenameTarget(null)} disabled={renaming}>取消</button>
+              <button className="btn btn-sm btn-primary" onClick={handleRename} disabled={renaming}>
+                {renaming ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 重命名中</> : '确定'}
+              </button>
             </div>
           </div>
         </div>
@@ -475,6 +489,24 @@ function FolderTree({
 }) {
   return (
     <div className="space-y-0.5">
+      {/* 根目录入口 */}
+      <div
+        className={`folder-tree-item ${currentPath === '' ? 'active' : ''} ${dragOverFolder === '' ? 'drag-over' : ''}`}
+        style={{ paddingLeft: '12px' }}
+        onClick={() => onNavigate('')}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', '');
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragOver={(e) => { onDragOver(e); setDragOverFolder(''); }}
+        onDragLeave={() => setDragOverFolder(null)}
+        onDrop={(e) => onDrop(e, '')}
+      >
+        <span className="w-3 shrink-0" />
+        <svg className="w-4 h-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+        <span className="truncate text-sm font-medium">全部素材</span>
+      </div>
       {items.map(node => (
         <FolderTreeItem
           key={node.path}
@@ -518,6 +550,11 @@ function FolderTreeItem({
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         onClick={() => onNavigate(node.path)}
         onContextMenu={(e) => onContextMenu(e, node.path, 'folder')}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', node.path);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
         onDragOver={(e) => { onDragOver(e); setDragOverFolder(node.path); }}
         onDragLeave={() => setDragOverFolder(null)}
         onDrop={(e) => onDrop(e, node.path)}
@@ -577,6 +614,11 @@ function FolderCard({
       className={`folder-card ${isDragOver ? 'drag-over' : ''}`}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', folder.path);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       onDragOver={(e) => { onDragOver(e); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { setDragOver(false); onDrop(e); }}
@@ -605,7 +647,7 @@ function ImageCard({
 }) {
   return (
     <div
-      className={`relative rounded-xl overflow-hidden border transition-all group/image ${selected ? 'ring-2 ring-accent border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}
+      className={`relative rounded-xl overflow-hidden border transition-all group/image ${selected ? 'border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}
       onContextMenu={onContextMenu}
       draggable
       onDragStart={onDragStart}
@@ -615,11 +657,11 @@ function ImageCard({
         <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 transition-colors pointer-events-none rounded-t-xl" />
         {/* 选择框 */}
         <div className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-          <input type="checkbox" checked={selected} onChange={onToggleSelect} className="w-4 h-4 accent-accent rounded cursor-pointer" />
+          <Checkbox checked={selected} onChange={onToggleSelect} />
         </div>
         {selected && (
           <div className="absolute top-2 right-2" onClick={e => e.stopPropagation()}>
-            <input type="checkbox" checked={selected} onChange={onToggleSelect} className="w-4 h-4 accent-accent rounded cursor-pointer" />
+            <Checkbox checked={selected} onChange={onToggleSelect} />
           </div>
         )}
       </div>

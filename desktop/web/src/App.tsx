@@ -5,6 +5,7 @@ import Discovery from './pages/Discovery';
 import Queue from './pages/Queue';
 import Materials from './pages/Materials';
 import Settings from './pages/Settings';
+import ArticlePublish from './pages/ArticlePublish';
 
 export default function App() {
   console.log('App build test 1.0');
@@ -14,6 +15,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/discovery" element={<Discovery />} />
+          <Route path="/articles" element={<ArticlePublish />} />
           <Route path="/queue" element={<Queue />} />
           <Route path="/materials" element={<Materials />} />
           <Route path="/settings" element={<Settings />} />

@@ -188,46 +188,86 @@ def _fill_title_robustly(page, title: str) -> bool:
     return False
 
 
-def _find_content_editor(page, editor_frame):
-    """在编辑器 frame 和所有嵌套 frame 中查找正文编辑区域。
-    返回 (locator, frame) 或 (None, None)。
+def _find_content_editor_js(page, editor_frame, content: str) -> bool:
+    """通过 JavaScript 在所有 frame 中查找正文编辑器并直接填入内容。
+    返回 True 表示填写成功，False 表示未找到正文区域。
     """
-    content_selectors = [
-        "[contenteditable][placeholder*='正文']",
-        "div[role='textbox'][placeholder*='正文']",
-        "iframe[title*='正文']",
-        "[contenteditable='true']",
-        "div[role='textbox']",
-        "div[contenteditable]",
-        ".ProseMirror",
-        ".ql-editor",
-        "#js_content",
-        "body[contenteditable]",
-    ]
-    # 先在编辑器 frame 中找
-    for sel in content_selectors:
-        loc = editor_frame.locator(sel).first
+    frames_to_check = [editor_frame] + [f for f in page.frames if f != editor_frame and not f.is_detached()]
+    # 去重但保持顺序
+    seen = set()
+    unique_frames = []
+    for f in frames_to_check:
+        fid = id(f)
+        if fid not in seen:
+            seen.add(fid)
+            unique_frames.append(f)
+
+    for f in unique_frames:
         try:
-            loc.wait_for(state="visible", timeout=3000)
-            return loc, editor_frame
-        except Exception:
+            success = f.evaluate("""(htmlContent) => {
+                function findContentEditor() {
+                    // 1) 按 ID 精确查找
+                    const byId = document.getElementById('js_content');
+                    if (byId && byId.isConnected) return byId;
+
+                    // 2) 按 data-placeholder / placeholder 包含"正文"
+                    const allEd = document.querySelectorAll('[contenteditable="true"]');
+                    for (const el of allEd) {
+                        const ph = (el.getAttribute('data-placeholder') || el.getAttribute('placeholder') || '').trim();
+                        if (ph.includes('正文') || ph.includes('编辑区')) return el;
+                    }
+
+                    // 3) 有 ≥2 个可编辑区域 → 排除标题，取最大的
+                    if (allEd.length >= 2) {
+                        let best = null, bestArea = 0;
+                        for (const el of allEd) {
+                            const ph = (el.getAttribute('data-placeholder') || el.getAttribute('placeholder') || '').trim();
+                            if (ph.includes('标题')) continue;
+                            const r = el.getBoundingClientRect();
+                            if (r.width < 50 || r.height < 30) continue;
+                            const area = r.width * r.height;
+                            if (area > bestArea) { bestArea = area; best = el; }
+                        }
+                        if (best) return best;
+                        // 没有排除到标题 → 取面积第二大的（标题通常比正文小）
+                        const sorted = [...allEd].sort((a, b) => {
+                            const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+                            return (rb.width * rb.height) - (ra.width * ra.height);
+                        });
+                        if (sorted.length >= 2) return sorted[0]; // 最大的可能是正文
+                    }
+
+                    // 4) 仅一个 contenteditable
+                    if (allEd.length === 1) {
+                        const ph = (allEd[0].getAttribute('data-placeholder') || allEd[0].getAttribute('placeholder') || '').trim();
+                        if (!ph.includes('标题')) return allEd[0];
+                    }
+
+                    return null;
+                }
+
+                const el = findContentEditor();
+                if (!el) return false;
+
+                el.focus();
+                el.innerHTML = htmlContent;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                return true;
+            }""", content)
+            if success:
+                _emit(f"在 frame {f.url[:60] or '(empty)'} 中找到正文编辑器", None)
+                return True
+        except Exception as e:
+            logger.debug("frame 查找失败: %s", e)
             continue
-    # 遍历所有 frame（包括嵌套 iframe 中的 UEditor）
-    for f in page.frames:
-        if f == editor_frame:
-            continue
-        for sel in content_selectors:
-            loc = f.locator(sel).first
-            try:
-                loc.wait_for(state="visible", timeout=2000)
-                return loc, f
-            except Exception:
-                continue
-    return None, None
+
+    return False
 
 
-def _select_cover(page, editor_frame, on_log=None) -> None:
-    """自动选择封面：选择封面 → 菜单从正文选择 → 选图弹窗确认 → 裁剪弹窗确认。"""
+def _select_cover(page, editor_frame, on_log=None) -> bool:
+    """自动选择封面：选择封面 → 菜单从正文选择 → 选图弹窗确认 → 裁剪弹窗确认。
+    返回 True 表示封面设置成功，False 表示失败或被跳过。
+    """
     # 1. 点击"选择封面"按钮（等待右侧边栏加载完成）
     _human_sleep(1.0, 0.5)
     _emit("正在查找封面设置区域...", on_log)
@@ -249,7 +289,7 @@ def _select_cover(page, editor_frame, on_log=None) -> None:
     ]
     if not _click_first_available(page, cover_selectors, wait_ms=4000):
         _emit("未找到选择封面按钮，跳过封面设置", on_log)
-        return
+        return False
     _emit("已点击选择封面", on_log)
     _human_sleep(0.5, 0.3)
 
@@ -297,30 +337,71 @@ def _select_cover(page, editor_frame, on_log=None) -> None:
 
     if not from_body_clicked:
         _emit("未找到从正文选择菜单项，跳过封面设置", on_log)
-        return
+        return False
     _emit("已点击从正文选择", on_log)
     _human_sleep(0.5, 0.3)
 
-    # 3. 选择图片弹窗 → 勾选第一张图
-    img_selectors = [
-        ".weui-desktop-img-picker__img-item",
-        ".weui-desktop-img-picker__img-item:first-child",
-        ".img_item",
-        ".pic_list li",
-        ".image_list li",
-        "[class*='img-picker'] li",
-        "[class*='imgPicker'] li",
-        "[class*='upload'] li",
-        ".weui-desktop-dialog img",
-        ".weui-desktop-dialog li",
-        ".weui-desktop-dialog [class*='img']",
-        "[class*='dialog'] [class*='img']",
-        "[role='dialog'] li",
-        "[role='dialog'] img",
-    ]
-    if not _click_first_available(page, img_selectors, wait_ms=3000):
+    # 3. 选择图片弹窗 → 勾选第一张图（支持多轮等待和降级策略）
+    _emit("正在查找可选封面图片...", on_log)
+    img_selected = False
+    for attempt in range(3):
+        if attempt > 0:
+            _emit(f"重试查找封面图片（第{attempt+1}次）...", on_log)
+            _human_sleep(2.0, 0.5)
+
+        img_selectors = [
+            # 微信桌面版现代选择器
+            ".weui-desktop-dialog__body img",
+            ".weui-desktop-dialog__bd img",
+            ".weui-desktop-dialog__bd [class*='img']",
+            ".weui-desktop-grid__item",
+            ".weui-desktop-media__item",
+            ".weui-desktop-img-picker__img-item",
+            ".weui-desktop-img-picker__img-item:first-child",
+            ".img_item",
+            ".pic_list li",
+            ".image_list li",
+            "[class*='img-picker'] li",
+            "[class*='imgPicker'] li",
+            "[class*='upload'] li",
+            # 通用弹窗匹配
+            ".weui-desktop-dialog img",
+            ".weui-desktop-dialog li",
+            ".weui-desktop-dialog [class*='img']",
+            ".weui-desktop-dialog [class*='grid']",
+            "[class*='dialog'] [class*='img']",
+            "[role='dialog'] li",
+            "[role='dialog'] img",
+            # 兜底：任何一个可见的 dialog 内图片
+            "[role='dialog'] [class*='img']:first-child",
+            ".weui-desktop-dialog [class*='item']:first-child",
+        ]
+        if _click_first_available(page, img_selectors, wait_ms=3000):
+            img_selected = True
+            break
+
+        # 降级：直接在 dialog 范围内找任何可见的 img
+        if not img_selected:
+            try:
+                for scope in [page] + page.frames:
+                    for role_sel in ["[role='dialog']", ".weui-desktop-dialog"]:
+                        dialog = scope.locator(role_sel).first
+                        if dialog.is_visible(timeout=500):
+                            imgs = dialog.locator("img")
+                            count = imgs.count()
+                            if count > 0:
+                                imgs.first.click()
+                                _emit("通过降级策略选中封面图片", on_log)
+                                img_selected = True
+                                break
+                    if img_selected:
+                        break
+            except Exception:
+                pass
+
+    if not img_selected:
         _emit("未找到可选图片，跳过封面设置", on_log)
-        return
+        return False
     _emit("已勾选第一张封面图片", on_log)
     _human_sleep(0.3, 0.2)
 
@@ -370,6 +451,7 @@ def _select_cover(page, editor_frame, on_log=None) -> None:
 
     _human_sleep(0.5, 0.3)
     _emit("封面设置流程完成", on_log)
+    return True
 
 
 
@@ -429,19 +511,12 @@ def publish_article(
             if not _fill_title_robustly(page, title):
                 raise RuntimeError("未找到标题输入框")
             _emit("标题填写完成", on_log)
-            content_frame = None
 
             # 有正文内容时才填写
+            content_frame = None
             if content and content.strip():
                 _emit("正在填写正文内容...", on_log)
-                content_loc, content_frame = _find_content_editor(page, editor_frame)
-                if content_loc:
-                    content_loc.click()
-                    _human_sleep(0.3, 0.2)
-                    try:
-                        content_loc.evaluate("el => { el.focus(); el.innerHTML = arguments[0]; el.dispatchEvent(new Event('input', {bubbles:true})); }", content)
-                    except Exception:
-                        page.keyboard.type(content, delay=10)
+                if _find_content_editor_js(page, editor_frame, content):
                     _emit("正文内容填写完成", on_log)
                 else:
                     _emit("未找到正文区域，跳过", on_log)
@@ -481,10 +556,13 @@ def publish_article(
                     _emit(f"已上传图片 {i+1}/{len(images)}: {Path(img).name}", on_log)
                     _human_sleep(2.0, 1.0)
 
-            # 等待图片在正文中渲染完成
-            _human_sleep(2.0, 1.0)
+            # 等待图片上传完成并渲染（多图需更长时间）
+            _emit("等待图片上传完成...", on_log)
+            _human_sleep(max(3.0, len(images) * 0.5), 1.0)
             _emit("正在选择封面...", on_log)
-            _select_cover(page, editor_frame, on_log)
+            cover_ok = _select_cover(page, editor_frame, on_log)
+            if not cover_ok:
+                _emit("封面未设置（不影响草稿保存）", on_log)
 
             # 保存草稿或发布
             if save_draft:
@@ -519,7 +597,8 @@ def publish_article(
                 context.storage_state(path=str(WECHAT_STATE_PATH))
                 context.close()
                 _emit("草稿保存成功", on_log)
-                return {"success": True, "message": "已保存为草稿", "title": title}
+                msg = "已保存为草稿" + ("（未设置封面）" if not cover_ok else "")
+                return {"success": True, "message": msg, "title": title}
             else:
                 _emit("已填充内容，正在发布...", on_log)
                 if on_confirm_needed:
@@ -543,7 +622,8 @@ def publish_article(
                 context.close()
 
         _emit("发布成功", on_log)
-        return {"success": True, "message": "发布成功", "title": title}
+        msg = "发布成功" + ("（未设置封面）" if not cover_ok else "")
+        return {"success": True, "message": msg, "title": title}
     except Exception as err:
         err_msg = str(err)
         if "Executable doesn't exist" in err_msg:

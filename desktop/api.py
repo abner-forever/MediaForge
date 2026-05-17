@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import requests as http_requests
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
@@ -21,7 +24,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import DATA_DIR, DOWNLOAD_DIR, LOG_DIR, settings
 from desktop.app_state import app_state
-from services.ai import generate_content
+from services.ai import (
+    de_ai_article,
+    generate_article,
+    generate_article_title,
+    generate_content,
+    polish_article,
+)
 from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
 from services.platforms import get_platform, list_platforms
@@ -96,6 +105,44 @@ class PublishRequest(BaseModel):
     save_draft: bool = True
 
 
+# ── 文章请求模型 ───────────────────────────────────
+
+
+class ArticleCreateRequest(BaseModel):
+    title: str = ""
+    content: str = ""
+    summary: str = ""
+    cover: str = ""
+    images: List[str] = []
+    tags: List[str] = []
+    celebrity: str = ""
+    source: str = ""
+    status: str = "draft"
+
+
+class ArticleUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    summary: Optional[str] = None
+    cover: Optional[str] = None
+    images: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    celebrity: Optional[str] = None
+    source: Optional[str] = None
+    ai_generated: Optional[bool] = None
+    status: Optional[str] = None
+
+
+class ArticleGenerateRequest(BaseModel):
+    topic: str = ""
+    title: str = ""
+
+
+class ArticlePublishRequest(BaseModel):
+    save_draft: bool = False
+    dry_run: bool = False
+
+
 # ── 首页 ──────────────────────────────────────────────
 
 
@@ -131,6 +178,8 @@ def _get_provider_key(env: dict, provider: str) -> str:
         "deepseek": "DEEPSEEK_API_KEY",
         "glm": "GLM_API_KEY",
         "openai": "OPENAI_API_KEY",
+        "qwen": "QWEN_API_KEY",
+        "minimax": "MINIMAX_API_KEY",
     }
     return env.get(key_map.get(provider, ""), "") or ""
 
@@ -214,7 +263,7 @@ async def save_settings(data: Dict[str, Any]):
             updates[k] = str(v)
 
     # 拦截供应商专用 API key → 写入本地存储，不写 .env
-    _API_KEY_ENV_NAMES = {"MIMO_API_KEY", "DEEPSEEK_API_KEY", "GLM_API_KEY", "OPENAI_API_KEY"}
+    _API_KEY_ENV_NAMES = {"MIMO_API_KEY", "DEEPSEEK_API_KEY", "GLM_API_KEY", "OPENAI_API_KEY", "QWEN_API_KEY", "MINIMAX_API_KEY"}
     local_keys = {}
     for key in _API_KEY_ENV_NAMES:
         if key in updates:
@@ -270,6 +319,72 @@ async def get_api_key(provider: str = Query("")):
     prov = (provider or store.get("AI_PROVIDER", "mimo")).lower()
     key = _get_provider_key(store, prov)
     return {"key": key}
+
+
+@app.post("/api/settings/ai-test")
+async def test_ai_connection(data: dict):
+    """测试 AI 服务连通性：向配置的端点发送轻量请求验证配置有效。"""
+    from utils.settings_store import read_settings as _read_settings
+
+    cfg = _read_settings()
+    provider = (data.get("provider") or cfg.get("AI_PROVIDER") or "mimo").lower()
+    model = data.get("model") or cfg.get("AI_MODEL") or "mimo-chat"
+    base_url = data.get("base_url") or cfg.get("AI_BASE_URL") or ""
+    api_key = data.get("api_key") or _get_provider_key(cfg, provider)
+
+    if not base_url:
+        return {"success": False, "message": "请先配置 Base URL"}
+    if not api_key:
+        return {"success": False, "message": "请先配置 API Key"}
+
+    base = base_url.rstrip("/")
+    for suffix in ("/messages", "/v1/messages", "/chat/completions"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    base = base.rstrip("/")
+
+    # 构造候选 URL 列表
+    if base.endswith("/v1"):
+        url_candidates = [f"{base}/chat/completions"]
+    elif re.search(r"/v\d+$", base):
+        # 已有版本号路径（如 /v4），只试直接拼接
+        url_candidates = [f"{base}/chat/completions"]
+    else:
+        url_candidates = [f"{base}/chat/completions", f"{base}/v1/chat/completions"]
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 5,
+    }
+    timeout = int(cfg.get("REQUEST_TIMEOUT", 30))
+
+    # 打印 curl 命令方便调试
+    curl_cmd = f"curl -s -w '\\n%{{http_code}}' '{url_candidates[0]}' -H 'Authorization: Bearer {api_key[:8]}...' -H 'Content-Type: application/json' -d '{json.dumps(payload)}'"
+    print(f"[AI测试] provider={provider} model={model}", flush=True)
+    print(f"[AI测试] 候选URL: {url_candidates}", flush=True)
+    print(f"[AI测试] curl: {curl_cmd}", flush=True)
+
+    errors = []
+    for url in url_candidates:
+        try:
+            resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code == 200:
+                return {"success": True, "message": "连接成功"}
+            detail = resp.text[:300]
+            msg = f"[{url}] 连接失败（{resp.status_code}）: {detail}"
+            errors.append(msg)
+            print(f"[AI测试] {msg}", flush=True)
+        except Exception as e:
+            msg = f"[{url}] 连接失败: {str(e)}"
+            errors.append(msg)
+            print(f"[AI测试] {msg}", flush=True)
+            continue
+    return {"success": False, "message": "\n".join(errors)}
 
 
 @app.get("/api/settings/weibo-login-stream")
@@ -848,8 +963,6 @@ async def generate_queue_content(index: int):
         app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
         return {"success": True, "title": new_title, "desc": "", "message": ""}
 
-    from services.ai import generate_content
-
     ai_title, _ = generate_content(context)
 
     if not ai_title or ai_title == "今日美图分享":
@@ -1018,6 +1131,8 @@ async def list_materials():
     for celeb_dir in sorted(img_root.iterdir()):
         if not celeb_dir.is_dir():
             continue
+        if celeb_dir.name.startswith(".") or celeb_dir.name == "__covers__":
+            continue
         celeb_name = celeb_dir.name
         celeb_group = {"celebrity": celeb_name, "scenes": [], "total": 0}
         for scene_dir in sorted(celeb_dir.iterdir()):
@@ -1097,6 +1212,8 @@ def _build_tree_node(dir_path: Path, root: Path) -> Optional[dict]:
     children: list[dict] = []
     item_count = 0
     for child in sorted(dir_path.iterdir()):
+        if child.name.startswith(".") or child.name == "__covers__":
+            continue
         if child.is_dir():
             node = _build_tree_node(child, root)
             if node:
@@ -1121,10 +1238,13 @@ async def materials_tree():
         return {"tree": []}
     tree: list[dict] = []
     for child in sorted(root.iterdir()):
-        if child.is_dir():
-            node = _build_tree_node(child, root)
-            if node:
-                tree.append(node)
+        if not child.is_dir():
+            continue
+        if child.name.startswith(".") or child.name == "__covers__":
+            continue
+        node = _build_tree_node(child, root)
+        if node:
+            tree.append(node)
     return {"tree": tree}
 
 
@@ -1154,6 +1274,8 @@ async def materials_browse(path: str = Query("")):
     folders: list[dict] = []
     files: list[dict] = []
     for child in sorted(target.iterdir()):
+        if child.name.startswith(".") or child.name == "__covers__":
+            continue
         if child.is_dir():
             folders.append({
                 "name": child.name,
@@ -1248,11 +1370,13 @@ async def materials_move_items(req: MoveItemsRequest):
 
     moved = 0
     for item in req.items:
-        fp = Path(item)
+        fp = (root / item).resolve()
         if not fp.exists():
             continue
-        if not str(fp.resolve()).startswith(str(root)):
+        if not str(fp).startswith(str(root)):
             continue
+        if str(fp.parent) == str(dest) or str(dest) == str(fp) or str(dest).startswith(str(fp) + '/'):
+            continue  # 同目录或拖到自身/子目录无需移动
         dest_path = dest / fp.name
         if dest_path.exists():
             stem = fp.stem
@@ -1305,6 +1429,8 @@ async def download_stream(indices: str = Query(""), filter_watermark: bool = Que
             base_dir = DOWNLOAD_DIR.expanduser().resolve() / celeb_dir / slug_dir
             base_dir.mkdir(parents=True, exist_ok=True)
 
+            post_local_images: list[str] = []
+            post_dropped = 0
             for idx, url in enumerate(images, start=1):
                 current += 1
                 ext = ".jpg"
@@ -1317,12 +1443,14 @@ async def download_stream(indices: str = Query(""), filter_watermark: bool = Que
                 result = _download_one(url, filename, overwrite=False, filter_watermark=filter_watermark)
                 if result:
                     total_downloaded += 1
+                    post_local_images.append(_img_rel(result))
                 else:
                     total_dropped += 1
+                    post_dropped += 1
                 yield f"data: {_json.dumps({'type': 'progress', 'current': current, 'total': total, 'celebrity': celebrity, 'scene': scene, 'downloaded': total_downloaded, 'dropped': total_dropped}, ensure_ascii=False)}\n\n"
 
-            post["local_images"] = [_img_rel(str(f)) for f in sorted(base_dir.iterdir()) if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".gif")]
-            post["dropped_count"] = total_dropped
+            post["local_images"] = post_local_images
+            post["dropped_count"] = post_dropped
 
         app_state.set_discovery_results(posts)
         yield f"data: {_json.dumps({'type': 'done', 'downloaded': total_downloaded, 'dropped': total_dropped}, ensure_ascii=False)}\n\n"
@@ -1350,6 +1478,368 @@ async def check_watermark(paths: List[str]):
         except Exception:
             pass
     return {"watermarked": watermarked}
+
+
+# ── 文章发布 API ──────────────────────────────────────
+
+
+@app.get("/api/articles")
+async def list_articles(status: Optional[str] = Query(None)):
+    """列出文章，可按状态筛选。"""
+    return {"articles": app_state.get_articles(status)}
+
+
+@app.post("/api/articles")
+async def create_article(req: ArticleCreateRequest):
+    """创建新文章。"""
+    article = app_state.add_article(req.model_dump())
+    app_state.add_operation("创建文章", f"「{article['title'] or '无标题'}」")
+    return {"success": True, "article": article}
+
+
+@app.get("/api/articles/inspiration")
+async def get_inspiration(keyword: str = Query("", description="搜索关键词")):
+    """从平台搜索热点话题作为灵感。"""
+    if not keyword:
+        return {"topics": []}
+
+    topics = []
+    try:
+        from services.platforms import get_platform
+        platform = get_platform("weibo")
+        if platform:
+            posts = platform.fetch_posts(
+                mode="keyword",
+                max_pages=1,
+                search_tags=[keyword],
+            )
+            for p in posts[:20]:
+                text = p.get("text", "").strip()
+                if text and len(text) > 5:
+                    topics.append({
+                        "text": text[:100],
+                        "source": "weibo",
+                        "celebrity": p.get("celebrity", ""),
+                        "screen_name": p.get("screen_name", ""),
+                    })
+    except Exception as e:
+        logger.error("获取灵感失败: %s", e)
+
+    if not topics:
+        try:
+            platform = get_platform("toutiao")
+            if platform:
+                posts = platform.fetch_posts(
+                    mode="keyword",
+                    max_pages=1,
+                    search_tags=[keyword],
+                )
+                for p in posts[:20]:
+                    text = p.get("text", "").strip()
+                    if text and len(text) > 5:
+                        topics.append({
+                            "text": text[:100],
+                            "source": "toutiao",
+                            "celebrity": p.get("celebrity", ""),
+                            "screen_name": p.get("screen_name", ""),
+                        })
+        except Exception as e:
+            logger.error("头条获取灵感失败: %s", e)
+
+    return {"topics": topics}
+
+
+@app.get("/api/articles/cover-search")
+async def article_cover_search(keyword: str = Query("")):
+    """搜索配图：本地素材 + 网络图片。"""
+    images: list[dict] = []
+    seen = set()
+
+    # 1) 本地素材搜索
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    if root.exists():
+        kw = keyword.lower()
+        for path in root.rglob("*"):
+            if len(images) >= 50:
+                break
+            if not path.is_file() or path.suffix.lower() not in _IMAGE_EXT:
+                continue
+            if "__covers__" in path.relative_to(root).parts:
+                continue
+            rel = path.relative_to(root).as_posix()
+            if kw and kw not in rel.lower():
+                continue
+            images.append({
+                "path": rel,
+                "name": path.name,
+                "source": "local",
+                "celebrity": rel.split("/")[0] if "/" in rel else "",
+            })
+            seen.add(rel)
+
+    # 2) 网络搜索 (Bing Images)
+    if keyword:
+        try:
+            import re as _re
+            import hashlib as _hashlib
+            from urllib.parse import quote as _url_quote, unquote as _unquote
+            resp = http_requests.get(
+                f"https://www.bing.com/images/search?q={_url_quote(keyword)}&count=30",
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+                timeout=15,
+            )
+            # Bing 的图片 URL 藏在 mediaurl 参数中（URL 编码的）
+            raw_urls = _re.findall(r'mediaurl=([^&]+)', resp.text)
+            for raw in raw_urls:
+                if len(images) >= 60:
+                    break
+                # URL 解码
+                decoded = _unquote(raw).replace("\\\\/", "/").replace("\\/", "/")
+                # 如果是 Bing 缩略图，尝试提取原图 URL（riu 参数）
+                if "/th/id/" in decoded:
+                    riu_match = _re.search(r'riu=([^&]+)', decoded)
+                    if riu_match:
+                        original = _unquote(riu_match.group(1)).replace("\\\\/", "/").replace("\\/", "/")
+                        if original.startswith("http") and original not in seen:
+                            seen.add(original)
+                            images.append({
+                                "path": original,
+                                "name": original.rsplit("/", 1)[-1][:50],
+                                "source": "web",
+                                "celebrity": "",
+                            })
+                            continue
+                if decoded.startswith("http") and decoded not in seen:
+                    seen.add(decoded)
+                    images.append({
+                        "path": decoded,
+                        "name": decoded.rsplit("/", 1)[-1][:50],
+                        "source": "web",
+                        "celebrity": "",
+                    })
+        except Exception as e:
+            from utils.logger import get_logger
+            get_logger(__name__).warning("网络配图搜索失败: %s", e)
+
+    return {"images": images}
+
+
+class CoverDownloadRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/articles/cover-download")
+async def article_cover_download(req: CoverDownloadRequest):
+    """下载网络图片到本地缓存目录，返回本地相对路径。"""
+    url = req.url
+    if not url:
+        raise HTTPException(400, "缺少图片 URL")
+
+    try:
+        resp = http_requests.get(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Referer": "https://www.bing.com/",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+
+        # 验证响应为图片
+        content_type = resp.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            raise HTTPException(400, f"下载地址返回的不是图片 (Content-Type: {content_type})")
+
+        from uuid import uuid4
+        covers_dir = DOWNLOAD_DIR / "__covers__"
+        covers_dir.mkdir(parents=True, exist_ok=True)
+        ext = Path(url.split("?")[0].split("#")[0]).suffix or ".jpg"
+        if ext.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            ext = ".jpg"
+        filename = f"{uuid4().hex}{ext}"
+        local_path = covers_dir / filename
+        local_path.write_bytes(resp.content)
+        rel = local_path.relative_to(DOWNLOAD_DIR).as_posix()
+        return {"success": True, "path": rel}
+    except Exception as e:
+        raise HTTPException(502, f"下载封面图片失败: {e}")
+
+
+@app.get("/api/articles/{article_id}")
+async def get_article(article_id: str):
+    """获取单篇文章。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    return {"article": article}
+
+
+@app.put("/api/articles/{article_id}")
+async def update_article(article_id: str, req: ArticleUpdateRequest):
+    """更新文章。"""
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    article = app_state.update_article(article_id, updates)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    return {"success": True, "article": article}
+
+
+@app.delete("/api/articles/{article_id}")
+async def delete_article(article_id: str):
+    """删除文章。"""
+    if app_state.delete_article(article_id):
+        return {"success": True}
+    raise HTTPException(404, "文章不存在")
+
+
+@app.post("/api/articles/{article_id}/generate")
+async def generate_article_content(article_id: str, req: ArticleGenerateRequest):
+    """AI 根据话题/标题生成正文。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+
+    topic = req.topic or article.get("source", "") or article.get("title", "")
+    title = req.title or article.get("title", "")
+    if not topic:
+        raise HTTPException(400, "缺少话题或标题")
+
+    content = generate_article(topic, title)
+    app_state.update_article(article_id, {"content": content, "ai_generated": True})
+    app_state.add_operation("AI 生成", f"为「{title or topic}」生成正文")
+    return {"success": True, "content": content}
+
+
+@app.post("/api/articles/{article_id}/polish")
+async def polish_article_content(article_id: str):
+    """AI 校对润色文章正文。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    content = article.get("content", "")
+    if not content:
+        raise HTTPException(400, "正文为空，无法校对")
+
+    polished = polish_article(content)
+    app_state.update_article(article_id, {"content": polished})
+    app_state.add_operation("AI 校对", f"「{article.get('title', '') or '无标题'}」")
+    return {"success": True, "content": polished}
+
+
+@app.post("/api/articles/{article_id}/de-ai")
+async def de_ai_article_content(article_id: str):
+    """去 AI 味儿。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    content = article.get("content", "")
+    if not content:
+        raise HTTPException(400, "正文为空")
+
+    rewritten = de_ai_article(content)
+    app_state.update_article(article_id, {"content": rewritten})
+    app_state.add_operation("去 AI 味儿", f"「{article.get('title', '') or '无标题'}」")
+    return {"success": True, "content": rewritten}
+
+
+@app.post("/api/articles/{article_id}/generate-title")
+async def generate_article_title_endpoint(article_id: str):
+    """AI 从正文生成标题。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    content = article.get("content", "")
+    if not content:
+        raise HTTPException(400, "正文为空")
+
+    title = generate_article_title(content)
+    if title:
+        app_state.update_article(article_id, {"title": title})
+        app_state.add_operation("AI 生成标题", f"「{title}」")
+    return {"success": bool(title), "title": title}
+
+
+@app.post("/api/articles/{article_id}/queue")
+async def add_article_to_queue(article_id: str):
+    """将文章加入发布队列。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+
+    from services.extensions import build_html
+
+    content_html = build_html(article.get("content", ""), article.get("images", []))
+    queue_item = {
+        "title": article.get("title", ""),
+        "desc": content_html,
+        "images": list(article.get("images", [])),
+        "cover": article.get("cover", ""),
+        "celebrity": article.get("celebrity", ""),
+        "type": "article",
+        "article_id": article_id,
+        "tags": list(article.get("tags", [])),
+        "content": article.get("content", ""),
+    }
+    app_state.add_to_queue(queue_item)
+    app_state.update_article(article_id, {"status": "queued"})
+    app_state.add_operation("加入队列", f"文章「{article.get('title', '') or '无标题'}」")
+    return {"success": True, "queue": app_state.get_queue()}
+
+
+@app.post("/api/articles/{article_id}/publish")
+async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
+    """直接发布文章到公众号。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+
+    title = article.get("title", "")
+    content = article.get("content", "")
+    images = article.get("images", [])
+
+    if not title:
+        raise HTTPException(400, "标题为空")
+
+    from services.extensions import build_html
+    from services.wechat import publish_article as wechat_publish
+
+    content_html = build_html(content, images)
+    abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
+
+    app_state.clear_publish_logs()
+
+    def _on_log(msg: str) -> None:
+        app_state.add_publish_log(msg)
+
+    import asyncio
+    result = await asyncio.to_thread(
+        wechat_publish,
+        title=title,
+        content=content_html,
+        images=abs_images,
+        dry_run=req.dry_run,
+        save_draft=req.save_draft,
+        on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
+        on_confirm_needed=lambda t: True,
+        on_log=_on_log,
+    )
+    app_state.finish_publish()
+    if result.get("success"):
+        status = "published" if not req.save_draft else "queued"
+        app_state.update_article(article_id, {"status": status})
+        action = "保存草稿" if req.save_draft else "发布"
+        app_state.add_operation(action, f"文章「{title}」")
+    return result
 
 
 # ── SPA Catch-All（放在所有路由最后）─────────────────

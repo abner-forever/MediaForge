@@ -50,6 +50,23 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Cyber card tokens - light mode */
+  --cyber-bg: #ffffff;
+  --cyber-bg-hero: #ffffff;
+  --cyber-border: rgba(0,0,0,0.08);
+  --cyber-text-bright: #18181b;
+  --cyber-text-primary: #27272a;
+  --cyber-text-secondary: #52525b;
+  --cyber-text-tertiary: #a1a1aa;
+  --cyber-text-quaternary: #d4d4d8;
+  --cyber-text-icon: #a1a1aa;
+  --cyber-bg-hover: rgba(0,0,0,0.03);
+  --cyber-border-divider: rgba(0,0,0,0.06);
+  --cyber-grid: rgba(0,0,0,0.04);
+  --cyber-scanline: rgba(0,0,0,0.02);
+  --cyber-header: #71717a;
+  --cyber-header-bar: rgba(0,0,0,0.08);
 }
 
 [data-theme="dark"] {
@@ -81,6 +98,22 @@
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.35);
   --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 24px var(--accent-glow);
+
+  --cyber-bg: #141418;
+  --cyber-bg-hero: #0e0e12;
+  --cyber-border: rgba(255,255,255,0.10);
+  --cyber-text-bright: rgba(255,255,255,0.70);
+  --cyber-text-primary: rgba(255,255,255,0.65);
+  --cyber-text-secondary: rgba(255,255,255,0.40);
+  --cyber-text-tertiary: rgba(255,255,255,0.25);
+  --cyber-text-quaternary: rgba(255,255,255,0.15);
+  --cyber-text-icon: rgba(255,255,255,0.20);
+  --cyber-bg-hover: rgba(255,255,255,0.03);
+  --cyber-border-divider: rgba(255,255,255,0.05);
+  --cyber-grid: rgba(255,255,255,0.02);
+  --cyber-scanline: rgba(255,255,255,0.012);
+  --cyber-header: rgba(255,255,255,0.25);
+  --cyber-header-bar: rgba(255,255,255,0.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -113,6 +146,22 @@
     --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.35);
     --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.4);
     --shadow-glow: 0 0 24px var(--accent-glow);
+
+    --cyber-bg: #141418;
+    --cyber-bg-hero: #0e0e12;
+    --cyber-border: rgba(255,255,255,0.10);
+    --cyber-text-bright: rgba(255,255,255,0.70);
+    --cyber-text-primary: rgba(255,255,255,0.65);
+    --cyber-text-secondary: rgba(255,255,255,0.40);
+    --cyber-text-tertiary: rgba(255,255,255,0.25);
+    --cyber-text-quaternary: rgba(255,255,255,0.15);
+    --cyber-text-icon: rgba(255,255,255,0.20);
+    --cyber-bg-hover: rgba(255,255,255,0.03);
+    --cyber-border-divider: rgba(255,255,255,0.05);
+    --cyber-grid: rgba(255,255,255,0.02);
+    --cyber-scanline: rgba(255,255,255,0.012);
+    --cyber-header: rgba(255,255,255,0.25);
+    --cyber-header-bar: rgba(255,255,255,0.06);
   }
 }
 
@@ -172,52 +221,6 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 input[type="number"] { -moz-appearance: textfield; }
-
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 4px;
-  background: var(--border);
-  border-radius: 999px;
-  outline: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg-card);
-  cursor: pointer;
-  transition: transform 0.15s var(--ease-out);
-  box-shadow: var(--shadow-sm);
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg-card);
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-track {
-  height: 4px;
-  background: var(--border);
-  border-radius: 999px;
-  border: none;
-}
 
 label {
   display: flex;
@@ -380,7 +383,199 @@ label > .field-control {
   border-color: transparent;
 }
 
-/* ── Toggle Switch ──────────────────────────── */
+/* ── Ant Design 风格复选框 ────────────────── */
+.checkbox-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.checkbox-root.checkbox-disabled {
+  cursor: not-allowed;
+}
+
+.checkbox-target {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-card);
+  transition: all 0.2s var(--ease-out);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.checkbox-target input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.checkbox-root:not(.checkbox-disabled):hover .checkbox-target {
+  border-color: var(--accent);
+}
+
+.checkbox-target.checkbox-checked {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+}
+
+.checkbox-target.checkbox-checked .checkbox-icon {
+  display: block;
+}
+
+.checkbox-target:focus-visible,
+.checkbox-target:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.checkbox-root.checkbox-disabled .checkbox-target {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  opacity: 0.5;
+}
+
+.checkbox-root.checkbox-disabled .checkbox-target.checkbox-checked {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+.checkbox-icon {
+  display: none;
+  width: 12px;
+  height: 12px;
+  color: #fff;
+  stroke: currentColor;
+  pointer-events: none;
+}
+
+.checkbox-indet {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--bg-card);
+  pointer-events: none;
+}
+
+.checkbox-target.checkbox-indeterminate {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+}
+
+.checkbox-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.checkbox-root.checkbox-disabled .checkbox-label {
+  opacity: 0.5;
+}
+
+/* ── Ant Design 风格滑块 ──────────────────── */
+.slider-root {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+}
+
+.slider-root.slider-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.slider-rail {
+  position: absolute;
+  width: 100%;
+  height: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--border);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.slider-track {
+  position: absolute;
+  height: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--accent);
+  border-radius: 999px 0 0 999px;
+  left: 0;
+  pointer-events: none;
+}
+
+.slider-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  top: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  box-sizing: border-box;
+  transition: box-shadow 0.2s var(--ease-out), transform 0.15s var(--ease-out);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.slider-handle.slider-handle-hover,
+.slider-handle.slider-handle-active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.slider-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: scaleIn 0.15s var(--ease-out) both;
+}
+
+.slider-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--accent);
+}
+
+/* ── 删除旧 range 样式 ── */
+input[type="range"] {
+  display: none;
+}
+
+/* ── Ant Design 风格切换开关 ─────────────── */
 .toggle {
   position: relative;
   display: inline-flex;
@@ -399,25 +594,26 @@ label > .field-control {
 
 .toggle-track {
   position: relative;
-  width: 36px;
-  height: 20px;
+  width: 40px;
+  height: 24px;
   background: var(--border);
   border-radius: 999px;
-  transition: all 0.2s var(--ease-out);
+  transition: all 0.25s var(--ease-out);
   flex-shrink: 0;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
 }
 
 .toggle-track::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
   background: #fff;
   border-radius: 50%;
-  transition: transform 0.2s var(--ease-spring);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.25s var(--ease-spring);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.02);
 }
 
 .toggle input:checked + .toggle-track {
@@ -426,6 +622,14 @@ label > .field-control {
 
 .toggle input:checked + .toggle-track::after {
   transform: translateX(16px);
+}
+
+.toggle:active .toggle-track::after {
+  transform: scale(0.9);
+}
+
+.toggle input:checked:active + .toggle-track::after {
+  transform: translateX(16px) scale(0.9);
 }
 
 .toggle-label {
@@ -441,6 +645,7 @@ label > .field-control {
   border-radius: var(--radius-xl);
   padding: 1.25rem;
   transition: all 0.2s var(--ease-out);
+  box-shadow: var(--shadow-xs);
 }
 
 .card-hover {
@@ -577,19 +782,62 @@ label > .field-control {
   50% { transform: translateY(-4px); }
 }
 
-[data-theme="dark"] .cyber-card {
-  background: #141418;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+.cyber-card {
+  background: var(--cyber-bg);
+  border: 1px solid var(--cyber-border);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-[data-theme="dark"] .cyber-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 30px var(--accent-glow), inset 0 0 30px rgba(96, 165, 250, 0.03);
+.cyber-card:hover {
+  box-shadow: 0 0 30px var(--accent-glow);
 }
 
-[data-theme="dark"] .cyber-card-hero {
-  background: #0e0e12;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.cyber-card-hero {
+  background: var(--cyber-bg-hero);
+  border: 1px solid var(--cyber-border);
+}
+
+/* 毛玻璃卡片 — 多色渐变背景 + 玻璃高光边缘 */
+.cyber-glass {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 18%, var(--cyber-bg)) 0%,
+    color-mix(in srgb, var(--info) 12%, var(--cyber-bg)) 40%,
+    color-mix(in srgb, var(--success) 8%, var(--cyber-bg)) 75%,
+    color-mix(in srgb, var(--warning) 6%, var(--cyber-bg)) 100%
+  );
+  overflow: hidden;
+}
+.cyber-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 8%, transparent) 0%,
+    color-mix(in srgb, var(--info) 5%, transparent) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+.cyber-glass::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 18%, transparent) 30%,
+    color-mix(in srgb, var(--info) 12%, transparent) 60%,
+    color-mix(in srgb, var(--warning) 10%, transparent) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
 .cyber-header {
@@ -597,7 +845,7 @@ label > .field-control {
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--cyber-header);
 }
 
 .cyber-header-bar {
@@ -609,11 +857,11 @@ label > .field-control {
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent);
+  background: linear-gradient(90deg, var(--cyber-header-bar), transparent);
 }
 
 .gradient-text-cyber {
-  background: linear-gradient(135deg, #fff 20%, var(--accent) 80%);
+  background: linear-gradient(135deg, var(--cyber-text-bright) 20%, var(--accent) 80%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -625,8 +873,8 @@ label > .field-control {
 
 .cyber-grid {
   background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    linear-gradient(var(--cyber-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyber-grid) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
@@ -635,10 +883,20 @@ label > .field-control {
     0deg,
     transparent,
     transparent 2px,
-    rgba(255,255,255,0.012) 2px,
-    rgba(255,255,255,0.012) 4px
+    var(--cyber-scanline) 2px,
+    var(--cyber-scanline) 4px
   );
 }
+
+/* Cyber text color helpers */
+.cyber-text-bright { color: var(--cyber-text-bright); }
+.cyber-text-primary { color: var(--cyber-text-primary); }
+.cyber-text-secondary { color: var(--cyber-text-secondary); }
+.cyber-text-tertiary { color: var(--cyber-text-tertiary); }
+.cyber-text-quaternary { color: var(--cyber-text-quaternary); }
+.cyber-text-icon { color: var(--cyber-text-icon); }
+.cyber-bg-hover { background-color: var(--cyber-bg-hover); }
+.cyber-border-divider { border-color: var(--cyber-border-divider); }
 
 /* 卡片顶部霓虹线 */
 .cyber-accent-bar {

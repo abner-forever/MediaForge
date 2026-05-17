@@ -3,6 +3,7 @@ import { useStore, THEME_PRESETS } from '../stores';
 import { settingsApi, type SettingsData, type WeiboLoginEvent } from '../api/client';
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
+import Slider from '../components/Slider';
 import EyeIcon from '../components/EyeIcon';
 import Loading from '../components/Loading';
 import { useLoading } from '../hooks/useLoading';
@@ -212,9 +213,12 @@ const PROVIDERS: Record<string, { name: string; models: string[]; baseUrl: strin
   deepseek: { name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'], baseUrl: 'https://api.deepseek.com/v1', keyName: 'DEEPSEEK_API_KEY', urlHint: 'DeepSeek API 地址，格式：https://api.deepseek.com/v1' },
   openai: { name: 'OpenAI', models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'], baseUrl: 'https://api.openai.com/v1', keyName: 'OPENAI_API_KEY', urlHint: 'OpenAI API 地址，格式：https://api.openai.com/v1' },
   glm: { name: '智谱 GLM', models: ['GLM-5.1', 'GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.7-Flash', 'GLM-4.6', 'GLM-4.5-Air', 'GLM-4-Long'], baseUrl: 'https://open.bigmodel.cn/api/paas/v4', keyName: 'GLM_API_KEY', urlHint: '智谱 API 地址，格式：https://open.bigmodel.cn/api/paas/v4' },
+  qwen: { name: '千问 Qwen', models: ['qwen3.6-max-preview', 'qwen3.5-max', 'qwen3.5-plus', 'qwen3.5-flash', 'qwen3-max-thinking', 'qwen3-max', 'qwen3-plus', 'qwen3-flash'], baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', keyName: 'QWEN_API_KEY', urlHint: '阿里云 DashScope 兼容地址，格式：https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  minimax: { name: 'MiniMax', models: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'], baseUrl: 'https://api.minimax.io/v1', keyName: 'MINIMAX_API_KEY', urlHint: 'MiniMax API 地址，格式：https://api.minimax.io/v1' },
 };
 
 function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+  const { addToast } = useStore();
   const { loading: saving, withLoading: withSave } = useLoading();
   const [provider, setProvider] = useState(data.ai_provider);
   const [model, setModel] = useState(data.ai_model);
@@ -222,16 +226,55 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [fullKey, setFullKey] = useState('');
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
   const current = PROVIDERS[provider];
 
-  function handleProviderChange(p: string) { setProvider(p); const c = PROVIDERS[p]; if (c) { setBaseUrl(c.baseUrl); setModel(c.models[0]); } setApiKey(''); setFullKey(''); }
+  function handleProviderChange(p: string) { setProvider(p); const c = PROVIDERS[p]; if (c) { setBaseUrl(c.baseUrl); setModel(c.models[0]); } setApiKey(''); setFullKey(''); setTestState('idle'); setTestMessage(''); }
+  async function testConnection() {
+    setTestState('testing');
+    setTestMessage('');
+    try {
+      const res = await settingsApi.testAiConnection({
+        provider, model, base_url: baseUrl,
+        ...(apiKey ? { api_key: apiKey } : {}),
+      });
+      setTestState(res.success ? 'success' : 'error');
+      setTestMessage(res.message);
+    } catch (err: any) {
+      setTestState('error');
+      setTestMessage(err.message || '测试失败');
+    }
+  }
+  function maskKey(key: string): string {
+    if (!key || key.length <= 8) return key;
+    return `${key.slice(0, 4)}...${key.slice(-4)}`;
+  }
   async function toggleKeyVisibility() {
     if (showKey) { setShowKey(false); return; }
     if (!fullKey) { try { setFullKey((await settingsApi.getKey(provider)).key); } catch {} }
     setShowKey(true);
   }
+  async function copyApiKey() {
+    const text = fullKey || apiKey;
+    if (text) {
+      await navigator.clipboard.writeText(text);
+      addToast('已复制', 'success');
+      return;
+    }
+    try {
+      const { key } = await settingsApi.getKey(provider);
+      if (key) {
+        await navigator.clipboard.writeText(key);
+        addToast('已复制', 'success');
+        setFullKey(key);
+      }
+    } catch { /* ignore */ }
+  }
   const currentKey = data.ai_api_keys?.[provider] || '';
-  const displayKey = showKey ? (fullKey || apiKey) : (apiKey || currentKey);
+  const displayValue = showKey
+    ? (fullKey || apiKey)
+    : (apiKey ? maskKey(apiKey) : maskKey(currentKey));
 
   return (
     <div className="card space-y-4">
@@ -242,17 +285,37 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
         <label className="col-span-2">Base URL<input type="text" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder={current?.urlHint} /></label>
         <label className="col-span-2">API Key
           <div className="relative">
-            <input type={showKey ? 'text' : 'password'} value={displayKey} onChange={e => { setApiKey(e.target.value); setFullKey(''); }} placeholder={currentKey ? '已设置（留空保持不变）' : `请输入 ${current?.keyName || 'API Key'}`} className="w-full pr-9" />
-            {currentKey && <button type="button" onClick={toggleKeyVisibility} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-secondary transition-colors"><EyeIcon visible={showKey} /></button>}
+            <input type="text" value={displayValue} onChange={e => { setApiKey(e.target.value); setFullKey(''); }} placeholder={`请输入 ${current?.keyName || 'API Key'}`} className="w-full pr-16" />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+              <button type="button" onClick={copyApiKey} className="p-1 text-text-muted hover:text-text-secondary transition-colors" title="复制">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+              <button type="button" onClick={toggleKeyVisibility} className="p-1 text-text-muted hover:text-text-secondary transition-colors" title={showKey ? '隐藏' : '显示'}>
+                <EyeIcon visible={showKey} />
+              </button>
+            </div>
           </div>
         </label>
       </div>
       <div className="bg-bg-secondary rounded-xl p-3">
         <p className="text-xs text-text-muted leading-relaxed">Base URL 请填写 OpenAI 兼容地址，以 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/v1</code> 结尾。系统自动拼接 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/chat/completions</code>。</p>
       </div>
-      <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); })} disabled={saving}>
-        {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); })} disabled={saving}>
+          {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}
+        </button>
+        <button className="btn btn-sm" onClick={testConnection} disabled={testState === 'testing'}>
+          {testState === 'testing' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 测试中</> : '测试连接'}
+        </button>
+        {testState !== 'idle' && (
+          <span className="text-xs" style={{ color: testState === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+            {testMessage}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -531,8 +594,20 @@ function WatermarkSection({ data, save }: { data: SettingsData; save: (u: Record
           <span className="toggle-track" />
           <span className="toggle-label">允许降级</span>
         </label>
-        <label><div className="flex items-center justify-between"><span>角标阈值</span><span className="text-xs font-mono text-accent tabular-nums">{cornerRatio.toFixed(2)}</span></div><input type="range" min={1.0} max={2.0} step={0.02} value={cornerRatio} onChange={e => setCornerRatio(+e.target.value)} /></label>
-        <label><div className="flex items-center justify-between"><span>底边阈值</span><span className="text-xs font-mono text-accent tabular-nums">{bottomRatio.toFixed(2)}</span></div><input type="range" min={1.0} max={2.0} step={0.02} value={bottomRatio} onChange={e => setBottomRatio(+e.target.value)} /></label>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-text-secondary">角标阈值</span>
+            <span className="text-xs font-mono text-accent tabular-nums">{cornerRatio.toFixed(2)}</span>
+          </div>
+          <Slider value={cornerRatio} onChange={setCornerRatio} min={1.0} max={2.0} step={0.02} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-text-secondary">底边阈值</span>
+            <span className="text-xs font-mono text-accent tabular-nums">{bottomRatio.toFixed(2)}</span>
+          </div>
+          <Slider value={bottomRatio} onChange={setBottomRatio} min={1.0} max={2.0} step={0.02} />
+        </div>
       </div>
       <button className="btn btn-primary" onClick={() => withSave(async () => save({ WATERMARK_FILTER: wmFilter ? 'true' : 'false', WATERMARK_STRICT_MODE: wmStrict ? 'true' : 'false', MIN_CLEAN_IMAGES: String(minClean), ALLOW_WATERMARK_FALLBACK: wmFallback ? 'true' : 'false', WATERMARK_CORNER_RATIO: String(cornerRatio), WATERMARK_BOTTOM_RATIO: String(bottomRatio) }))} disabled={saving}>
         {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存水印配置'}

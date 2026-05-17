@@ -13,6 +13,23 @@ export default function Lightbox() {
 
   useEffect(() => { document.addEventListener('keydown', handleKey); return () => document.removeEventListener('keydown', handleKey); }, [handleKey]);
 
+  /* ── 预加载相邻图片提升切换流畅度 ── */
+  useEffect(() => {
+    if (!lightbox) return;
+    const { images, index } = lightbox;
+    const preload = (idx: number) => {
+      if (idx < 0 || idx >= images.length) return;
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = images[idx];
+      document.head.appendChild(link);
+      setTimeout(() => link.remove(), 5000);
+    };
+    preload(index - 1);
+    preload(index + 1);
+  }, [lightbox]);
+
   if (!lightbox) return null;
   const { images, index } = lightbox;
   const url = images[index];
@@ -34,7 +51,7 @@ export default function Lightbox() {
             <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m15 18-6-6 6-6" /></svg>
           </button>
         )}
-        <img src={url} alt="" className="max-h-[82vh] max-w-full object-contain select-none rounded-lg shadow-2xl" draggable={false} />
+        <img src={url} alt="" className="max-h-[82vh] max-w-full object-contain select-none rounded-lg shadow-2xl" draggable={false} decoding="async" />
         {images.length > 1 && (
           <button onClick={() => lightboxNav(1)} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105 backdrop-blur">
             <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m9 18 6-6-6-6" /></svg>

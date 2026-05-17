@@ -94,10 +94,10 @@ export default function Dashboard() {
       <GlowOrb className="-top-32 -right-32 w-80 h-80" color="#ef4444" />
       <div className="relative py-20 text-center space-y-4">
         <div className="text-5xl mb-2 opacity-40">🔌</div>
-        <h2 className="text-lg font-bold text-white/70">无法连接后端服务</h2>
-        <p className="text-sm text-white/40 max-w-md mx-auto">
+        <h2 className="text-lg font-bold cyber-text-bright">无法连接后端服务</h2>
+        <p className="text-sm cyber-text-secondary max-w-md mx-auto">
           请确保已启动
-          <code className="mx-2 px-2.5 py-1 rounded-lg bg-white/[0.04] text-[var(--accent)] font-mono text-xs border border-white/[0.06]">
+          <code className="mx-2 px-2.5 py-1 rounded-lg cyber-bg-hover text-[var(--accent)] font-mono text-xs cyber-border-divider border">
             cd desktop && python main.py
           </code>
         </p>
@@ -130,7 +130,7 @@ export default function Dashboard() {
 
   const statCards = [
     { label: '本地图片', value: stats?.local_images ?? 0, path: '/materials', icon: '🖼️' },
-    { label: '待发布', value: stats?.queue_size ?? 0, path: '/queue', icon: '📤' },
+    { label: '发布队列', value: stats?.queue_size ?? 0, path: '/queue', icon: '📤' },
     { label: '已选图片', value: stats?.selected_count ?? 0, icon: '✅' },
     { label: '搜索结果', value: stats?.discovery_count ?? 0, icon: '🎯' },
   ];
@@ -155,14 +155,14 @@ export default function Dashboard() {
             <h1 className="text-[1.65rem] md:text-[2rem] font-bold tracking-tight leading-[1.15] gradient-text-cyber">
               {getGreeting()}，创作者
             </h1>
-            <p className="text-sm text-white/40 max-w-xl leading-relaxed">
+            <p className="text-sm cyber-text-secondary max-w-xl leading-relaxed">
               AI 驱动的图文创作工作流 —— 发现、评分、发布，一站式完成
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-5 border-t border-white/[0.05]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-5 cyber-border-divider border-t">
             {statusItems.map((item) => (
-              <span key={item.label} className="flex items-center gap-2 text-xs text-white/35">
+              <span key={item.label} className="flex items-center gap-2 text-xs cyber-text-tertiary">
                 <StatusDot ok={item.ok} />
                 {item.label}
               </span>
@@ -177,19 +177,19 @@ export default function Dashboard() {
           <div
             key={item.label}
             onClick={() => item.path && navigate(item.path)}
-            className="cyber-card group relative overflow-hidden rounded-xl p-6 md:p-7 text-center cursor-pointer"
+            className="cyber-card cyber-glass group relative overflow-hidden rounded-xl p-6 md:p-7 text-center cursor-pointer"
           >
             <div className="cyber-accent-bar" />
             <div className="cyber-orb w-32 h-32 -top-12 -right-12 opacity-0" style={{ background: 'radial-gradient(circle, var(--accent), transparent)' }} />
 
             <div className="relative z-10">
-              <div className="text-xl mb-2.5 text-white/20 group-hover:text-white/40 transition-all duration-300 group-hover:scale-110 group-hover:-rotate-3 inline-block">
+              <div className="text-xl mb-2.5 group-hover:scale-110 group-hover:-rotate-3 transition-all duration-300">
                 {item.icon}
               </div>
               <div className="text-2xl md:text-3xl font-bold tabular-nums tracking-tight leading-none mb-1.5 gradient-text-cyber">
                 {item.value}
               </div>
-              <div className="text-[11px] text-white/30 font-medium tracking-wider uppercase">
+              <div className="text-[11px] cyber-text-tertiary font-medium tracking-wider uppercase">
                 {item.label}
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function Dashboard() {
             <div
               key={a.path}
               onClick={() => navigate(a.path)}
-              className="cyber-card group relative overflow-hidden rounded-xl p-8 md:p-9 text-center cursor-pointer"
+              className="cyber-card cyber-glass group relative overflow-hidden rounded-xl p-8 md:p-9 text-center cursor-pointer"
             >
               <div className="cyber-accent-bar" />
               <div className="cyber-orb w-40 h-40 -top-16 -right-16 opacity-0" style={{ background: 'radial-gradient(circle, var(--accent), transparent)' }} />
@@ -217,10 +217,10 @@ export default function Dashboard() {
                 <div className="text-[2.5rem] mb-4 inline-block group-hover:scale-110 group-hover:-rotate-3 transition-all duration-500 ease-out">
                   {a.icon}
                 </div>
-                <div className="text-sm font-semibold text-white/65 group-hover:text-white transition-colors duration-300">
+                <div className="text-sm font-semibold cyber-text-primary group-hover:text-[color:var(--cyber-text-bright)] transition-colors duration-300">
                   {a.title}
                 </div>
-                <div className="text-xs text-white/25 mt-2 leading-relaxed group-hover:text-white/35 transition-colors duration-300">
+                <div className="text-xs cyber-text-tertiary mt-2 leading-relaxed group-hover:text-[color:var(--cyber-text-secondary)] transition-colors duration-300">
                   {a.desc}
                 </div>
               </div>
@@ -239,7 +239,7 @@ export default function Dashboard() {
             <button
               onClick={handleClearOps}
               disabled={deleting}
-              className="text-[11px] font-medium text-white/20 hover:text-white/40 tracking-widest uppercase transition-colors duration-200"
+              className="text-[11px] font-medium cyber-text-quaternary hover:text-[color:var(--cyber-text-secondary)] tracking-widest uppercase transition-colors duration-200"
             >
               清空记录
             </button>
@@ -252,8 +252,8 @@ export default function Dashboard() {
             <GlowOrb className="-top-32 -right-32 w-64 h-64" />
             <div className="relative space-y-2">
               <div className="text-3xl opacity-20">📋</div>
-              <div className="text-sm text-white/30 font-medium">暂无操作记录</div>
-              <div className="text-xs text-white/20">开始使用后，操作记录将展示在这里</div>
+              <div className="text-sm cyber-text-tertiary font-medium">暂无操作记录</div>
+              <div className="text-xs cyber-text-quaternary">开始使用后，操作记录将展示在这里</div>
             </div>
           </div>
         ) : (
@@ -263,20 +263,20 @@ export default function Dashboard() {
               {ops.map((op, i) => (
                 <div
                   key={i}
-                  className="group flex items-center gap-3 px-4 py-3.5 text-sm transition-all duration-200 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.03]"
+                  className="group flex items-center gap-3 px-4 py-3.5 text-sm transition-all duration-200 cyber-border-divider border-b last:border-0 hover:bg-[color:var(--cyber-bg-hover)]"
                 >
                   <span className="text-base shrink-0 opacity-50 group-hover:opacity-80 transition-opacity">
                     {ACTION_ICONS[op.action] || '📌'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <span className="text-white/45 truncate block group-hover:text-white/65 transition-colors duration-200">
+                    <span className="cyber-text-secondary truncate block group-hover:text-[color:var(--cyber-text-primary)] transition-colors duration-200">
                       {op.detail || op.action}
                     </span>
                   </div>
-                  <span className="text-xs text-white/20 shrink-0 tabular-nums">{timeAgo(op.time)}</span>
+                  <span className="text-xs cyber-text-quaternary shrink-0 tabular-nums">{timeAgo(op.time)}</span>
                   <button
                     onClick={() => handleDeleteOp(i)}
-                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/15 opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-400 transition-all duration-200"
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg cyber-text-quaternary opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-400 transition-all duration-200"
                     title="删除"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

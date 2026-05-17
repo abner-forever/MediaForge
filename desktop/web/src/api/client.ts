@@ -77,6 +77,11 @@ export interface QueueItem {
   publish_logs?: string[];
   status?: 'saved' | 'published';
   time?: string;
+  /** 文章类型队列项 */
+  type?: 'image' | 'article';
+  article_id?: string;
+  content?: string;
+  tags?: string[];
 }
 
 export interface MaterialsGroup {
@@ -215,6 +220,38 @@ export interface PlatformMeta {
   search_params_description: string;
 }
 
+/* ── 文章类型 ──────────────────────────────────── */
+
+export interface ArticleItem {
+  id: string;
+  title: string;
+  content: string;
+  summary: string;
+  cover: string;
+  images: string[];
+  tags: string[];
+  celebrity?: string;
+  source?: string;
+  ai_generated: boolean;
+  status: 'draft' | 'queued' | 'published';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InspirationTopic {
+  text: string;
+  source: string;
+  celebrity?: string;
+  screen_name?: string;
+}
+
+export interface CoverImage {
+  path: string;
+  name: string;
+  source: 'local' | 'web';
+  celebrity: string;
+}
+
 /* ── Platform API ─────────────────────────────── */
 
 export const platformApi = {
@@ -239,6 +276,8 @@ export const settingsApi = {
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
   getKey: (provider?: string) => get<{ key: string }>(`/api/settings/api-key${provider ? `?provider=${provider}` : ''}`),
   getTheme: () => get<{ theme: string; accent: string }>('/api/settings/theme'),
+  testAiConnection: (params: { provider?: string; model?: string; base_url?: string; api_key?: string }) =>
+    post<{ success: boolean; message: string }>('/api/settings/ai-test', params),
   verifyWeibo: (cookie?: string) => post<WeiboVerifyResult>('/api/settings/weibo-verify', { cookie }),
   clearWeibo: () => post<{ success: boolean }>('/api/settings/weibo-clear'),
   weiboLogin: (onEvent: (evt: WeiboLoginEvent) => void): Promise<void> => {
@@ -412,4 +451,55 @@ export const queueApi = {
   publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean }) =>
     post<{ success: boolean; message: string }>(`/api/queue/${index}/publish`, opts),
   enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
+};
+
+/* ── Article API ────────────────────────────────── */
+
+export interface ArticleListResponse {
+  articles: ArticleItem[];
+}
+
+export interface ArticleResponse {
+  article: ArticleItem;
+}
+
+export interface ArticleContentResponse {
+  success: boolean;
+  content?: string;
+  title?: string;
+}
+
+export interface InspirationResponse {
+  topics: InspirationTopic[];
+}
+
+export const articleApi = {
+  list: (status?: string) => {
+    const q = status ? `?status=${status}` : '';
+    return get<ArticleListResponse>(`/api/articles${q}`);
+  },
+  get: (id: string) => get<ArticleResponse>(`/api/articles/${id}`),
+  create: (data: Partial<ArticleItem>) =>
+    post<{ success: boolean; article: ArticleItem }>('/api/articles', data),
+  update: (id: string, data: Partial<ArticleItem>) =>
+    put<{ success: boolean; article: ArticleItem }>(`/api/articles/${id}`, data),
+  delete: (id: string) => del<{ success: boolean }>(`/api/articles/${id}`),
+  generate: (id: string, params: { topic?: string; title?: string }) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/generate`, params),
+  polish: (id: string) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/polish`),
+  deAi: (id: string) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/de-ai`),
+  generateTitle: (id: string) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/generate-title`),
+  publish: (id: string, opts: { save_draft?: boolean; dry_run?: boolean }) =>
+    post<{ success: boolean; message: string }>(`/api/articles/${id}/publish`, opts),
+  addToQueue: (id: string) =>
+    post<{ success: boolean; queue: QueueItem[] }>(`/api/articles/${id}/queue`),
+  inspiration: (keyword: string) =>
+    get<InspirationResponse>(`/api/articles/inspiration?keyword=${encodeURIComponent(keyword)}`),
+  coverSearch: (keyword: string) =>
+    get<{ images: CoverImage[] }>(`/api/articles/cover-search?keyword=${encodeURIComponent(keyword)}`),
+  coverDownload: (url: string) =>
+    post<{ success: boolean; path: string }>('/api/articles/cover-download', { url }),
 };

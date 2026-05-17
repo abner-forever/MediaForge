@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from config import DATA_DIR, QUEUE_CACHE_PATH
 from utils.file import read_json, write_json
 
 OPLOG_CACHE_PATH = DATA_DIR / "state" / "operations.json"
+ARTICLES_CACHE_PATH = DATA_DIR / "state" / "articles.json"
 
 
 class AppState:
@@ -23,6 +25,7 @@ class AppState:
         self.publish_logs: List[str] = []
         self.publish_active: bool = False
         self._operations: List[Dict[str, Any]] = self._load_operations()
+        self.articles: List[Dict[str, Any]] = self._load_articles()
 
     # ── 队列持久化 ─────────────────────────────────────
     @staticmethod
@@ -69,6 +72,67 @@ class AppState:
             self.publish_queue[index].update(updates)
             self._save_queue()
             return True
+        return False
+
+    # ── 文章管理 ──────────────────────────────────────
+    @staticmethod
+    def _load_articles() -> List[Dict[str, Any]]:
+        return read_json(ARTICLES_CACHE_PATH, default=[])
+
+    def _save_articles(self) -> None:
+        write_json(ARTICLES_CACHE_PATH, self.articles)
+
+    def get_articles(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        if status:
+            return [a for a in self.articles if a.get("status") == status]
+        return list(self.articles)
+
+    def get_article(self, article_id: str) -> Optional[Dict[str, Any]]:
+        for a in self.articles:
+            if a.get("id") == article_id:
+                return dict(a)
+        return None
+
+    def add_article(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        now = datetime.now().isoformat()
+        article = {
+            "id": str(uuid.uuid4()),
+            "title": data.get("title", ""),
+            "content": data.get("content", ""),
+            "summary": data.get("summary", ""),
+            "cover": data.get("cover", ""),
+            "images": list(data.get("images", [])),
+            "tags": list(data.get("tags", [])),
+            "celebrity": data.get("celebrity", ""),
+            "source": data.get("source", ""),
+            "ai_generated": data.get("ai_generated", False),
+            "status": data.get("status", "draft"),
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.articles.append(article)
+        self._save_articles()
+        return article
+
+    def update_article(self, article_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        for i, a in enumerate(self.articles):
+            if a.get("id") == article_id:
+                allowed = {"title", "content", "summary", "cover", "images",
+                           "tags", "celebrity", "source", "ai_generated", "status"}
+                for k, v in updates.items():
+                    if k in allowed:
+                        self.articles[i][k] = v
+                self.articles[i]["updated_at"] = datetime.now().isoformat()
+                self._save_articles()
+                return dict(self.articles[i])
+        return None
+
+    def delete_article(self, article_id: str) -> bool:
+        for i, a in enumerate(self.articles):
+            if a.get("id") == article_id:
+                self.articles.pop(i)
+                self._save_articles()
+                return True
         return False
 
     # ── 操作记录 ──────────────────────────────────────

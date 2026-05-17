@@ -6,6 +6,7 @@ import NumberInput from '../components/NumberInput';
 import SearchLoadingOverlay from '../components/SearchLoadingOverlay';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Loading from '../components/Loading';
+import Checkbox from '../components/Checkbox';
 import { useLoading } from '../hooks/useLoading';
 
 function fmtTime(raw?: string): string {
@@ -89,20 +90,23 @@ export default function Discovery() {
   const hasLocalAny = discoveryPosts.some((p) => p.local_images && p.local_images.length > 0);
 
   // All local images from filtered posts, sorted by score
-  const allLocalImages: { path: string; scoreInfo: { score: number; reason: string; method: string }; celebrity: string; scene: string; postIndex: number }[] = [];
-  filteredIndices.forEach((origIdx) => {
-    const p = discoveryPosts[origIdx];
-    (p.local_images || []).forEach((img) => {
-      const s = imageScores[img] || { score: 0, reason: '未评分', method: 'unknown' };
-      allLocalImages.push({ path: img, scoreInfo: s, celebrity: p.celebrity, scene: p.scene, postIndex: origIdx });
+  const allLocalImages = useMemo(() => {
+    const result: { path: string; scoreInfo: { score: number; reason: string; method: string }; celebrity: string; scene: string; postIndex: number }[] = [];
+    filteredIndices.forEach((origIdx) => {
+      const p = discoveryPosts[origIdx];
+      (p.local_images || []).forEach((img) => {
+        const s = imageScores[img] || { score: 0, reason: '未评分', method: 'unknown' };
+        result.push({ path: img, scoreInfo: s, celebrity: p.celebrity, scene: p.scene, postIndex: origIdx });
+      });
     });
-  });
-  allLocalImages.sort((a, b) => b.scoreInfo.score - a.scoreInfo.score);
+    result.sort((a, b) => b.scoreInfo.score - a.scoreInfo.score);
+    return result;
+  }, [filteredIndices, discoveryPosts, imageScores]);
 
   // Group gallery images by post
   const galleryGroups = useMemo(() => {
     const groups: { postIndex: number; celebrity: string; scene: string; images: typeof allLocalImages }[] = [];
-    const map = new Map<number, typeof allLocalImages>();
+    const map = new Map<number, (typeof allLocalImages)[number][]>();
     allLocalImages.forEach((item) => {
       const list = map.get(item.postIndex);
       if (list) list.push(item);
@@ -229,8 +233,8 @@ export default function Discovery() {
   async function enqueueSelected() {
     if (!selectedImages.length) { addToast('请先选择图片', 'error'); return; }
     await withEnqueuing(async () => {
-      setProgress({ current: 0, total: 0, detail: '正在加入队列...' });
-      try { const r = await queueApi.enqueueSelected(selectedImages); clearSelectedImages(); addToast(`已加入队列：《${r.title}》`, 'success'); }
+      setProgress({ current: 0, total: 0, detail: '正在加入发布队列...' });
+      try { const r = await queueApi.enqueueSelected(selectedImages); clearSelectedImages(); addToast(`已加入发布队列：《${r.title}》`, 'success'); }
       catch (err: any) { addToast(err.message, 'error'); }
       setProgress(null);
     });
@@ -273,13 +277,28 @@ export default function Discovery() {
           <label>最少图片<NumberInput value={minImages} onChange={setMinImages} min={0} max={20} /></label>
         </div>
         {platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed') && (
-          <label>明星列表<input type="text" value={celebs} onChange={e => setCelebs(e.target.value)} placeholder="迪丽热巴,杨幂（逗号分隔）" /></label>
+          <div>
+            <label>明星列表
+              <input type="text" value={celebs} onChange={e => setCelebs(e.target.value)} placeholder="迪丽热巴,杨幂（逗号分隔）" /></label>
+            <span className="text-xs text-text-muted">将与每个搜索标签组合，例如「迪丽热巴 写真」</span>
+          </div>
         )}
         {platform === 'weibo' && mode === 'super_topic' && (
           <label>超话列表<input type="text" value={superTopics} onChange={e => setSuperTopics(e.target.value)} placeholder="迪丽热巴超话,杨幂超话（逗号分隔）" /></label>
         )}
-        {platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed' || mode === 'keyword') && (
-          <label>搜索标签<input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="写真,街拍,活动（逗号分隔）" /></label>
+        {platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed') && (
+          <div>
+            <label>搜索标签
+              <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="写真,街拍,活动（逗号分隔）" /></label>
+            <span className="text-xs text-text-muted">与明星名组合搜索</span>
+          </div>
+        )}
+        {platform === 'weibo' && mode === 'keyword' && (
+          <div>
+            <label>搜索标签
+              <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="写真,街拍,活动（逗号分隔）" /></label>
+            <span className="text-xs text-text-muted">仅按标签搜索，不涉及明星名称</span>
+          </div>
         )}
         {platform === 'toutiao' && mode === 'keyword' && (
           <label>搜索关键词<input type="text" value={toutiaoKeywords} onChange={e => setToutiaoKeywords(e.target.value)} placeholder="时尚,明星,穿搭（逗号分隔）" /></label>
@@ -349,7 +368,7 @@ export default function Discovery() {
                     return (
                       <div key={origIdx} className={`rounded-xl p-4 border transition-all ${isChecked ? 'bg-accent-soft border-accent' : 'bg-bg-card border-border hover:border-accent/30'}`}>
                         <div className="flex items-center gap-2 mb-3">
-                          <input type="checkbox" checked={isChecked} onChange={() => togglePostSelect(origIdx)} className="w-4 h-4 accent-accent cursor-pointer rounded" />
+                          <Checkbox checked={isChecked} onChange={() => togglePostSelect(origIdx)} />
                           <span className="text-sm font-semibold text-text">{p.celebrity}</span>
                           {p.screen_name && (
                             p.screen_name === p.celebrity
@@ -432,7 +451,7 @@ export default function Discovery() {
                             </div>
                             <div className="px-2.5 py-2 flex items-center justify-between">
                               <span className="text-[10px] text-text-muted truncate max-w-[110px]">{s.reason}</span>
-                              <input type="checkbox" checked={isSel} onChange={() => toggleImageSelect(item.path)} className="w-3.5 h-3.5 accent-accent rounded" />
+                              <Checkbox checked={isSel} onChange={() => toggleImageSelect(item.path)} />
                             </div>
                           </div>
                         );
@@ -460,7 +479,7 @@ export default function Discovery() {
       {searching && <SearchLoadingOverlay message={searchMessage} platformName={activePlatform?.name} onCancel={cancelSearch} />}
 
       <ConfirmDialog open={removeConfirmIndex !== null} title="删除帖子" message={`确认删除第 ${removeConfirmIndex !== null ? removeConfirmIndex + 1 : ''} 条帖子？`} confirmText="删除" danger onConfirm={() => { if (removeConfirmIndex !== null) removePost(removeConfirmIndex); setRemoveConfirmIndex(null); }} onCancel={() => setRemoveConfirmIndex(null)} />
-      <ConfirmDialog open={clearConfirm} title="清除搜索结果" message="确认清除所有搜索结果？" confirmText="清除" danger onConfirm={() => { setClearConfirm(false); clearDiscovery(); }} onCancel={() => setClearConfirm(false)} />
+      <ConfirmDialog open={clearConfirm} title="清除搜索结果" message="确认清除所有搜索结果？" confirmText="清除" danger noLoading onConfirm={() => { setClearConfirm(false); clearDiscovery(); }} onCancel={() => setClearConfirm(false)} />
     </div>
   );
 }
