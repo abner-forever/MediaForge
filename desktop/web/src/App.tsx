@@ -1,26 +1,48 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Discovery from './pages/Discovery';
-import Queue from './pages/Queue';
-import Materials from './pages/Materials';
-import Settings from './pages/Settings';
-import ArticlePublish from './pages/ArticlePublish';
+import Loading from './components/Loading';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Discovery = lazy(() => import('./pages/Discovery'));
+const Queue = lazy(() => import('./pages/Queue'));
+const Materials = lazy(() => import('./pages/Materials'));
+const Settings = lazy(() => import('./pages/Settings'));
+const ArticlePublish = lazy(() => import('./pages/ArticlePublish'));
 
 export default function App() {
-  console.log('App build test 1.0');
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/discovery" element={<Discovery />} />
-          <Route path="/articles" element={<ArticlePublish />} />
-          <Route path="/queue" element={<Queue />} />
-          <Route path="/materials" element={<Materials />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/" element={
+            <Suspense fallback={<PageLoading />}><Dashboard /></Suspense>
+          } />
+          <Route path="/discovery" element={
+            <Suspense fallback={<PageLoading />}><Discovery /></Suspense>
+          } />
+          <Route path="/articles" element={
+            <Suspense fallback={<PageLoading />}><ArticlePublish /></Suspense>
+          } />
+          <Route path="/queue" element={
+            <Suspense fallback={<PageLoading />}><Queue /></Suspense>
+          } />
+          <Route path="/materials" element={
+            <Suspense fallback={<PageLoading />}><Materials /></Suspense>
+          } />
+          <Route path="/settings" element={
+            <Suspense fallback={<PageLoading />}><Settings /></Suspense>
+          } />
         </Route>
       </Routes>
     </BrowserRouter>
+  );
+}
+
+function PageLoading() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <Loading />
+    </div>
   );
 }

@@ -168,11 +168,26 @@ class TestBuildHtml:
     def test_with_images(self):
         html = build_html("描述文字", ["img1.jpg", "img2.jpg"])
         assert "描述文字" in html
-        assert "img1.jpg" in html
-        assert "img2.jpg" in html
         assert "<section" in html
+        # 图片由 wechat.py 通过文件上传处理，不再内嵌到 HTML 中
+        assert "img1.jpg" not in html
 
     def test_empty_images(self):
         html = build_html("只有文字", [])
         assert "只有文字" in html
         assert "<img" not in html
+
+    def test_paragraphs(self):
+        html = build_html("第一段\n\n第二段", [])
+        assert "<p" in html
+        # 两段分别包裹在 p 标签中，段落间有 margin 间距
+        assert html.count("<p") == 2
+        assert "第一段" in html
+        assert "第二段" in html
+        assert "margin" in html
+
+    def test_line_breaks(self):
+        html = build_html("第一行\n第二行", [])
+        assert "第一行" in html
+        assert "第二行" in html
+        assert "<br>" in html or "<br/>" in html

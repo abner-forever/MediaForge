@@ -197,12 +197,22 @@ def select_cover(images: List[str]) -> str:
 
 
 def build_html(desc: str, images: List[str]) -> str:
-    """HTML 排版：简洁的公众号图文格式。"""
-    body = [
-        '<section style="padding:16px;">',
-        f'<p style="font-size:16px;line-height:1.8;">{desc}</p>',
-    ]
-    for img in images:
-        body.append(f'<p><img src="{img}" style="width:100%;border-radius:8px;" /></p>')
-    body.append("</section>")
-    return "\n".join(body)
+    """HTML 排版：简洁的公众号图文格式，保留段落换行。
+
+    图片由发布流程通过文件上传单独插入正文（wechat.py），
+    不在 HTML 中嵌入 <img> 标签，否则本地路径图片在微信编辑器中无法显示，
+    且封面无法从正文选择。
+    """
+    import re
+
+    body = ['<section style="padding:16px;">']
+
+    # 按空行分割段落，保留格式
+    for para in re.split(r'\n\s*\n', desc.strip()):
+        lines = para.strip().split('\n')
+        text = '<br>'.join(line for line in lines if line.strip())
+        if text:
+            body.append(f'<p style="font-size:16px;line-height:1.8;margin:0 0 1em 0;">{text}</p>')
+
+    body.append('</section>')
+    return '\n'.join(body)

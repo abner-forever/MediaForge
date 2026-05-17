@@ -225,6 +225,23 @@ def _call_ai(prompt: str, fallback: str) -> str:
     return fallback
 
 
+ARTICLE_CHAT_TEMPLATE = """你是一名公众号文章写作助手。请根据用户的要求对文章进行处理。
+
+当前文章内容：
+{content}
+
+用户要求：{instruction}
+
+请直接输出处理后的文章内容，不要额外说明。如果用户要求生成新文章，请直接输出正文。
+"""
+
+
+def chat_article(content: str, instruction: str) -> str:
+    """根据用户指令修改或生成文章正文。"""
+    prompt = ARTICLE_CHAT_TEMPLATE.format(content=content[:2000] or "(空)", instruction=instruction)
+    return _call_ai(prompt, instruction)
+
+
 def generate_article(topic: str, title: str = "") -> str:
     """根据话题和标题生成公众号文章正文。"""
     prompt = ARTICLE_GENERATE_TEMPLATE.format(topic=topic, title=title or topic)

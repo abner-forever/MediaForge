@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../stores';
 import { articleApi, queueApi } from '../api/client';
@@ -6,13 +6,41 @@ import type { ArticleItem, InspirationTopic, CoverImage } from '../api/client';
 import Loading from '../components/Loading';
 import ConfirmDialog from '../components/ConfirmDialog';
 
+/* ── Types ──────────────────────────────────── */
 type TabKey = 'all' | 'draft' | 'queued' | 'published';
 const TAB_LABELS: Record<TabKey, string> = { all: '全部', draft: '草稿', queued: '已排队', published: '已发布' };
-const STATUS_LABELS: Record<string, { text: string; cls: string }> = {
-  draft: { text: '草稿', cls: 'tag' },
-  queued: { text: '已排队', cls: 'tag-accent' },
-  published: { text: '已发布', cls: 'tag' },
+const STATUS_LABELS: Record<string, { text: string }> = {
+  draft: { text: '草稿' },
+  queued: { text: '已排队' },
+  published: { text: '已发布' },
 };
+
+/* ── Sub-components ─────────────────────────── */
+
+function FilterTab({ children, active, onClick }: { children: React.ReactNode; active?: boolean; onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        fontSize: 12, fontWeight: active ? 500 : 400, lineHeight: 1.4,
+        letterSpacing: '0.02em',
+        borderRadius: 9999,
+        border: active ? '1px solid var(--accent)' : '1px solid transparent',
+        background: active ? 'var(--accent-soft)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text-muted)',
+        cursor: 'pointer',
+        padding: '3px 10px',
+        transition: 'all 0.15s',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-muted)'; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ── Main Component ─────────────────────────── */
 
 export default function ArticlePublish() {
   const navigate = useNavigate();
@@ -37,18 +65,28 @@ export default function ArticlePublish() {
   const [queueLoading, setQueueLoading] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
 
-  /* ── 确认对话框 ─────────────────────────────── */
+  /* ── 对话输入 ────────────────────────────────── */
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  /* ── UI 状态 ────────────────────────────────── */
   const [confirm, setConfirm] = useState<{ msg: string; onOk: () => void } | null>(null);
-
-  /* ── 灵感关键词 ────────────────────────────── */
   const [inspirationKeyword, setInspirationKeyword] = useState('');
-
-  /* ── 封面搜索 ────────────────────────────────── */
+  const [inspirationExpanded, setInspirationExpanded] = useState(false);
+  const [articleListExpanded, setArticleListExpanded] = useState(true);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
   const [coverKeyword, setCoverKeyword] = useState('');
   const [coverResults, setCoverResults] = useState<CoverImage[]>([]);
   const [coverSearchLoading, setCoverSearchLoading] = useState(false);
   const [coverDownloading, setCoverDownloading] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
+
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = Math.max(el.scrollHeight, 480) + 'px';
+  };
 
   /* ── 加载文章列表 ───────────────────────────── */
   const loadArticles = useCallback(async (filter?: TabKey) => {
@@ -59,118 +97,71 @@ export default function ArticlePublish() {
       setArticles(res.articles);
     } catch (e: any) {
       addToast(e.message || '加载文章失败', 'error');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [addToast, setArticles]);
 
-  useEffect(() => {
-    loadArticles(articleFilter);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadArticles(articleFilter); }, []); // eslint-disable-line
 
-  /* ── 选择文章到编辑器 ──────────────────────────── */
+  useEffect(() => {
+    if (contentRef.current) autoResize(contentRef.current);
+  }, [content]);
+
   const selectArticle = (a: ArticleItem) => {
-    setEditingId(a.id);
-    setTitle(a.title);
-    setContent(a.content);
-    setCover(a.cover || '');
-    setSource(a.source || '');
-    setTagsText(a.tags?.join(', ') || '');
-    setCurrentArticle(a);
+    setEditingId(a.id); setTitle(a.title); setContent(a.content);
+    setCover(a.cover || ''); setSource(a.source || '');
+    setTagsText(a.tags?.join(', ') || ''); setCurrentArticle(a);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  /* ── 重置编辑器 ──────────────────────────────── */
   const resetEditor = () => {
-    setEditingId(null);
-    setTitle('');
-    setContent('');
-    setCover('');
-    setSource('');
-    setTagsText('');
-    setCurrentArticle(null);
-    setShowCoverSearch(false);
-    setCoverResults([]);
+    setEditingId(null); setTitle(''); setContent(''); setCover('');
+    setSource(''); setTagsText(''); setCurrentArticle(null);
+    setShowCoverSearch(false); setCoverResults([]);
+    setInspirationExpanded(false);
   };
 
-  /* ── 搜索灵感 ────────────────────────────────── */
   const doInspiration = async () => {
     if (!inspirationKeyword.trim()) return;
     try {
       setInspirationLoading(true);
       const res = await articleApi.inspiration(inspirationKeyword.trim());
       setInspirationResults(res.topics);
-      if (res.topics.length === 0) {
-        addToast('未找到相关话题，换个关键词试试', 'info');
-      }
-    } catch (e: any) {
-      addToast(e.message || '搜索灵感失败', 'error');
-    } finally {
-      setInspirationLoading(false);
-    }
+      if (res.topics.length === 0) addToast('未找到相关话题，换个关键词试试', 'info');
+    } catch (e: any) { addToast(e.message || '搜索灵感失败', 'error');
+    } finally { setInspirationLoading(false); }
   };
 
-  /* ── 点击灵感话题填入标题 ──────────────────── */
   const pickInspiration = (topic: InspirationTopic) => {
-    setTitle(topic.text.slice(0, 64));
-    setSource(topic.text);
-    setInspirationResults([]);
-    setInspirationKeyword('');
+    setTitle(topic.text.slice(0, 128)); setSource(topic.text);
+    setInspirationResults([]); setInspirationKeyword('');
   };
 
-  /* ── 封面图片 URL（本地路径 / 代理远程） ─────── */
   const coverImageUrl = (path: string, source?: string) => {
-    if (source === 'web' || path.startsWith('http')) {
-      return `/proxy?url=${encodeURIComponent(path)}`;
-    }
-    if (!path.startsWith('/')) {
-      return `/images/${encodeURIComponent(path).replace(/%2F/g, '/')}`;
-    }
+    if (source === 'web' || path.startsWith('http')) return `/proxy?url=${encodeURIComponent(path)}`;
+    if (!path.startsWith('/')) return `/images/${encodeURIComponent(path).replace(/%2F/g, '/')}`;
     return `/images/${path}`;
   };
 
-  /* ── 搜索配图 ────────────────────────────────── */
   const doCoverSearch = async (kw: string) => {
-    if (!kw.trim()) {
-      addToast('请输入关键词', 'info');
-      return;
-    }
+    if (!kw.trim()) { addToast('请输入关键词', 'info'); return; }
     try {
       setCoverSearchLoading(true);
       const res = await articleApi.coverSearch(kw.trim());
       setCoverResults(res.images);
-      if (res.images.length === 0) {
-        addToast('未找到相关配图', 'info');
-      }
-    } catch (e: any) {
-      addToast(e.message || '搜索配图失败', 'error');
-    } finally {
-      setCoverSearchLoading(false);
-    }
+      if (res.images.length === 0) addToast('未找到相关配图', 'info');
+    } catch (e: any) { addToast(e.message || '搜索配图失败', 'error');
+    } finally { setCoverSearchLoading(false); }
   };
 
-  /* ── 选择配图为封面 ──────────────────────────── */
   const selectCoverImage = async (img: CoverImage) => {
-    if (img.source === 'local') {
-      setCover(img.path);
-      setShowCoverSearch(false);
-      return;
-    }
-    // 网络图片需要先下载
+    if (img.source === 'local') { setCover(img.path); setShowCoverSearch(false); setCoverLoading(true); return; }
     try {
       setCoverDownloading(true);
       addToast('正在下载封面图片…', 'info');
       const res = await articleApi.coverDownload(img.path);
-      if (res.success && res.path) {
-        setCover(res.path);
-        setShowCoverSearch(false);
-        addToast('封面已设置', 'success');
-      }
-    } catch (e: any) {
-      addToast(e.message || '下载封面失败', 'error');
-    } finally {
-      setCoverDownloading(false);
-    }
+      if (res.success && res.path) { setCover(res.path); setShowCoverSearch(false); setCoverLoading(true); addToast('封面已设置', 'success'); }
+    } catch (e: any) { addToast(e.message || '下载封面失败', 'error');
+    } finally { setCoverDownloading(false); }
   };
 
   const doSave = async () => {
@@ -178,28 +169,15 @@ export default function ArticlePublish() {
       setSaveLoading(true);
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
       const data = { title, content, cover, source, tags, status: 'draft' as const };
-      if (editingId) {
-        await articleApi.update(editingId, data);
-        addToast('文章已更新', 'success');
-      } else {
-        await articleApi.create(data);
-        addToast('草稿已保存', 'success');
-        resetEditor();
-      }
+      if (editingId) { await articleApi.update(editingId, data); addToast('文章已更新', 'success'); }
+      else { await articleApi.create(data); addToast('草稿已保存', 'success'); resetEditor(); }
       loadArticles(articleFilter);
-    } catch (e: any) {
-      addToast(e.message || '保存失败', 'error');
-    } finally {
-      setSaveLoading(false);
-    }
+    } catch (e: any) { addToast(e.message || '保存失败', 'error');
+    } finally { setSaveLoading(false); }
   };
 
-  /* ── 加入队列 ────────────────────────────────── */
   const doQueue = async () => {
-    if (!editingId) {
-      addToast('请先保存草稿再加入队列', 'info');
-      return;
-    }
+    if (!editingId) { addToast('请先保存草稿再加入队列', 'info'); return; }
     try {
       setQueueLoading(true);
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
@@ -207,19 +185,12 @@ export default function ArticlePublish() {
       await articleApi.addToQueue(editingId);
       addToast('已加入发布队列', 'success');
       loadArticles(articleFilter);
-    } catch (e: any) {
-      addToast(e.message || '加入队列失败', 'error');
-    } finally {
-      setQueueLoading(false);
-    }
+    } catch (e: any) { addToast(e.message || '加入队列失败', 'error');
+    } finally { setQueueLoading(false); }
   };
 
-  /* ── 发布到公众号 ────────────────────────────── */
   const doPublish = async (saveDraft: boolean) => {
-    if (!editingId) {
-      addToast('请先保存草稿再发布', 'info');
-      return;
-    }
+    if (!editingId) { addToast('请先保存草稿再发布', 'info'); return; }
     try {
       setPublishLoading(true);
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
@@ -227,501 +198,545 @@ export default function ArticlePublish() {
       const res = await articleApi.publish(editingId, { save_draft: saveDraft });
       addToast(res.message || (saveDraft ? '已保存为草稿' : '发布成功'), 'success');
       loadArticles(articleFilter);
-    } catch (e: any) {
-      addToast(e.message || '发布失败', 'error');
-    } finally {
-      setPublishLoading(false);
-    }
+    } catch (e: any) { addToast(e.message || '发布失败', 'error');
+    } finally { setPublishLoading(false); }
   };
 
-  /* ── 删除文章 ────────────────────────────────── */
   const doDelete = (id: string) => {
     setConfirm({
       msg: '确定删除此文章？',
       onOk: async () => {
-        try {
-          await articleApi.delete(id);
-          addToast('已删除', 'success');
-          if (editingId === id) resetEditor();
-          loadArticles(articleFilter);
-        } catch (e: any) {
-          addToast(e.message || '删除失败', 'error');
-        }
+        try { await articleApi.delete(id); addToast('已删除', 'success'); if (editingId === id) resetEditor(); loadArticles(articleFilter); }
+        catch (e: any) { addToast(e.message || '删除失败', 'error'); }
       },
     });
   };
 
-  /* ── 确保文章已保存，未保存时自动创建 ──────────── */
   const ensureArticleSaved = async (): Promise<string | null> => {
     if (editingId) return editingId;
-    if (!title && !content) {
-      addToast('请先输入标题或正文', 'info');
-      return null;
-    }
+    if (!title && !content) { addToast('请先输入标题或正文', 'info'); return null; }
     try {
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
       const res = await articleApi.create({ title, content, cover, source, tags, status: 'draft' });
-      setEditingId(res.article.id);
-      setCurrentArticle(res.article);
-      loadArticles(articleFilter);
-      return res.article.id;
-    } catch (e: any) {
-      addToast(e.message || '自动保存失败', 'error');
-      return null;
-    }
+      setEditingId(res.article.id); setCurrentArticle(res.article);
+      loadArticles(articleFilter); return res.article.id;
+    } catch (e: any) { addToast(e.message || '自动保存失败', 'error'); return null; }
   };
 
-  /* ── AI 生成 ──────────────────────────────────── */
   const doGenerate = async () => {
-    if (!title && !source) {
-      addToast('请输入标题或灵感来源', 'info');
-      return;
-    }
+    if (!title && !source) { addToast('请输入标题或灵感来源', 'info'); return; }
     try {
       setGenLoading(true);
-      const id = await ensureArticleSaved();
-      if (!id) return;
+      const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.generate(id, { topic: source || title, title });
-      if (res.content) {
-        setContent(res.content);
-        addToast('AI 生成完成', 'success');
-      }
-    } catch (e: any) {
-      addToast(e.message || 'AI 生成失败', 'error');
-    } finally {
-      setGenLoading(false);
-    }
+      if (res.content) { setContent(res.content); addToast('AI 生成完成', 'success'); }
+    } catch (e: any) { addToast(e.message || 'AI 生成失败', 'error');
+    } finally { setGenLoading(false); }
   };
 
-  /* ── AI 校对 ──────────────────────────────────── */
   const doPolish = async () => {
     if (!content) { addToast('请先输入正文', 'info'); return; }
     try {
       setPolishLoading(true);
-      const id = await ensureArticleSaved();
-      if (!id) return;
+      const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.polish(id);
-      if (res.content) {
-        setContent(res.content);
-        addToast('校对完成', 'success');
-      }
-    } catch (e: any) {
-      addToast(e.message || '校对失败', 'error');
-    } finally {
-      setPolishLoading(false);
-    }
+      if (res.content) { setContent(res.content); addToast('校对完成', 'success'); }
+    } catch (e: any) { addToast(e.message || '校对失败', 'error');
+    } finally { setPolishLoading(false); }
   };
 
-  /* ── 去 AI 味儿 ──────────────────────────────── */
   const doDeAi = async () => {
     if (!content) { addToast('请先输入正文', 'info'); return; }
     try {
       setDeAiLoading(true);
-      const id = await ensureArticleSaved();
-      if (!id) return;
+      const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.deAi(id);
-      if (res.content) {
-        setContent(res.content);
-        addToast('去 AI 味儿完成', 'success');
-      }
-    } catch (e: any) {
-      addToast(e.message || '处理失败', 'error');
-    } finally {
-      setDeAiLoading(false);
-    }
+      if (res.content) { setContent(res.content); addToast('去 AI 味儿完成', 'success'); }
+    } catch (e: any) { addToast(e.message || '处理失败', 'error');
+    } finally { setDeAiLoading(false); }
   };
 
-  /* ── AI 生成标题 ──────────────────────────────── */
   const doGenerateTitle = async () => {
     if (!content) { addToast('请先输入正文', 'info'); return; }
     try {
       setTitleLoading(true);
-      const id = await ensureArticleSaved();
-      if (!id) return;
+      const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.generateTitle(id);
-      if (res.title) {
-        setTitle(res.title);
-        addToast('标题已生成', 'success');
-      }
-    } catch (e: any) {
-      addToast(e.message || '生成标题失败', 'error');
-    } finally {
-      setTitleLoading(false);
-    }
+      if (res.title) { setTitle(res.title); addToast('标题已生成', 'success'); }
+    } catch (e: any) { addToast(e.message || '生成标题失败', 'error');
+    } finally { setTitleLoading(false); }
   };
 
-  /* ── 切换筛选 ────────────────────────────────── */
-  const switchFilter = (tab: TabKey) => {
-    setArticleFilter(tab);
-    loadArticles(tab);
+  const doChat = async () => {
+    const instruction = chatInput.trim();
+    if (!instruction) return;
+    try {
+      setChatLoading(true);
+      setChatInput('');
+      const id = await ensureArticleSaved();
+      if (!id) { setChatLoading(false); return; }
+      const res = await articleApi.chat(id, instruction);
+      if (res.content) { setContent(res.content); addToast('处理完成', 'success'); }
+    } catch (e: any) { addToast(e.message || '处理失败', 'error');
+    } finally { setChatLoading(false); }
   };
 
-  /* ── 格式化时间 ──────────────────────────────── */
+  const switchFilter = (tab: TabKey) => { setArticleFilter(tab); loadArticles(tab); };
+
   const fmtTime = (iso: string) => {
     if (!iso) return '';
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  /* ── Render ──────────────────────────────────── */
-  const hasContent = articles.length > 0 || inspirationResults.length > 0;
-
+  /* ── Render ────────────────────────────────── */
   return (
-    <div className="space-y-6">
-      {/* 标题 */}
-      <div className="section-header">
-        <div>
-          <h1 className="text-xl font-bold">文章发布</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">AI 辅助创作，发布文章到公众号</p>
-        </div>
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.3px', color: 'var(--text)', margin: 0 }}>
+          新建文章
+        </h1>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* ── 左栏：灵感 + 编辑器 ───────────────── */}
-        <div className="xl:col-span-2 space-y-6">
+      {/* 70/30 Grid */}
+      <div className="grid grid-cols-1 gap-6" style={{
+        gridTemplateColumns: `1fr ${articleListExpanded ? '320px' : '0px'}`,
+        transition: 'grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}>
 
-          {/* 灵感探索 */}
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">灵感探索</h2>
-              <span className="text-[11px] text-[var(--text-muted)]">从平台搜索热门话题</span>
-            </div>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] transition-colors"
-                placeholder="输入话题关键词，如「时尚」「科技」「旅行」…"
-                value={inspirationKeyword}
-                onChange={(e) => setInspirationKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && doInspiration()}
-              />
-              <button className="btn btn-primary btn-sm" onClick={doInspiration} disabled={inspirationLoading}>
-                {inspirationLoading ? <Loading size="sm" /> : '搜索灵感'}
-              </button>
-            </div>
-            {inspirationResults.length > 0 && (
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {inspirationResults.map((t, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--bg-secondary)] transition-colors group"
-                    onClick={() => pickInspiration(t)}
-                  >
-                    <span className="text-xs text-[var(--text-muted)] mt-0.5 shrink-0">
-                      {t.source === 'weibo' ? 'WB' : 'TT'}
-                    </span>
-                    <span className="text-sm text-[var(--text)] group-hover:text-[var(--accent)] line-clamp-2">{t.text}</span>
-                    {t.celebrity && <span className="text-xs text-[var(--text-muted)] shrink-0 mt-0.5">{t.celebrity}</span>}
-                  </div>
-                ))}
+        {/* ── 左栏：编辑器 ─────────────────────── */}
+        <div>
+          <div style={{ paddingBottom: 40 }}>
+            {/* 新建按钮 */}
+            {editingId && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <button onClick={resetEditor} style={{
+                  fontSize: 12, fontWeight: 500, color: 'var(--text-muted)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6,
+                  transition: 'background 0.15s',
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-softer)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  ＋ 新建文章
+                </button>
               </div>
             )}
-            {!inspirationLoading && inspirationResults.length === 0 && inspirationKeyword && (
-              <p className="text-xs text-[var(--text-muted)]">未找到相关话题</p>
-            )}
-          </div>
 
-          {/* 文章编辑 */}
-          <div className="card p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">文章编辑</h2>
-              {editingId && (
-                <button className="btn-ghost btn-xs text-[var(--text-muted)]" onClick={resetEditor}>
-                  新建文章
-                </button>
+            {/* 灵感探索 — 内联折叠 */}
+            <div style={{ marginBottom: 12 }}>
+              <button
+                onClick={() => setInspirationExpanded(!inspirationExpanded)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 6,
+                  background: inspirationExpanded ? 'var(--accent-softer)' : 'transparent',
+                  border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 500, color: 'var(--text-muted)',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => { if (!inspirationExpanded) { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}}
+                onMouseLeave={(e) => { if (!inspirationExpanded) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                  style={{ transform: inspirationExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+                灵感探索
+                {!inspirationExpanded && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>搜索热点话题填入标题与来源</span>}
+              </button>
+              {inspirationExpanded && (
+                <div style={{ marginTop: 8, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      placeholder="输入话题关键词…"
+                      value={inspirationKeyword}
+                      onChange={(e) => setInspirationKeyword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && doInspiration()}
+                      style={{ flex: 1, padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)', fontFamily: 'inherit' }}
+                    />
+                    <button className="btn btn-sm" onClick={doInspiration} disabled={inspirationLoading}>
+                      {inspirationLoading ? <Loading size="sm" /> : '搜索'}
+                    </button>
+                  </div>
+                  {inspirationResults.length > 0 && (
+                    <div style={{ marginTop: 8, maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {inspirationResults.map((t, i) => (
+                        <div key={i} onClick={() => pickInspiration(t)} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 8,
+                          padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                          color: 'var(--text)', fontSize: 13, transition: 'background 0.15s',
+                        }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-softer)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, flexShrink: 0 }}>{t.source === 'weibo' ? 'WB' : 'TT'}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.text}</span>
+                          {t.celebrity && <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{t.celebrity}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!inspirationLoading && inspirationResults.length === 0 && inspirationKeyword && (
+                    <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>未找到相关话题</p>
+                  )}
+                </div>
               )}
             </div>
 
             {/* 标题 */}
-            <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">标题</label>
+            <div style={{ marginBottom: 16 }}>
               <input
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]"
-                placeholder="输入文章标题…"
-                maxLength={64}
+                placeholder="无标题"
+                maxLength={128}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: 26,
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                  letterSpacing: '-0.01em',
+                  color: 'var(--text)',
+                  padding: 0,
+                  fontFamily: 'inherit',
+                }}
               />
             </div>
 
-            {/* 元信息行 */}
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[280px]">
-                <label className="text-xs text-[var(--text-secondary)] mb-1 block">
-                  封面图片
-                  {cover && <span className="text-[var(--text-muted)] ml-1">（已选择）</span>}
-                </label>
-                <div className="flex gap-3 items-start">
-                  {cover && (
-                    <div
-                      className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--bg-inset)] cursor-pointer group relative"
-                      onClick={() => openLightbox([coverImageUrl(cover)], 0)}
-                      title="点击查看大图"
+            {/* 封面 — 折叠式 */}
+            <div style={{ marginBottom: 16 }}>
+              {cover ? (
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <img
+                    key={cover}
+                    src={coverImageUrl(cover)}
+                    style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', display: coverLoading ? 'none' : 'block' }}
+                    onClick={() => openLightbox([coverImageUrl(cover)], 0)}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; setCoverLoading(false); }}
+                    onLoad={() => setCoverLoading(false)}
+                  />
+                  {coverLoading && (
+                    <div style={{ width: '100%', height: 160, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <Loading size="sm" />
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>正在加载封面…</span>
+                    </div>
+                  )}
+                  <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={() => setShowCoverSearch(true)}
+                      className="btn btn-sm"
+                      style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
                     >
-                      <img
-                        src={coverImageUrl(cover)}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                      更换
+                    </button>
+                    <button
+                      onClick={() => { setCover(''); setShowCoverSearch(false); }}
+                      className="btn btn-sm"
+                      style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
+                    >
+                      移除
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowCoverSearch(true);
+                    const kw = coverKeyword || title || source || '';
+                    setCoverKeyword(kw);
+                    if (kw.trim()) doCoverSearch(kw);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 6,
+                    background: 'transparent', border: '1px dashed var(--border)',
+                    cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  添加封面
+                </button>
+              )}
+
+              {showCoverSearch && (
+                <div style={{ marginTop: 12, padding: 16, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <input
+                      placeholder="输入关键词搜索配图…"
+                      value={coverKeyword}
+                      onChange={(e) => setCoverKeyword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && doCoverSearch(coverKeyword)}
+                      autoFocus
+                      style={{ flex: 1, fontSize: 13, padding: '6px 10px' }}
+                    />
+                    <button className="btn btn-sm" onClick={() => doCoverSearch(coverKeyword)} disabled={coverSearchLoading}>
+                      {coverSearchLoading ? <Loading size="sm" /> : '搜索'}
+                    </button>
+                  </div>
+                  {coverSearchLoading && (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+                        <Loading size="sm" /><span>正在搜索配图…</span>
                       </div>
                     </div>
                   )}
-                  <div className="flex-1 space-y-2 min-w-0">
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] min-w-0"
-                        placeholder="图片路径，或搜索配图…"
-                        value={cover}
-                        onChange={(e) => setCover(e.target.value)}
-                      />
-                      <button
-                        className="btn btn-sm shrink-0"
-                        onClick={() => {
-                          const kw = coverKeyword || title || source || '';
-                          setCoverKeyword(kw);
-                          setShowCoverSearch(!showCoverSearch);
-                          if (!showCoverSearch) {
-                            (kw.trim() ? doCoverSearch(kw) : setCoverResults([]));
-                          }
-                        }}
-                      >
-                        {coverDownloading ? <Loading size="sm" /> : '搜索配图'}
-                      </button>
-                    </div>
-
-                    {/* 封面搜索面板 */}
-                    {showCoverSearch && (
-                      <div className="p-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)] space-y-3">
-                        <div className="flex gap-2">
-                          <input
-                            className="flex-1 px-3 py-1.5 rounded text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]"
-                            placeholder="输入关键词搜索配图…"
-                            value={coverKeyword}
-                            onChange={(e) => setCoverKeyword(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && doCoverSearch(coverKeyword)}
-                            autoFocus
-                          />
-                          <button className="btn btn-sm" onClick={() => doCoverSearch(coverKeyword)} disabled={coverSearchLoading}>
-                            {coverSearchLoading ? <Loading size="sm" /> : '搜索'}
-                          </button>
-                        </div>
-
-                        {coverSearchLoading && (
-                          <div className="flex justify-center py-6">
-                            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                              <Loading size="sm" />
-                              <span>正在搜索配图…</span>
+                  {!coverSearchLoading && coverResults.length > 0 && (
+                    <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {(() => {
+                        const local = coverResults.filter(r => r.source === 'local');
+                        const web = coverResults.filter(r => r.source === 'web');
+                        return (<>
+                          {local.length > 0 && (
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>本地素材 ({local.length})</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                                {local.map((img, i) => (
+                                  <div key={`local-${i}`} onClick={() => selectCoverImage(img)} style={{ position: 'relative', cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '1/1', background: 'var(--bg-inset)', transition: 'border-color 0.15s' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}>
+                                    <img src={coverImageUrl(img.path, img.source)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    {img.celebrity && <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '2px 4px', fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.celebrity}</span>}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
-
-                        {!coverSearchLoading && coverResults.length > 0 && (
-                          <div className="max-h-80 overflow-y-auto space-y-3">
-                            {/* 本地素材 */}
-                            {(() => {
-                              const local = coverResults.filter(r => r.source === 'local');
-                              if (local.length === 0) return null;
-                              return (
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <svg className="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                    <span className="text-xs font-medium text-[var(--text-secondary)]">本地素材 ({local.length})</span>
+                          )}
+                          {web.length > 0 && (
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>网络图片 ({web.length})</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                                {web.map((img, i) => (
+                                  <div key={`web-${i}`} onClick={() => selectCoverImage(img)} style={{ position: 'relative', cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '1/1', background: 'var(--bg-inset)', transition: 'border-color 0.15s' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}>
+                                    <img src={coverImageUrl(img.path, img.source)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    <span style={{ position: 'absolute', top: 2, right: 2, padding: '2px 4px', fontSize: 8, color: '#fff', background: 'rgba(94,106,210,0.7)', borderRadius: 4 }}>WEB</span>
                                   </div>
-                                  <div className="grid grid-cols-5 gap-2">
-                                    {local.map((img, i) => (
-                                      <div
-                                        key={`local-${i}`}
-                                        className="relative group cursor-pointer rounded-lg overflow-hidden border border-[var(--border)] hover:border-[var(--accent)] transition-colors aspect-square bg-[var(--bg-inset)]"
-                                        onClick={() => selectCoverImage(img)}
-                                      >
-                                        <img src={coverImageUrl(img.path, img.source)} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                                        {img.celebrity && (
-                                          <span className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-[9px] text-white bg-black/50 truncate leading-none">{img.celebrity}</span>
-                                        )}
-                                        <div className="absolute top-0.5 right-0.5 px-1 py-0.5 text-[8px] text-white bg-green-600/70 rounded leading-none font-medium opacity-0 group-hover:opacity-100 transition-opacity">选择</div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-
-                            {/* 网络图片 */}
-                            {(() => {
-                              const web = coverResults.filter(r => r.source === 'web');
-                              if (web.length === 0) return null;
-                              return (
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <svg className="w-3.5 h-3.5 text-[var(--text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                    <span className="text-xs font-medium text-[var(--text-secondary)]">网络图片 ({web.length})</span>
-                                  </div>
-                                  <div className="grid grid-cols-5 gap-2">
-                                    {web.map((img, i) => (
-                                      <div
-                                        key={`web-${i}`}
-                                        className="relative group cursor-pointer rounded-lg overflow-hidden border border-[var(--border)] hover:border-[var(--accent)] transition-colors aspect-square bg-[var(--bg-inset)]"
-                                        onClick={() => selectCoverImage(img)}
-                                      >
-                                        <img src={coverImageUrl(img.path, img.source)} alt="" className="w-full h-full object-cover" loading="lazy" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                                        <span className="absolute top-0.5 right-0.5 px-1 py-0.5 text-[8px] text-white bg-blue-500/70 rounded leading-none font-medium">WEB</span>
-                                        <div className="absolute bottom-0 left-0 right-0 px-1 py-0.5 text-[9px] text-white bg-black/50 truncate leading-none opacity-0 group-hover:opacity-100 transition-opacity">点击选择</div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-
-                        {!coverSearchLoading && coverResults.length === 0 && (
-                          <p className="text-xs text-[var(--text-muted)] text-center py-4">
-                            {coverKeyword ? '未找到相关配图，换个关键词试试' : '输入关键词搜索配图'}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>);
+                      })()}
+                    </div>
+                  )}
+                  {!coverSearchLoading && coverResults.length === 0 && (
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                      {coverKeyword ? '未找到相关配图，换个关键词试试' : '输入关键词搜索配图'}
+                    </p>
+                  )}
                 </div>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-[var(--text-secondary)] mb-1 block">标签（逗号分隔）</label>
+              )}
+            </div>
+
+            {/* 标签 + 来源 — 并排 */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                  标签
+                </label>
                 <input
-                  className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]"
                   placeholder="时尚, 穿搭, 街拍"
                   value={tagsText}
                   onChange={(e) => setTagsText(e.target.value)}
+                  style={{ fontSize: 14 }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                  话题来源
+                </label>
+                <input
+                  placeholder="可选，用于 AI 生成参考"
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                  style={{ fontSize: 14 }}
                 />
               </div>
             </div>
 
-            {/* 灵感来源 */}
-            <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">灵感来源 / 话题（可选）</label>
+            {/* AI 工具栏 — 轻量化 */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 2,
+              padding: '4px 0', marginBottom: 12,
+              borderBottom: '1px solid var(--border-subtle)',
+            }}>
+              <button className="btn btn-xs btn-ghost" onClick={doGenerate} disabled={genLoading}>
+                {genLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 2 }}><path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z"/></svg>}
+                生成正文
+              </button>
+              <button className="btn btn-xs btn-ghost" onClick={doPolish} disabled={polishLoading || !content}>
+                {polishLoading ? <Loading size="sm" /> : null}
+                AI 校对
+              </button>
+              <button className="btn btn-xs btn-ghost" onClick={doDeAi} disabled={deAiLoading || !content}>
+                {deAiLoading ? <Loading size="sm" /> : null}
+                去 AI 味儿
+              </button>
+              <button className="btn btn-xs btn-ghost" onClick={doGenerateTitle} disabled={titleLoading || !content}>
+                {titleLoading ? <Loading size="sm" /> : null}
+                生成标题
+              </button>
+            </div>
+
+            {/* 对话输入 */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)]"
-                placeholder="输入话题，用于 AI 生成参考"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
+                placeholder="输入指令修改正文，如「缩短到300字」「改成正式风格」…"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
+                style={{ flex: 1, fontSize: 14 }}
               />
+              <button className="btn btn-sm" onClick={doChat} disabled={chatLoading || !chatInput.trim()}
+                style={{ flexShrink: 0 }}>
+                {chatLoading ? <Loading size="sm" /> : '发送'}
+              </button>
             </div>
 
-            {/* 正文 */}
-            <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">正文</label>
+            {/* 正文 — 自动撑高 */}
+            <div style={{ marginBottom: 8 }}>
               <textarea
-                className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--bg-inset)] border border-[var(--border)] focus:outline-none focus:border-[var(--accent)] resize-y"
-                rows={12}
-                placeholder="输入文章正文，或使用 AI 生成…"
+                rows={20}
+                placeholder="开始写作…"
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  autoResize(e.target);
+                }}
+                ref={contentRef}
+                style={{
+                  width: '100%',
+                  minHeight: 480,
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  outline: 'none',
+                  background: 'var(--bg-card)',
+                  fontSize: 16,
+                  lineHeight: 1.7,
+                  color: 'var(--text)',
+                  resize: 'none',
+                  padding: '14px 16px',
+                  fontFamily: 'inherit',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent)';
+                  e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-soft)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               />
             </div>
 
-            {/* AI 工具栏 */}
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button className="btn btn-sm" onClick={doGenerate} disabled={genLoading}>
-                {genLoading ? <Loading size="sm" /> : '✨ AI 生成'}
-              </button>
-              <button className="btn btn-sm" onClick={doPolish} disabled={polishLoading || !content}>
-                {polishLoading ? <Loading size="sm" /> : '✓ AI 校对'}
-              </button>
-              <button className="btn btn-sm" onClick={doDeAi} disabled={deAiLoading || !content}>
-                {deAiLoading ? <Loading size="sm" /> : '🔄 去 AI 味儿'}
-              </button>
-              <button className="btn btn-sm" onClick={doGenerateTitle} disabled={titleLoading || !content}>
-                {titleLoading ? <Loading size="sm" /> : '🏷️ AI 生成标题'}
-              </button>
-            </div>
-
-            {/* 操作按钮 */}
-            <div className="flex flex-wrap gap-3 pt-2 border-t border-[var(--border)]">
-              <button className="btn btn-primary btn-sm" onClick={doSave} disabled={saveLoading}>
-                {saveLoading ? <Loading size="sm" /> : '💾 保存草稿'}
-              </button>
-              <button className="btn btn-sm" onClick={doQueue} disabled={queueLoading}>
-                {queueLoading ? <Loading size="sm" /> : '📋 加入队列'}
-              </button>
-              <button className="btn btn-sm" onClick={() => setConfirm({
-                msg: '确定发布此文章到公众号？',
-                onOk: () => doPublish(false),
-              })} disabled={publishLoading}>
-                {publishLoading ? <Loading size="sm" /> : '📤 直接发布'}
-              </button>
-              <button className="btn btn-sm" onClick={() => setConfirm({
-                msg: '保存为公众号草稿？',
-                onOk: () => doPublish(true),
-              })} disabled={publishLoading}>
-                保存为公众号草稿
-              </button>
+            {/* 字数统计 */}
+            <div style={{ textAlign: 'right', marginBottom: 24 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {content.length} 字
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── 右栏：文章列表 ───────────────────── */}
-        <div className="xl:col-span-1">
-          <div className="card p-4 space-y-3">
-            <h2 className="text-sm font-semibold">文章列表</h2>
+        {/* ── 右栏：文章列表 ── */}
+        <div style={{ overflow: 'hidden', minWidth: 0 }}>
+          <div style={{
+            width: 320,
+            opacity: articleListExpanded ? 1 : 0,
+            transition: 'opacity 0.25s ease',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+
+          {/* 文章列表 — 紧凑 */}
+          <div className="card" style={{ padding: 16 }}>
+            <div
+              onClick={() => setArticleListExpanded(!articleListExpanded)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: 12 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                  style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+                <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+                  文章列表
+                </h2>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{articles.length} 篇</span>
+            </div>
 
             {/* 筛选标签 */}
-            <div className="flex gap-1 flex-wrap">
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
               {(Object.keys(TAB_LABELS) as TabKey[]).map((tab) => (
-                <button
-                  key={tab}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                    articleFilter === tab
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text)]'
-                  }`}
-                  onClick={() => switchFilter(tab)}
-                >
+                <FilterTab key={tab} active={articleFilter === tab} onClick={() => switchFilter(tab)}>
                   {TAB_LABELS[tab]}
-                </button>
+                </FilterTab>
               ))}
             </div>
 
             {/* 文章列表 */}
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            <div style={{ maxHeight: 'calc(100vh - 440px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {loading && articles.length === 0 && (
-                <div className="flex justify-center py-8"><Loading /></div>
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}><Loading /></div>
               )}
               {!loading && articles.length === 0 && (
-                <div className="empty-state text-sm py-8">
-                  <p className="text-[var(--text-muted)]">暂无文章</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">使用左侧编辑器开始创作</p>
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>暂无文章</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0' }}>在左侧编辑器中开始创作</p>
                 </div>
               )}
               {articles.map((a) => {
                 const statusInfo = STATUS_LABELS[a.status] || STATUS_LABELS.draft;
                 const isActive = editingId === a.id;
                 return (
-                  <div
-                    key={a.id}
-                    className={`p-3 rounded-lg cursor-pointer transition-colors border ${
-                      isActive
-                        ? 'border-[var(--accent)] bg-[var(--accent-softer)]'
-                        : 'border-transparent hover:bg-[var(--bg-secondary)]'
-                    }`}
-                    onClick={() => selectArticle(a)}
+                  <div key={a.id} onClick={() => selectArticle(a)} style={{
+                    padding: 8, borderRadius: 6, cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    border: `1px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+                    background: isActive ? 'var(--accent-softer)' : 'transparent',
+                  }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-secondary)'; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{a.title || '无标题'}</p>
-                        <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {a.title || '无标题'}
+                        </p>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {a.summary || a.content?.slice(0, 60) || ''}
                         </p>
                       </div>
-                      <span className={`${statusInfo.cls} text-[11px] shrink-0`}>{statusInfo.text}</span>
+                      <span style={{ fontSize: 11, color: a.status === 'queued' ? 'var(--accent)' : 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {statusInfo.text}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] text-[var(--text-muted)]">{fmtTime(a.updated_at || a.created_at)}</span>
-                      <button
-                        className="text-[10px] text-[var(--danger)] opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
-                        onClick={(e) => { e.stopPropagation(); doDelete(a.id); }}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtTime(a.updated_at || a.created_at)}</span>
+                      <button onClick={(e) => { e.stopPropagation(); doDelete(a.id); }} style={{
+                        fontSize: 10, color: '#e5484d', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0, transition: 'opacity 0.15s',
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                       >
                         删除
                       </button>
@@ -731,10 +746,74 @@ export default function ArticlePublish() {
               })}
             </div>
           </div>
+          </div>
         </div>
       </div>
 
-      {/* 确认对话框 */}
+      {/* 折叠状态下的展开按钮 */}
+      <button
+        onClick={() => setArticleListExpanded(true)}
+        style={{
+          position: 'fixed',
+          right: 0,
+          top: '50%',
+          zIndex: 50,
+          width: 28,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--accent)',
+          border: 'none',
+          borderRadius: '8px 0 0 8px',
+          color: '#fff',
+          cursor: 'pointer',
+          opacity: articleListExpanded ? 0 : 0.9,
+          boxShadow: articleListExpanded ? 'none' : '-2px 0 8px rgba(0,0,0,0.12)',
+          transform: `translateY(-50%) translateX(${articleListExpanded ? '16px' : '0'})`,
+          pointerEvents: articleListExpanded ? 'none' : 'auto',
+          transition: 'opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease',
+        }}
+        onMouseEnter={(e) => {
+          if (articleListExpanded) return;
+          e.currentTarget.style.opacity = '1';
+          e.currentTarget.style.boxShadow = '-2px 0 12px rgba(0,0,0,0.2)';
+        }}
+        onMouseLeave={(e) => {
+          if (articleListExpanded) return;
+          e.currentTarget.style.opacity = '0.9';
+          e.currentTarget.style.boxShadow = '-2px 0 8px rgba(0,0,0,0.12)';
+        }}
+        title="展开文章列表"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </button>
+
+      {/* 操作栏 — 底部固定 */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+        padding: '12px 0',
+        borderTop: '1px solid var(--border-subtle)',
+        position: 'sticky', bottom: 0,
+        background: 'var(--bg)',
+        zIndex: 10,
+      }}>
+        <button className="btn btn-primary" onClick={doSave} disabled={saveLoading}>
+          {saveLoading ? <Loading size="sm" /> : null} 保存草稿
+        </button>
+        <button className="btn" onClick={doQueue} disabled={queueLoading}>
+          {queueLoading ? <Loading size="sm" /> : null} 加入队列
+        </button>
+        <button className="btn" onClick={() => setConfirm({ msg: '确定发布此文章到公众号？', onOk: () => doPublish(false) })} disabled={publishLoading}>
+          {publishLoading ? <Loading size="sm" /> : null} 直接发布
+        </button>
+        <button className="btn btn-ghost" onClick={() => setConfirm({ msg: '保存为公众号草稿？', onOk: () => doPublish(true) })}>
+          公众号草稿
+        </button>
+      </div>
+
       <ConfirmDialog
         open={!!confirm}
         title="确认操作"

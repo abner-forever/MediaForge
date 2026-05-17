@@ -27,32 +27,41 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   return (
-    <aside className="flex flex-col w-56 h-full shrink-0 border-r border-white/[0.06]" style={{ background: 'linear-gradient(180deg, var(--bg-sidebar) 0%, #0a0a14 100%)' }}>
+    <aside style={{
+      display: 'flex',
+      flexDirection: 'column',
+      width: 240,
+      height: '100%',
+      flexShrink: 0,
+      background: 'var(--bg-sidebar)',
+      borderRight: '1px solid rgba(255,255,255,0.06)',
+    }}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-5">
-        <div className="w-14 h-14 flex items-center justify-center shrink-0 overflow-hidden">
-          <img src="/static/logo.png" alt="图文工坊" className="w-full h-full object-contain" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 20px 24px' }}>
+        <div style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <img src="/static/logo.png" alt="图文工坊" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <div>
-          <div className="text-base font-bold text-white tracking-tight">图文工坊</div>
-          <div className="text-[11px] text-white/30 tracking-[0.15em] uppercase">MediaForge</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#f7f8f8', letterSpacing: '-0.3px' }}>图文工坊</div>
+          <div style={{ fontSize: 11, color: 'rgba(247,248,248,0.3)', letterSpacing: '0.3px', fontWeight: 500 }}>MediaForge</div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-0.5">
+      <nav style={{ flex: 1, padding: '0 8px' }}>
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-accent text-white shadow-md shadow-accent/20'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06]'
+                  ? 'bg-[var(--accent)] text-white'
+                  : 'text-[#8a8f98] hover:text-[#f7f8f8] hover:bg-white/[0.06]'
               }`
             }
+            style={{ marginBottom: 2, textDecoration: 'none' }}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -61,23 +70,24 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 py-4 border-t border-white/[0.06] space-y-3">
+      <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <NavLink
           to="/settings"
           end
           className={({ isActive }) =>
-            `flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+            `flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
               isActive
-                ? 'bg-accent text-white shadow-md shadow-accent/20'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+                ? 'bg-[var(--accent)] text-white'
+                : 'text-[#62666d] hover:text-[#d0d6e0] hover:bg-white/[0.04]'
             }`
           }
+          style={{ textDecoration: 'none' }}
         >
           {ICONS.settings}
           <span>系统设置</span>
         </NavLink>
-        <div className="text-center">
-          <span className="text-[9px] text-zinc-700 tracking-[0.15em]">v{__APP_VERSION__}</span>
+        <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <span style={{ fontSize: 11, color: '#3e3e44', letterSpacing: '0.15em' }}>v{__APP_VERSION__}</span>
         </div>
       </div>
     </aside>

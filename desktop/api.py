@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -25,6 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from config import DATA_DIR, DOWNLOAD_DIR, LOG_DIR, settings
 from desktop.app_state import app_state
 from services.ai import (
+    chat_article,
     de_ai_article,
     generate_article,
     generate_article_title,
@@ -136,6 +138,10 @@ class ArticleUpdateRequest(BaseModel):
 class ArticleGenerateRequest(BaseModel):
     topic: str = ""
     title: str = ""
+
+
+class ArticleChatRequest(BaseModel):
+    instruction: str
 
 
 class ArticlePublishRequest(BaseModel):
@@ -985,6 +991,7 @@ async def publish_from_queue(index: int, req: PublishRequest):
     title = item.get("title", "")
     desc = item.get("desc", "")
     images = item.get("images", [])
+    cover = item.get("cover", "")
     if not images:
         raise HTTPException(400, "没有图片")
     if not title:
@@ -1000,6 +1007,11 @@ async def publish_from_queue(index: int, req: PublishRequest):
 
     # Playwright 需要绝对路径，相对路径转为绝对
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
+    abs_cover: Optional[str] = None
+    if cover:
+        cover_abs = str(DOWNLOAD_DIR / cover) if not Path(cover).is_absolute() else cover
+        if Path(cover_abs).exists():
+            abs_cover = cover_abs
 
     # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
     import asyncio
@@ -1008,6 +1020,7 @@ async def publish_from_queue(index: int, req: PublishRequest):
         title=title,
         content=content,
         images=abs_images,
+        cover=abs_cover,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
         on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
@@ -1091,26 +1104,74 @@ async def serve_image(path: str):
     return FileResponse(str(file_path))
 
 
+_CT_EXT_MAP = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+_EXT_CT_MAP = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+
+_PROXY_CACHE = {}  # url → (content, content_type) 内存缓存
+
+
+def _proxy_cache_get(url: str) -> tuple[bytes | None, str | None]:
+    """从内存/磁盘缓存读取已代理的图片。"""
+    # 内存
+    if url in _PROXY_CACHE:
+        return _PROXY_CACHE[url]
+    # 磁盘
+    cache_dir = DOWNLOAD_DIR / "__proxy_cache__"
+    if not cache_dir.exists():
+        return None, None
+    key = hashlib.md5(url.encode()).hexdigest()
+    for ext in (".jpg", ".png", ".webp", ".gif", ".jpeg"):
+        p = cache_dir / f"{key}{ext}"
+        if p.exists():
+            ct = _EXT_CT_MAP.get(ext, "image/jpeg")
+            data = p.read_bytes()
+            _PROXY_CACHE[url] = (data, ct)
+            return data, ct
+    return None, None
+
+
+def _proxy_cache_set(url: str, content: bytes, content_type: str) -> None:
+    """保存代理图片到内存和磁盘缓存。"""
+    _PROXY_CACHE[url] = (content, content_type)
+    cache_dir = DOWNLOAD_DIR / "__proxy_cache__"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = hashlib.md5(url.encode()).hexdigest()
+    ext = _CT_EXT_MAP.get(content_type.split(";")[0].strip(), ".jpg")
+    (cache_dir / f"{key}{ext}").write_bytes(content)
+
+
 _PLATFORM_REFERERS = {
     "weibo": "https://weibo.com/",
     "toutiao": "https://www.toutiao.com/",
 }
 
+# 平台 → 超时（秒）
+_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10}
+
 
 @app.get("/proxy")
 async def proxy_image(url: str, platform: str = Query("weibo")):
-    """代理远程图片，解决 CORS 问题。"""
+    """代理远程图片，解决 CORS 问题（带磁盘/内存缓存）。"""
+    # 查缓存
+    cached, ct = _proxy_cache_get(url)
+    if cached:
+        from fastapi.responses import Response
+        return Response(content=cached, media_type=ct)
+
     import requests as req_lib
     from fastapi.responses import Response
 
-    referer = _PLATFORM_REFERERS.get(platform, "https://weibo.com/")
+    referer = _PLATFORM_REFERERS.get(platform, "https://www.bing.com/")
+    timeout = _PROXY_TIMEOUTS.get(platform, 20)
     try:
-        resp = req_lib.get(url, timeout=10, headers={
+        resp = req_lib.get(url, timeout=timeout, headers={
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
             "Referer": referer,
         })
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "image/jpeg")
+        # 写入缓存（异步写入，不阻塞返回）
+        _proxy_cache_set(url, resp.content, content_type)
         return Response(content=resp.content, media_type=content_type)
     except Exception as err:
         raise HTTPException(502, f"代理请求失败: {err}")
@@ -1641,6 +1702,34 @@ async def article_cover_download(req: CoverDownloadRequest):
     if not url:
         raise HTTPException(400, "缺少图片 URL")
 
+    covers_dir = DOWNLOAD_DIR / "__covers__"
+    covers_dir.mkdir(parents=True, exist_ok=True)
+
+    # 优先复用代理缓存（免去重新下载）
+    cached_data, cached_ct = _proxy_cache_get(url)
+    if cached_data:
+        from PIL import Image as PILImage
+        from io import BytesIO
+        from uuid import uuid4
+        filename = f"{uuid4().hex}.jpg"
+        local_path = covers_dir / filename
+        try:
+            img = PILImage.open(BytesIO(cached_data))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            if img.width > 1200:
+                ratio = 1200 / img.width
+                new_size = (1200, int(img.height * ratio))
+                img = img.resize(new_size, PILImage.LANCZOS)
+            img.save(local_path, "JPEG", quality=85, optimize=True)
+            img.close()
+        except Exception:
+            # PIL 处理失败则直接保存原始内容
+            local_path.write_bytes(cached_data)
+        rel = local_path.relative_to(DOWNLOAD_DIR).as_posix()
+        return {"success": True, "path": rel}
+
+    # 缓存未命中，从源站下载
     try:
         resp = http_requests.get(
             url,
@@ -1652,6 +1741,7 @@ async def article_cover_download(req: CoverDownloadRequest):
                 "Referer": "https://www.bing.com/",
             },
             timeout=30,
+            stream=True,
         )
         resp.raise_for_status()
 
@@ -1660,17 +1750,44 @@ async def article_cover_download(req: CoverDownloadRequest):
         if not content_type.startswith("image/"):
             raise HTTPException(400, f"下载地址返回的不是图片 (Content-Type: {content_type})")
 
+        # 检查文件大小（超过 5MB 的图片拒绝下载）
+        content_length = resp.headers.get("Content-Length")
+        if content_length and int(content_length) > 5 * 1024 * 1024:
+            raise HTTPException(413, "图片过大（超过 5MB），请选择其他配图")
+
         from uuid import uuid4
-        covers_dir = DOWNLOAD_DIR / "__covers__"
-        covers_dir.mkdir(parents=True, exist_ok=True)
-        ext = Path(url.split("?")[0].split("#")[0]).suffix or ".jpg"
-        if ext.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
-            ext = ".jpg"
-        filename = f"{uuid4().hex}{ext}"
+        filename = f"{uuid4().hex}.jpg"
         local_path = covers_dir / filename
-        local_path.write_bytes(resp.content)
+
+        # 流式写入临时文件
+        temp_path = local_path.with_suffix(".tmp")
+        with temp_path.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+
+        # 用 PIL 压缩到合理尺寸（最大 1200px 宽，JPEG quality 85）
+        try:
+            from PIL import Image as PILImage
+            img = PILImage.open(temp_path)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            if img.width > 1200:
+                ratio = 1200 / img.width
+                new_size = (1200, int(img.height * ratio))
+                img = img.resize(new_size, PILImage.LANCZOS)
+            img.save(local_path, "JPEG", quality=85, optimize=True)
+            img.close()
+            temp_path.unlink(missing_ok=True)
+            # 同时写入代理缓存以供复用
+            _proxy_cache_set(url, local_path.read_bytes(), "image/jpeg")
+        except Exception:
+            temp_path.rename(local_path)
+
         rel = local_path.relative_to(DOWNLOAD_DIR).as_posix()
         return {"success": True, "path": rel}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(502, f"下载封面图片失败: {e}")
 
@@ -1769,6 +1886,22 @@ async def generate_article_title_endpoint(article_id: str):
     return {"success": bool(title), "title": title}
 
 
+@app.post("/api/articles/{article_id}/chat")
+async def chat_article_content(article_id: str, req: ArticleChatRequest):
+    """AI 对话式修改/生成正文。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    instruction = req.instruction.strip()
+    if not instruction:
+        raise HTTPException(400, "请输入指令")
+
+    content = chat_article(article.get("content", ""), instruction)
+    app_state.update_article(article_id, {"content": content, "ai_generated": True})
+    app_state.add_operation("AI 对话", f"「{instruction[:30]}」")
+    return {"success": True, "content": content}
+
+
 @app.post("/api/articles/{article_id}/queue")
 async def add_article_to_queue(article_id: str):
     """将文章加入发布队列。"""
@@ -1806,6 +1939,7 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
     title = article.get("title", "")
     content = article.get("content", "")
     images = article.get("images", [])
+    cover = article.get("cover", "")
 
     if not title:
         raise HTTPException(400, "标题为空")
@@ -1815,6 +1949,11 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
 
     content_html = build_html(content, images)
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
+    abs_cover: Optional[str] = None
+    if cover:
+        cover_abs = str(DOWNLOAD_DIR / cover) if not Path(cover).is_absolute() else cover
+        if Path(cover_abs).exists():
+            abs_cover = cover_abs
 
     app_state.clear_publish_logs()
 
@@ -1827,6 +1966,7 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
         title=title,
         content=content_html,
         images=abs_images,
+        cover=abs_cover,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
         on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),

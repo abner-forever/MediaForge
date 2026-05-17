@@ -264,18 +264,54 @@ def _find_content_editor_js(page, editor_frame, content: str) -> bool:
     return False
 
 
-def _select_cover(page, editor_frame, on_log=None) -> bool:
-    """自动选择封面：选择封面 → 菜单从正文选择 → 选图弹窗确认 → 裁剪弹窗确认。
-    返回 True 表示封面设置成功，False 表示失败或被跳过。
+def _confirm_cover_dialogs(page, on_log=None) -> bool:
+    """封面上传/选择后的确认和裁剪弹窗序列。"""
+    _emit("封面弹窗：点击下一步...", on_log)
+    _click_first_available(page, [
+        "button:has-text('下一步')",
+        "button:has-text('下一张')",
+        "[class*='next']",
+        ".weui-desktop-btn_primary",
+    ], wait_ms=2000)
+    _human_sleep(0.3, 0.2)
+
+    _emit("封面弹窗：确认选择...", on_log)
+    _click_first_available(page, [
+        "button:has-text('确定')",
+        "button:has-text('确认')",
+        "button:has-text('完成')",
+        "button:has-text('保存')",
+    ], wait_ms=2000)
+    _human_sleep(0.3, 0.2)
+
+    _emit("封面弹窗：裁剪完成...", on_log)
+    _click_first_available(page, [
+        "button:has-text('完成')",
+        "button:has-text('确定')",
+        "button:has-text('保存')",
+    ], wait_ms=2000)
+    _human_sleep(0.5, 0.3)
+
+    _emit("封面设置流程完成", on_log)
+    return True
+
+
+def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = None) -> bool:
+    """选择封面：有封面图片则直接上传，否则从正文选择。
+
+    微信编辑器当前封面选择弹窗有三个 tab：
+      AI配图 / 从正文选择 / 上传
+    优先使用「上传」直接传封面图，降级用「从正文选择」。
     """
-    # 1. 点击"选择封面"按钮（等待右侧边栏加载完成）
     _human_sleep(1.0, 0.5)
     _emit("正在查找封面设置区域...", on_log)
-    cover_selectors = [
+
+    # 1. 点击"选择封面"
+    if not _click_first_available(page, [
         "text=选择封面",
         "text=点击选择封面",
         "text=设置封面",
-        "text=添加封面",                       # 可能的备选文案
+        "text=添加封面",
         "a:has-text('选择封面')",
         "button:has-text('选择封面')",
         "span:has-text('选择封面')",
@@ -286,172 +322,160 @@ def _select_cover(page, editor_frame, on_log=None) -> bool:
         "[class*='js_cover']",
         ".appmsg_cover",
         "[data-role='cover']",
-    ]
-    if not _click_first_available(page, cover_selectors, wait_ms=4000):
+    ], wait_ms=4000):
         _emit("未找到选择封面按钮，跳过封面设置", on_log)
         return False
     _emit("已点击选择封面", on_log)
-    _human_sleep(0.5, 0.3)
+    _human_sleep(0.8, 0.3)
 
-    # 2. 菜单中点击"从正文选择"
-    _human_sleep(0.5, 0.3)
+    # 2. 有封面图片路径 → 直接上传
+    if cover_path and Path(cover_path).exists():
+        _emit("已有封面图片，尝试直接上传...", on_log)
+        # 弹窗中找"上传" tab/选项
+        upload_tab_found = False
+        for scope in [page, editor_frame]:
+            for sel in [
+                "text=上传封面",
+                "text=上传",
+                "button:has-text('上传')",
+                "span:has-text('上传')",
+                "div:has-text('上传')",
+                ".weui-desktop-dialog__wrapper >> text=上传",
+                "[class*='tab'] >> text=上传",
+                "[class*='Tab'] >> text=上传",
+            ]:
+                try:
+                    loc = scope.locator(sel).first
+                    if loc.is_visible(timeout=1000):
+                        loc.click()
+                        _emit("已切换到上传 tab", on_log)
+                        _human_sleep(0.5, 0.3)
+                        upload_tab_found = True
+                        break
+                except Exception:
+                    continue
+            if upload_tab_found:
+                break
+
+        if upload_tab_found:
+            # 找到文件输入框上传封面
+            for f in [page] + page.frames:
+                try:
+                    fi = f.locator("input[type='file']").first
+                    fi.wait_for(state="attached", timeout=3000)
+                    fi.set_input_files(cover_path)
+                    _emit(f"封面图片已上传: {Path(cover_path).name}", on_log)
+                    _human_sleep(3.0, 1.0)
+
+                    # 在弹窗中找到刚上传的图片缩略图并点击选中
+                    _emit("正在选中已上传的封面图片...", on_log)
+                    for attempt_sel in range(5):
+                        try:
+                            for f_sel in [page] + page.frames:
+                                # 在弹窗内找可见的 img 元素
+                                dialog = f_sel.locator("[role='dialog'], .weui-desktop-dialog").first
+                                if dialog.is_visible(timeout=500):
+                                    imgs = dialog.locator("img")
+                                    cnt = imgs.count()
+                                    for idx in range(cnt):
+                                        try:
+                                            img = imgs.nth(idx)
+                                            if img.is_visible(timeout=300):
+                                                img.click()
+                                                _emit("已选中封面图片", on_log)
+                                                _human_sleep(0.5, 0.3)
+                                                return _confirm_cover_dialogs(page, on_log)
+                                        except Exception:
+                                            continue
+                        except Exception:
+                            pass
+                        _human_sleep(1.0, 0.5)
+                    _emit("未能在弹窗中选中封面图片", on_log)
+                except Exception:
+                    continue
+
+    # 3. 降级：从正文选择
+    _emit("尝试从正文选择封面...", on_log)
     from_body_selectors = [
         "text=从正文选择",
-        "text=从正文选择图片",                  # 可能的备选文案
+        "text=从正文选择图片",
         "a:has-text('从正文选择')",
         "li:has-text('从正文选择')",
         "div:has-text('从正文选择')",
         "span:has-text('从正文选择')",
+        "[class*='tab'] >> text=从正文选择",
+        "[class*='Tab'] >> text=从正文选择",
+        ".weui-desktop-dialog__wrapper >> text=从正文选择",
+        "[class*='dropdown'] >> text=从正文选择",
         ".weui-desktop-dropdown__menu >> text=从正文选择",
         ".weui-desktop-dropdown__menu li:first-child",
-        "[class*='dropdown'] >> text=从正文选择",
         "[class*='menu'] >> text=从正文选择",
-        "role=menuitem >> text=从正文选择",
     ]
-
-    # 尝试先在 editor_frame 中查找，再在 page 层面查找
-    from_body_clicked = False
+    clicked = False
     for scope in [editor_frame, page]:
         for sel in from_body_selectors:
             try:
                 loc = scope.locator(sel).first
-                loc.wait_for(state="visible", timeout=1500)
-                loc.click()
-                from_body_clicked = True
-                break
+                if loc.is_visible(timeout=1500):
+                    loc.click()
+                    clicked = True
+                    break
             except Exception:
                 continue
-        if from_body_clicked:
+        if clicked:
             break
-
-    if not from_body_clicked:
-        # 降级：刚弹出的下拉菜单可能在 document 根级别，尝试获取全部 visible 文本节点
+    if not clicked:
+        # 兜底：get_by_text 在整个页面中找
         try:
-            _emit("尝试通过坐标点击从正文选择...", on_log)
-            text_loc = page.get_by_text("从正文选择", exact=False).first
-            if text_loc.is_visible(timeout=1000):
-                text_loc.click()
-                from_body_clicked = True
+            loc = page.get_by_text("从正文选择", exact=False).first
+            if loc.is_visible(timeout=1000):
+                loc.click()
+                clicked = True
         except Exception:
             pass
 
-    if not from_body_clicked:
-        _emit("未找到从正文选择菜单项，跳过封面设置", on_log)
+    if not clicked:
+        _emit("未找到从正文选择，跳过封面设置", on_log)
         return False
     _emit("已点击从正文选择", on_log)
     _human_sleep(0.5, 0.3)
 
-    # 3. 选择图片弹窗 → 勾选第一张图（支持多轮等待和降级策略）
-    _emit("正在查找可选封面图片...", on_log)
-    img_selected = False
+    # 4. 在弹窗中选择第一张图片（已上传到正文的图片）
     for attempt in range(3):
         if attempt > 0:
             _emit(f"重试查找封面图片（第{attempt+1}次）...", on_log)
             _human_sleep(2.0, 0.5)
-
         img_selectors = [
-            # 微信桌面版现代选择器
             ".weui-desktop-dialog__body img",
             ".weui-desktop-dialog__bd img",
-            ".weui-desktop-dialog__bd [class*='img']",
-            ".weui-desktop-grid__item",
-            ".weui-desktop-media__item",
-            ".weui-desktop-img-picker__img-item",
-            ".weui-desktop-img-picker__img-item:first-child",
-            ".img_item",
-            ".pic_list li",
-            ".image_list li",
-            "[class*='img-picker'] li",
-            "[class*='imgPicker'] li",
-            "[class*='upload'] li",
-            # 通用弹窗匹配
             ".weui-desktop-dialog img",
             ".weui-desktop-dialog li",
-            ".weui-desktop-dialog [class*='img']",
-            ".weui-desktop-dialog [class*='grid']",
-            "[class*='dialog'] [class*='img']",
-            "[role='dialog'] li",
             "[role='dialog'] img",
-            # 兜底：任何一个可见的 dialog 内图片
-            "[role='dialog'] [class*='img']:first-child",
-            ".weui-desktop-dialog [class*='item']:first-child",
+            "[role='dialog'] li",
+            ".weui-desktop-grid__item",
+            "[class*='img-picker'] li",
+            "[class*='imgPicker'] li",
         ]
         if _click_first_available(page, img_selectors, wait_ms=3000):
-            img_selected = True
-            break
+            _emit("已选择封面图片", on_log)
+            return _confirm_cover_dialogs(page, on_log)
 
-        # 降级：直接在 dialog 范围内找任何可见的 img
-        if not img_selected:
-            try:
-                for scope in [page] + page.frames:
-                    for role_sel in ["[role='dialog']", ".weui-desktop-dialog"]:
-                        dialog = scope.locator(role_sel).first
-                        if dialog.is_visible(timeout=500):
-                            imgs = dialog.locator("img")
-                            count = imgs.count()
-                            if count > 0:
-                                imgs.first.click()
-                                _emit("通过降级策略选中封面图片", on_log)
-                                img_selected = True
-                                break
-                    if img_selected:
-                        break
-            except Exception:
-                pass
+        # 降级：dialog 内任何可见图片
+        for scope in [page] + page.frames:
+            for role_sel in ["[role='dialog']", ".weui-desktop-dialog"]:
+                try:
+                    dialog = scope.locator(role_sel).first
+                    if dialog.is_visible(timeout=500):
+                        imgs = dialog.locator("img")
+                        if imgs.count() > 0:
+                            imgs.first.click()
+                            _emit("降级选择封面图片", on_log)
+                            return _confirm_cover_dialogs(page, on_log)
+                except Exception:
+                    continue
 
-    if not img_selected:
-        _emit("未找到可选图片，跳过封面设置", on_log)
-        return False
-    _emit("已勾选第一张封面图片", on_log)
-    _human_sleep(0.3, 0.2)
-
-    # 4. 点击"下一步"
-    next_selectors = [
-        "button:has-text('下一步')",
-        "a:has-text('下一步')",
-        "span:has-text('下一步')",
-        "button:has-text('下一张')",
-        "[class*='next']",
-        ".weui-desktop-btn.weui-desktop-btn_primary",
-    ]
-    if not _click_first_available(page, next_selectors, wait_ms=2000):
-        _emit("未找到下一步按钮，尝试继续后续步骤", on_log)
-    else:
-        _emit("已点击下一步", on_log)
-        _human_sleep(0.3, 0.2)
-
-    # 5. 编辑封面弹窗 → 确认
-    confirm_selectors = [
-        "button:has-text('确定')",
-        "button:has-text('确认')",
-        "a:has-text('确定')",
-        "span:has-text('确定')",
-        "button:has-text('完成')",
-        "[class*='dialog'] button:has-text('确定')",
-        "[role='dialog'] button:has-text('确定')",
-    ]
-    if _click_first_available(page, confirm_selectors, wait_ms=2000):
-        _emit("编辑封面已确认", on_log)
-        _human_sleep(0.3, 0.2)
-
-    # 6. 裁剪封面弹窗 → 完成
-    done_selectors = [
-        "button:has-text('完成')",
-        "button:has-text('确定')",
-        "button:has-text('保存')",
-        "a:has-text('完成')",
-        "span:has-text('完成')",
-        "[class*='dialog'] button:has-text('完成')",
-        "[role='dialog'] button:has-text('完成')",
-    ]
-    if _click_first_available(page, done_selectors, wait_ms=2000):
-        _emit("裁剪封面已完成", on_log)
-    else:
-        _emit("未找到裁剪确认按钮，可能无需此步骤", on_log)
-
-    _human_sleep(0.5, 0.3)
-    _emit("封面设置流程完成", on_log)
-    return True
+    _emit("未找到可选封面图片", on_log)
+    return False
 
 
 
@@ -460,6 +484,7 @@ def publish_article(
     title: str,
     content: str,
     images: List[str],
+    cover: Optional[str] = None,
     dry_run: bool = False,
     save_draft: bool = False,
     on_scan_needed: Optional[Callable[[], None]] = None,
@@ -471,6 +496,7 @@ def publish_article(
 
     Args:
         save_draft: True 则保存草稿不发布，False 则直接发布
+        cover: 封面图片的绝对路径，有则直接上传，无则从正文选择
         on_scan_needed: 需要扫码时的回调（UI 模式下用于显示提示）
         on_confirm_needed: 需要确认时的回调，接收 title，返回 True 确认发布
                            为 None 时使用 input() 阻塞等待（CLI 模式）
@@ -560,7 +586,7 @@ def publish_article(
             _emit("等待图片上传完成...", on_log)
             _human_sleep(max(3.0, len(images) * 0.5), 1.0)
             _emit("正在选择封面...", on_log)
-            cover_ok = _select_cover(page, editor_frame, on_log)
+            cover_ok = _select_cover(page, editor_frame, on_log, cover)
             if not cover_ok:
                 _emit("封面未设置（不影响草稿保存）", on_log)
 

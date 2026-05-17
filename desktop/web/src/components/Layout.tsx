@@ -11,10 +11,10 @@ export default function Layout() {
   useEffect(() => { syncTheme(); }, [syncTheme]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-bg">
-        <div className="max-w-5xl mx-auto p-6 lg:p-8">
+      <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px' }}>
           <Outlet />
         </div>
       </main>

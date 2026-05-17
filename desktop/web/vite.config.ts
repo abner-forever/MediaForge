@@ -13,6 +13,24 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('../static', import.meta.url)),
     emptyOutDir: true,
+    target: 'es2020',
+    cssCodeSplit: true,
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/scheduler/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('/node_modules/react-router')) {
+            return 'vendor-router';
+          }
+          if (id.includes('/node_modules/zustand/')) {
+            return 'vendor-state';
+          }
+        },
+      },
+    },
   },
   server: {
     port: 5173,

@@ -135,41 +135,36 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     });
   }
 
-  const pollLogs = useCallback(async (initialOffset = 0) => {
+  const pollLogs = useCallback(async (initialOffset = 0, { signal }: { signal?: AbortSignal } = {}) => {
     let offset = initialOffset;
     if (offset === 0) {
-      for (let i = 0; i < 6; i++) { const d = await publishLogsApi.get(0); if (d.active) break; await new Promise(r => setTimeout(r, 500)); }
+      for (let i = 0; i < 6; i++) {
+        if (signal?.aborted) return;
+        try { const d = await publishLogsApi.get(0); if (d.active) break; } catch {}
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
     while (true) {
+      if (signal?.aborted) return;
       try { const d = await publishLogsApi.get(offset); if (d.logs.length) { setLogs(p => [...p, ...d.logs]); offset = d.total; } if (!d.active && offset > 0) break; } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
     setPublishing(false);
   }, []);
 
-  // 切回页面时恢复发布状态和日志轮询
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const d = await publishLogsApi.get(0);
-        if (cancelled || item.status === 'published') return;
-        if (d.active) {
-          setLogs(d.logs);
-          setPublishing(true);
-          pollLogs(d.logs.length);
-        }
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line
+  // 发布结束时通过 abortController 中止轮询，不再依赖全局 publish_active 标志
+  const publishRef = useRef(false);
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
-    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishing(true);
+    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishing(true); publishRef.current = true;
     const pubPromise = queueApi.publish(index, opts);
-    await new Promise(r => setTimeout(r, 300)); pollLogs();
+    await new Promise(r => setTimeout(r, 300));
+    const ac = new AbortController();
+    pollLogs(0, { signal: ac.signal });
     try { const r = await pubPromise; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } catch (err: any) { addToast(err.message, 'error'); }
+    publishRef.current = false;
+    ac.abort();
     try { setQueue((await queueApi.get()).queue); } catch {}
     setPublishing(false);
   }
@@ -225,7 +220,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
                 const globalIdx = thumbStart + ii;
                 return (
                   <img key={globalIdx} src={imgSrc(img)} alt="" loading="lazy" decoding="async"
-                    className={`shrink-0 w-9 h-9 object-cover rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'ring-2 ring-accent border-accent' : 'border-border'}`}
+                    className={`shrink-0 w-9 h-9 object-cover rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
                     onClick={() => openLightbox(images.map(imgSrc), globalIdx)}
                     onError={e => (e.currentTarget.style.display = 'none')} />
                 );
