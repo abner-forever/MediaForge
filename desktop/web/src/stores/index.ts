@@ -15,7 +15,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   { id: 'blue', name: '默认蓝', light: '#00a1d6', dark: '#4dc9f6', hover: '#0090c0' },
   { id: 'red', name: '小红书红', light: '#FF2442', dark: '#FF5C6E', hover: '#E62038' },
   { id: 'green', name: '清新绿', light: '#10B981', dark: '#34D399', hover: '#059669' },
-  { id: 'purple', name: '皇家紫', light: '#7C3AED', dark: '#A78BFA', hover: '#6D28D9' },
+  { id: 'github', name: 'GitHub 蓝', light: '#0969DA', dark: '#58A6FF', hover: '#0550AE' },
 ];
 
 /* ── Toast ───────────────────────────────────── */

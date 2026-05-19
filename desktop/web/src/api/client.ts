@@ -82,6 +82,7 @@ export interface QueueItem {
   article_id?: string;
   content?: string;
   tags?: string[];
+  account_id?: string;
 }
 
 export interface MaterialsGroup {
@@ -169,12 +170,21 @@ export interface SettingsData {
   allow_watermark_fallback: boolean;
   materials_path: string;
   download_dir: string;
+  wechat_accounts: WeChatAccount[];
 }
 
 export interface OperationItem {
+  id: string;
   time: string;
   action: string;
   detail: string;
+}
+
+export interface OperationsResponse {
+  items: OperationItem[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface DownloadStreamEvent {
@@ -258,14 +268,57 @@ export const platformApi = {
   list: () => get<{ platforms: Record<string, PlatformMeta>; default: string }>('/api/platforms'),
 };
 
+/* ── WeChat Account API ──────────────────────────── */
+
+export interface WeChatAccount {
+  account_id: string;
+  name: string;
+  created_at?: string;
+  last_used?: string;
+  logged_in: boolean;
+}
+
+export interface WeChatLoginEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+}
+
+export const wechatAccountApi = {
+  list: () => get<{ accounts: WeChatAccount[] }>('/api/wechat/accounts'),
+  add: (name: string) => post<{ success: boolean; account: WeChatAccount }>('/api/wechat/accounts', { name }),
+  remove: (id: string) => del<{ success: boolean }>(`/api/wechat/accounts/${id}`),
+  status: (id: string) => get<{ logged_in: boolean; name: string }>(`/api/wechat/accounts/${id}/status`),
+  logout: (id: string) => post<{ success: boolean }>(`/api/wechat/accounts/${id}/logout`),
+  login: (id: string, onEvent: (evt: WeChatLoginEvent) => void): Promise<void> => {
+    return fetch(`/api/wechat/accounts/${id}/login`).then(async (res) => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)));
+          } catch { /* ignore */ }
+        }
+      }
+    });
+  },
+};
+
 /* ── Dashboard API ────────────────────────────── */
 
 export const dashboardApi = {
   health: () => get<HealthStatus>('/api/dashboard/health'),
   stats: () => get<DashboardStats>('/api/dashboard/stats'),
   runs: () => get<RunInfo[]>('/api/dashboard/runs'),
-  operations: () => get<OperationItem[]>('/api/dashboard/operations'),
-  deleteOperations: (indices: number[]) => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { indices }),
+  operations: (page = 1, pageSize = 10) => get<OperationsResponse>(`/api/dashboard/operations?page=${page}&page_size=${pageSize}`),
+  deleteOperations: (ids: string[]) => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { ids }),
   clearOperations: () => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { clear: true }),
 };
 
@@ -448,7 +501,7 @@ export const queueApi = {
   update: (index: number, data: Partial<QueueItem>) => put(`/api/queue/${index}`, data),
   remove: (index: number) => del(`/api/queue/${index}`),
   generate: (index: number) => post<{ success: boolean; title: string; desc: string; message?: string }>(`/api/queue/${index}/generate`),
-  publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean }) =>
+  publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean; account_id?: string }) =>
     post<{ success: boolean; message: string }>(`/api/queue/${index}/publish`, opts),
   enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
 };
@@ -492,7 +545,9 @@ export const articleApi = {
     post<ArticleContentResponse>(`/api/articles/${id}/de-ai`),
   generateTitle: (id: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/generate-title`),
-  publish: (id: string, opts: { save_draft?: boolean; dry_run?: boolean }) =>
+  optimizeLayout: (id: string) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/optimize-layout`),
+  publish: (id: string, opts: { save_draft?: boolean; dry_run?: boolean; account_id?: string }) =>
     post<{ success: boolean; message: string }>(`/api/articles/${id}/publish`, opts),
   addToQueue: (id: string) =>
     post<{ success: boolean; queue: QueueItem[] }>(`/api/articles/${id}/queue`),

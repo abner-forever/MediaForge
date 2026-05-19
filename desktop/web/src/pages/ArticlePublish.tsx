@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../stores';
 import { articleApi, queueApi } from '../api/client';
 import type { ArticleItem, InspirationTopic, CoverImage } from '../api/client';
 import Loading from '../components/Loading';
 import ConfirmDialog from '../components/ConfirmDialog';
+import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../components/RichTextEditor';
 
 /* ── Types ──────────────────────────────────── */
 type TabKey = 'all' | 'draft' | 'queued' | 'published';
@@ -49,6 +50,7 @@ export default function ArticlePublish() {
   /* ── 编辑器状态 ────────────────────────────── */
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [contentDoc, setContentDoc] = useState<object>({ type: 'doc', content: [{ type: 'paragraph' }] });
   const [cover, setCover] = useState('');
   const [source, setSource] = useState('');
   const [tagsText, setTagsText] = useState('');
@@ -60,6 +62,7 @@ export default function ArticlePublish() {
   const [polishLoading, setPolishLoading] = useState(false);
   const [deAiLoading, setDeAiLoading] = useState(false);
   const [titleLoading, setTitleLoading] = useState(false);
+  const [layoutLoading, setLayoutLoading] = useState(false);
   const [inspirationLoading, setInspirationLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [queueLoading, setQueueLoading] = useState(false);
@@ -81,13 +84,6 @@ export default function ArticlePublish() {
   const [coverDownloading, setCoverDownloading] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
 
-  const contentRef = useRef<HTMLTextAreaElement>(null);
-
-  const autoResize = (el: HTMLTextAreaElement) => {
-    el.style.height = 'auto';
-    el.style.height = Math.max(el.scrollHeight, 480) + 'px';
-  };
-
   /* ── 加载文章列表 ───────────────────────────── */
   const loadArticles = useCallback(async (filter?: TabKey) => {
     try {
@@ -102,19 +98,16 @@ export default function ArticlePublish() {
 
   useEffect(() => { loadArticles(articleFilter); }, []); // eslint-disable-line
 
-  useEffect(() => {
-    if (contentRef.current) autoResize(contentRef.current);
-  }, [content]);
-
   const selectArticle = (a: ArticleItem) => {
     setEditingId(a.id); setTitle(a.title); setContent(a.content);
+    setContentDoc(plainToTiptap(a.content));
     setCover(a.cover || ''); setSource(a.source || '');
     setTagsText(a.tags?.join(', ') || ''); setCurrentArticle(a);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const resetEditor = () => {
-    setEditingId(null); setTitle(''); setContent(''); setCover('');
+    setEditingId(null); setTitle(''); setContent(''); setContentDoc({ type: 'doc', content: [{ type: 'paragraph' }] }); setCover('');
     setSource(''); setTagsText(''); setCurrentArticle(null);
     setShowCoverSearch(false); setCoverResults([]);
     setInspirationExpanded(false);
@@ -229,7 +222,7 @@ export default function ArticlePublish() {
       setGenLoading(true);
       const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.generate(id, { topic: source || title, title });
-      if (res.content) { setContent(res.content); addToast('AI 生成完成', 'success'); }
+      if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('AI 生成完成', 'success'); }
     } catch (e: any) { addToast(e.message || 'AI 生成失败', 'error');
     } finally { setGenLoading(false); }
   };
@@ -240,7 +233,7 @@ export default function ArticlePublish() {
       setPolishLoading(true);
       const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.polish(id);
-      if (res.content) { setContent(res.content); addToast('校对完成', 'success'); }
+      if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('校对完成', 'success'); }
     } catch (e: any) { addToast(e.message || '校对失败', 'error');
     } finally { setPolishLoading(false); }
   };
@@ -251,7 +244,7 @@ export default function ArticlePublish() {
       setDeAiLoading(true);
       const id = await ensureArticleSaved(); if (!id) return;
       const res = await articleApi.deAi(id);
-      if (res.content) { setContent(res.content); addToast('去 AI 味儿完成', 'success'); }
+      if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('去 AI 味儿完成', 'success'); }
     } catch (e: any) { addToast(e.message || '处理失败', 'error');
     } finally { setDeAiLoading(false); }
   };
@@ -267,6 +260,17 @@ export default function ArticlePublish() {
     } finally { setTitleLoading(false); }
   };
 
+  const doOptimizeLayout = async () => {
+    if (!content) { addToast('请先输入正文', 'info'); return; }
+    try {
+      setLayoutLoading(true);
+      const id = await ensureArticleSaved(); if (!id) return;
+      const res = await articleApi.optimizeLayout(id);
+      if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('排版优化完成', 'success'); }
+    } catch (e: any) { addToast(e.message || '优化排版失败', 'error');
+    } finally { setLayoutLoading(false); }
+  };
+
   const doChat = async () => {
     const instruction = chatInput.trim();
     if (!instruction) return;
@@ -276,7 +280,7 @@ export default function ArticlePublish() {
       const id = await ensureArticleSaved();
       if (!id) { setChatLoading(false); return; }
       const res = await articleApi.chat(id, instruction);
-      if (res.content) { setContent(res.content); addToast('处理完成', 'success'); }
+      if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('处理完成', 'success'); }
     } catch (e: any) { addToast(e.message || '处理失败', 'error');
     } finally { setChatLoading(false); }
   };
@@ -573,27 +577,86 @@ export default function ArticlePublish() {
               </div>
             </div>
 
-            {/* AI 工具栏 — 轻量化 */}
+            {/* AI 工具栏 — 增强展示 */}
             <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 2,
-              padding: '4px 0', marginBottom: 12,
+              display: 'flex', flexWrap: 'wrap', gap: 4,
+              padding: '8px 0', marginBottom: 12,
               borderBottom: '1px solid var(--border-subtle)',
             }}>
-              <button className="btn btn-xs btn-ghost" onClick={doGenerate} disabled={genLoading}>
-                {genLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 2 }}><path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z"/></svg>}
+              <button onClick={doGenerate} disabled={genLoading} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', fontSize: 12, fontWeight: 500, lineHeight: 1.3,
+                border: '1px solid var(--accent-soft)', borderRadius: 6,
+                background: 'var(--accent-softer)', color: 'var(--accent)',
+                cursor: genLoading ? 'not-allowed' : 'pointer', opacity: genLoading ? 0.5 : 1,
+                transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={(e) => { if (!genLoading) { e.currentTarget.style.background = 'var(--accent-soft)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}}
+                onMouseLeave={(e) => { if (!genLoading) { e.currentTarget.style.background = 'var(--accent-softer)'; e.currentTarget.style.borderColor = 'var(--accent-soft)'; }}}
+              >
+                {genLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z"/></svg>}
                 生成正文
               </button>
-              <button className="btn btn-xs btn-ghost" onClick={doPolish} disabled={polishLoading || !content}>
-                {polishLoading ? <Loading size="sm" /> : null}
+              <button onClick={doPolish} disabled={polishLoading || !content} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', fontSize: 12, fontWeight: 500, lineHeight: 1.3,
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'transparent', color: 'var(--text-secondary)',
+                cursor: (polishLoading || !content) ? 'not-allowed' : 'pointer',
+                opacity: (polishLoading || !content) ? 0.4 : 1,
+                transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={(e) => { if (!polishLoading && content) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-softer)'; }}}
+                onMouseLeave={(e) => { if (!polishLoading && content) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}}
+              >
+                {polishLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>}
                 AI 校对
               </button>
-              <button className="btn btn-xs btn-ghost" onClick={doDeAi} disabled={deAiLoading || !content}>
-                {deAiLoading ? <Loading size="sm" /> : null}
+              <button onClick={doDeAi} disabled={deAiLoading || !content} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', fontSize: 12, fontWeight: 500, lineHeight: 1.3,
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'transparent', color: 'var(--text-secondary)',
+                cursor: (deAiLoading || !content) ? 'not-allowed' : 'pointer',
+                opacity: (deAiLoading || !content) ? 0.4 : 1,
+                transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={(e) => { if (!deAiLoading && content) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-softer)'; }}}
+                onMouseLeave={(e) => { if (!deAiLoading && content) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}}
+              >
+                {deAiLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M2 12a10 10 0 0 1 10-10"/><path d="M12 12 8 8"/><path d="M16 16 9 9"/></svg>}
                 去 AI 味儿
               </button>
-              <button className="btn btn-xs btn-ghost" onClick={doGenerateTitle} disabled={titleLoading || !content}>
-                {titleLoading ? <Loading size="sm" /> : null}
+              <button onClick={doGenerateTitle} disabled={titleLoading || !content} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', fontSize: 12, fontWeight: 500, lineHeight: 1.3,
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'transparent', color: 'var(--text-secondary)',
+                cursor: (titleLoading || !content) ? 'not-allowed' : 'pointer',
+                opacity: (titleLoading || !content) ? 0.4 : 1,
+                transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={(e) => { if (!titleLoading && content) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-softer)'; }}}
+                onMouseLeave={(e) => { if (!titleLoading && content) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}}
+              >
+                {titleLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>}
                 生成标题
+              </button>
+              <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', margin: '0 4px', alignSelf: 'center' }} />
+              <button onClick={doOptimizeLayout} disabled={layoutLoading || !content} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', fontSize: 12, fontWeight: 600, lineHeight: 1.3,
+                border: '1px solid var(--accent)', borderRadius: 6,
+                background: 'var(--accent-softer)', color: 'var(--accent)',
+                cursor: (layoutLoading || !content) ? 'not-allowed' : 'pointer',
+                opacity: (layoutLoading || !content) ? 0.5 : 1,
+                transition: 'all 0.15s', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={(e) => { if (!layoutLoading && content) { e.currentTarget.style.background = 'var(--accent-soft)'; }}}
+                onMouseLeave={(e) => { if (!layoutLoading && content) { e.currentTarget.style.background = 'var(--accent-softer)'; }}}
+              >
+                {layoutLoading ? <Loading size="sm" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 17h12v4H3z"/></svg>}
+                优化排版
               </button>
             </div>
 
@@ -612,48 +675,17 @@ export default function ArticlePublish() {
               </button>
             </div>
 
-            {/* 正文 — 自动撑高 */}
+            {/* 正文 — 富文本编辑器 */}
             <div style={{ marginBottom: 8 }}>
-              <textarea
-                rows={20}
+              <RichTextEditor
+                value={contentDoc}
+                onChange={(doc) => {
+                  setContentDoc(doc);
+                  setContent(tiptapToPlain(doc));
+                }}
                 placeholder="开始写作…"
-                value={content}
-                onChange={(e) => {
-                  setContent(e.target.value);
-                  autoResize(e.target);
-                }}
-                ref={contentRef}
-                style={{
-                  width: '100%',
-                  minHeight: 480,
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  outline: 'none',
-                  background: 'var(--bg-card)',
-                  fontSize: 16,
-                  lineHeight: 1.7,
-                  color: 'var(--text)',
-                  resize: 'none',
-                  padding: '14px 16px',
-                  fontFamily: 'inherit',
-                  transition: 'border-color 0.2s, box-shadow 0.2s',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-soft)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                minHeight={480}
               />
-            </div>
-
-            {/* 字数统计 */}
-            <div style={{ textAlign: 'right', marginBottom: 24 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {content.length} 字
-              </span>
             </div>
           </div>
         </div>

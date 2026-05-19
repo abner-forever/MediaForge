@@ -54,6 +54,7 @@ class AppState:
     # ── 发布队列 ──────────────────────────────────────
     def add_to_queue(self, item: Dict[str, Any]) -> None:
         item["time"] = datetime.now().isoformat()
+        item["id"] = str(uuid.uuid4())
         self.publish_queue.append(item)
         self._save_queue()
 
@@ -72,6 +73,14 @@ class AppState:
             self.publish_queue[index].update(updates)
             self._save_queue()
             return True
+        return False
+
+    def update_queue_item_by_id(self, item_id: str, updates: Dict[str, Any]) -> bool:
+        for item in self.publish_queue:
+            if item.get("id") == item_id:
+                item.update(updates)
+                self._save_queue()
+                return True
         return False
 
     # ── 文章管理 ──────────────────────────────────────
@@ -138,38 +147,44 @@ class AppState:
     # ── 操作记录 ──────────────────────────────────────
     @staticmethod
     def _load_operations() -> List[Dict[str, Any]]:
-        return read_json(OPLOG_CACHE_PATH, default=[])
+        ops = read_json(OPLOG_CACHE_PATH, default=[])
+        # 确保每个操作有 id（兼容旧数据）
+        for op in ops:
+            if "id" not in op:
+                op["id"] = str(uuid.uuid4())
+        return ops
 
     def _save_operations(self) -> None:
-        write_json(OPLOG_CACHE_PATH, self._operations[-50:])
+        write_json(OPLOG_CACHE_PATH, self._operations[-200:])
 
     def add_operation(self, action: str, detail: str = "") -> None:
         self._operations.append({
+            "id": str(uuid.uuid4()),
             "time": datetime.now().isoformat(),
             "action": action,
             "detail": detail,
         })
         self._save_operations()
 
-    def get_operations(self, limit: int = 20) -> List[Dict[str, Any]]:
-        return list(self._operations[-limit:])
+    def get_operations(self, page: int = 1, page_size: int = 10) -> tuple[List[Dict[str, Any]], int]:
+        """分页返回操作记录，按时间倒序（最新在前）。返回 (items, total)。"""
+        reversed_ops = list(reversed(self._operations))
+        total = len(reversed_ops)
+        start = (page - 1) * page_size
+        end = start + page_size
+        return reversed_ops[start:end], total
 
-    def delete_operations(self, indices: List[int]) -> int:
-        """删除指定索引（从末尾数起）的操作记录，返回删除数量。"""
-        if not indices:
+    def delete_operations_by_id(self, op_ids: List[str]) -> int:
+        """删除指定 id 的操作记录，返回删除数量。"""
+        if not op_ids:
             return 0
-        total = len(self._operations)
-        offset = max(0, total - 20)  # get_operations 的 limit=20
-        valid = set()
-        for i in indices:
-            real_idx = offset + i
-            if 0 <= real_idx < total:
-                valid.add(real_idx)
-        if not valid:
-            return 0
-        self._operations = [op for idx, op in enumerate(self._operations) if idx not in valid]
-        self._save_operations()
-        return len(valid)
+        id_set = set(op_ids)
+        before = len(self._operations)
+        self._operations = [op for op in self._operations if op.get("id") not in id_set]
+        deleted = before - len(self._operations)
+        if deleted:
+            self._save_operations()
+        return deleted
 
     def clear_all_operations(self) -> None:
         """清空所有操作记录。"""

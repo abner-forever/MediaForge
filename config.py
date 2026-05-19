@@ -100,7 +100,7 @@ class Settings:
     ai_base_url: str = field(default_factory=lambda: os.getenv("AI_BASE_URL", ""))
     post_limit: int = field(default_factory=lambda: int(os.getenv("POST_LIMIT", "3")))
     weibo_pages: int = field(default_factory=lambda: int(os.getenv("WEIBO_PAGES", "2")))
-    request_timeout: int = field(default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT", "20")))
+    request_timeout: int = field(default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT", "60")))
     retry_times: int = field(default_factory=lambda: int(os.getenv("RETRY_TIMES", "3")))
     min_publish_interval: int = field(default_factory=lambda: int(os.getenv("PUBLISH_INTERVAL_SECONDS", "10")))
     no_publish_without_confirm: bool = field(default_factory=lambda: os.getenv("REQUIRE_CONFIRM", "true").lower() == "true")

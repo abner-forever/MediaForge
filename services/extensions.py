@@ -197,7 +197,7 @@ def select_cover(images: List[str]) -> str:
 
 
 def build_html(desc: str, images: List[str]) -> str:
-    """HTML 排版：简洁的公众号图文格式，保留段落换行。
+    """HTML 排版：简洁的公众号图文格式，支持 Markdown 输入。
 
     图片由发布流程通过文件上传单独插入正文（wechat.py），
     不在 HTML 中嵌入 <img> 标签，否则本地路径图片在微信编辑器中无法显示，
@@ -207,10 +207,77 @@ def build_html(desc: str, images: List[str]) -> str:
 
     body = ['<section style="padding:16px;">']
 
-    # 按空行分割段落，保留格式
+    # 先处理 Markdown 标题 ## 标题
+    def md_heading(text: str) -> str:
+        text = re.sub(r'^## (.+)$', r'<h2 style="font-size:1.4em;font-weight:600;margin:0.8em 0 0.4em;line-height:1.3;">\1</h2>', text, flags=re.MULTILINE)
+        text = re.sub(r'^### (.+)$', r'<h3 style="font-size:1.15em;font-weight:600;margin:0.6em 0 0.3em;line-height:1.3;">\1</h3>', text, flags=re.MULTILINE)
+        return text
+
+    # 处理加粗 **text**
+    def md_bold(text: str) -> str:
+        return re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+
+    # 处理行内代码 `code`
+    def md_code(text: str) -> str:
+        return re.sub(r'`(.+?)`', r'<code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:0.9em;">\1</code>', text)
+
+    # 处理无序列表 - item
+    def md_ul(text: str) -> str:
+        def repl(m):
+            items = m.group(1).strip().split('\n')
+            html = '<ul style="padding-left:1.5em;margin:0 0 0.75em;">'
+            for item in items:
+                item = item.lstrip('-* ').strip()
+                if item:
+                    html += f'<li style="margin:0.25em 0;">{item}</li>'
+            html += '</ul>'
+            return html
+        return re.sub(r'(?<=\n)([-*]\s+.+\n?)+', repl, text)
+
+    # 处理有序列表 1. item
+    def md_ol(text: str) -> str:
+        def repl(m):
+            items = m.group(1).strip().split('\n')
+            html = '<ol style="padding-left:1.5em;margin:0 0 0.75em;">'
+            for item in items:
+                item = re.sub(r'^\d+\.\s+', '', item).strip()
+                if item:
+                    html += f'<li style="margin:0.25em 0;">{item}</li>'
+            html += '</ol>'
+            return html
+        return re.sub(r'(?<=\n)(\d+\.\s+.+\n?)+', repl, text)
+
+    # 处理引用 > quote
+    def md_blockquote(text: str) -> str:
+        def repl(m):
+            quotes = m.group(1).strip()
+            return f'<blockquote style="border-left:3px solid var(--accent);padding-left:1em;color:var(--text-secondary);margin:0.75em 0;">{quotes}</blockquote>'
+        return re.sub(r'^>\s*(.+)$', repl, text, flags=re.MULTILINE)
+
+    # 预处理：转义 HTML 特殊字符
+    def esc(t: str) -> str:
+        return t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    # 统一处理每段
     for para in re.split(r'\n\s*\n', desc.strip()):
-        lines = para.strip().split('\n')
-        text = '<br>'.join(line for line in lines if line.strip())
+        para = para.strip()
+        if not para:
+            continue
+        # 如果是 Markdown 标题行（独立一行）
+        if re.match(r'^#{1,3}\s+', para):
+            converted = md_heading(para)
+            converted = md_bold(converted)
+            converted = md_code(converted)
+            body.append(converted)
+            continue
+        # 如果是列表/引用块
+        if re.match(r'^[-*]\s+', para) or re.match(r'^\d+\.\s+', para) or para.startswith('>'):
+            converted = md_blockquote(md_ul(md_ol(md_bold(md_code(md_heading(esc(para)))))))
+            body.append(converted)
+            continue
+        # 普通段落：处理行内格式
+        lines = para.split('\n')
+        text = '<br>'.join(md_bold(md_code(line)) for line in lines if line.strip())
         if text:
             body.append(f'<p style="font-size:16px;line-height:1.8;margin:0 0 1em 0;">{text}</p>')
 

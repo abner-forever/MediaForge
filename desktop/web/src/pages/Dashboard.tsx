@@ -94,6 +94,10 @@ export default function Dashboard() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ops, setOps] = useState<OperationItem[]>([]);
+  const [opsTotal, setOpsTotal] = useState(0);
+  const [opsPage, setOpsPage] = useState(1);
+  const [loadingOps, setLoadingOps] = useState(false);
+  const pageSize = 10;
   const [connError, setConnError] = useState(false);
   const { loading: loadingDashboard, withLoading: withLoad } = useLoading();
   const { loading: deleting, withLoading: withDelete } = useLoading();
@@ -102,20 +106,36 @@ export default function Dashboard() {
     await withLoad(async () => {
       try {
         const [h, s, o] = await Promise.all([
-          dashboardApi.health(), dashboardApi.stats(), dashboardApi.operations(),
+          dashboardApi.health(), dashboardApi.stats(), dashboardApi.operations(1, pageSize),
         ]);
-        setHealth(h); setStats(s); setOps(o);
+        setHealth(h); setStats(s); setOps(o.items); setOpsTotal(o.total); setOpsPage(1);
         setConnError(false);
       } catch { setConnError(true); }
     });
   }
 
+  async function loadOps(page: number) {
+    setLoadingOps(true);
+    try {
+      const result = await dashboardApi.operations(page, pageSize);
+      if (page === 1) {
+        setOps(result.items);
+      } else {
+        setOps(prev => [...prev, ...result.items]);
+      }
+      setOpsTotal(result.total);
+      setOpsPage(page);
+    } finally {
+      setLoadingOps(false);
+    }
+  }
+
   useEffect(() => { load(); }, []);
 
-  const handleDeleteOp = useCallback(async (index: number) => {
+  const handleDeleteOp = useCallback(async (opId: string) => {
     await withDelete(async () => {
-      await dashboardApi.deleteOperations([index]);
-      setOps(await dashboardApi.operations());
+      await dashboardApi.deleteOperations([opId]);
+      await loadOps(1);
       addToast('已删除', 'info');
     });
   }, [addToast, withDelete]);
@@ -124,6 +144,7 @@ export default function Dashboard() {
     await withDelete(async () => {
       await dashboardApi.clearOperations();
       setOps([]);
+      setOpsTotal(0);
       addToast('已清空操作记录', 'info');
     });
   }, [addToast, withDelete]);
@@ -196,31 +217,60 @@ export default function Dashboard() {
         overflow: 'hidden',
         borderRadius: 16,
         background: [
-          'radial-gradient(ellipse at 80% 0%, rgba(79,140,255,0.12), transparent 60%)',
-          'radial-gradient(ellipse at 20% 100%, rgba(168,85,247,0.08), transparent 50%)',
-          'radial-gradient(ellipse at 50% 50%, rgba(6,182,212,0.04), transparent 40%)',
+          'linear-gradient(135deg, rgba(6,182,212,0.06) 0%, transparent 40%)',
+          'linear-gradient(225deg, rgba(79,140,255,0.08) 0%, transparent 40%)',
+          'linear-gradient(180deg, rgba(168,85,247,0.05) 0%, transparent 50%)',
           '#ffffff',
         ].join(', '),
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: '0 4px 20px rgba(79,140,255,0.08), 0 1px 3px rgba(0,0,0,0.04)',
       }}>
+        {/* Gradient border layer */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 16,
+          padding: 1,
+          background: 'linear-gradient(135deg, rgba(6,182,212,0.5), rgba(79,140,255,0.5), rgba(168,85,247,0.5))',
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMaskComposite: 'xor',
+          maskComposite: 'exclude',
+          pointerEvents: 'none',
+        }} />
         {/* Grid mesh */}
         <div style={{
           position: 'absolute',
           inset: 0,
           backgroundImage: [
-            'linear-gradient(rgba(79,140,255,0.04) 1px, transparent 1px)',
-            'linear-gradient(90deg, rgba(79,140,255,0.04) 1px, transparent 1px)',
+            'linear-gradient(rgba(79,140,255,0.05) 1px, transparent 1px)',
+            'linear-gradient(90deg, rgba(79,140,255,0.05) 1px, transparent 1px)',
           ].join(', '),
           backgroundSize: '36px 36px',
         }} />
         {/* Glow orbs */}
-        <GlowOrb color="rgba(79,140,255,0.12)" size={320} style={{ top: -100, right: -80 }} />
-        <GlowOrb color="rgba(168,85,247,0.08)" size={260} style={{ bottom: -80, left: -60 }} />
+        <GlowOrb color="rgba(6,182,212,0.15)" size={280} style={{ top: -80, left: -60 }} />
+        <GlowOrb color="rgba(79,140,255,0.18)" size={360} style={{ top: -100, right: -100 }} />
+        <GlowOrb color="rgba(168,85,247,0.1)" size={240} style={{ bottom: -60, left: '30%' }} />
+        {/* Tech line decorations */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: '10%',
+          right: '10%',
+          height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(79,140,255,0.3), rgba(6,182,212,0.3), transparent)',
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: '20%',
+          right: '20%',
+          height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.2), rgba(79,140,255,0.2), transparent)',
+        }} />
         {/* Glass card */}
         <div style={{
           position: 'relative',
-          background: 'rgba(255,255,255,0.7)',
+          background: 'rgba(255,255,255,0.75)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           padding: '32px 40px',
@@ -406,6 +456,9 @@ export default function Dashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #4f8cff, #a855f7)' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>最近操作</span>
+            {opsTotal > 0 && (
+              <span style={{ fontSize: 12, color: '#94a3b8', fontFeatureSettings: '"tnum"' }}>共 {opsTotal} 条</span>
+            )}
           </div>
           {ops.length > 0 && (
             <button onClick={handleClearOps} disabled={deleting}
@@ -437,7 +490,7 @@ export default function Dashboard() {
           ) : (
             <div style={{ maxHeight: 256, overflowY: 'auto' }}>
               {ops.map((op, i) => (
-                <div key={i} style={{
+                <div key={op.id} style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
                   borderBottom: i < ops.length - 1 ? '1px solid #f1f5f9' : 'none',
                   transition: 'background 0.15s',
@@ -452,7 +505,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <span style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0, fontFeatureSettings: '"tnum"' }}>{timeAgo(op.time)}</span>
-                  <button onClick={() => handleDeleteOp(i)} style={{
+                  <button onClick={() => handleDeleteOp(op.id)} style={{
                     flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', opacity: 0,
                     transition: 'all 0.15s',
@@ -466,6 +519,22 @@ export default function Dashboard() {
                   </button>
                 </div>
               ))}
+              {ops.length < opsTotal && (
+                <div style={{ padding: '12px 16px', textAlign: 'center', borderTop: '1px solid #f1f5f9' }}>
+                  <button
+                    onClick={() => loadOps(opsPage + 1)}
+                    disabled={loadingOps}
+                    style={{
+                      fontSize: 13, fontWeight: 500, color: '#4f8cff', background: 'none',
+                      border: 'none', cursor: 'pointer', padding: '4px 16px',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#3b6fd4'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#4f8cff'}
+                  >
+                    {loadingOps ? '加载中…' : `加载更多（${opsTotal - ops.length} 条）`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

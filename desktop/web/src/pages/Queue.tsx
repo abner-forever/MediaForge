@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../stores';
-import { queueApi, publishLogsApi, type QueueItem } from '../api/client';
+import { queueApi, publishLogsApi, wechatAccountApi, type QueueItem, type WeChatAccount } from '../api/client';
 import Select from '../components/Select';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useLoading } from '../hooks/useLoading';
@@ -98,11 +98,17 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishing, setPublishing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const isPublished = item.status === 'published';
   const { loading: generating, withLoading: withGenerating } = useLoading();
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logsLenRef = useRef(logs.length);
+
+  useEffect(() => {
+    wechatAccountApi.list().then(({ accounts }) => setWechatAccounts(accounts)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     // 只在日志追加时（发布过程中）滚动到底部，挂载时已有的日志不触发
@@ -116,7 +122,15 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   }, [logs]);
 
   async function updateField(field: string, value: string) { await queueApi.update(index, { [field]: value } as any); }
-  async function deleteItem() { await queueApi.remove(index); setQueue((await queueApi.get()).queue); addToast('已删除', 'info'); }
+  async function deleteItem() {
+    try {
+      await queueApi.remove(index);
+      setQueue((await queueApi.get()).queue);
+      addToast('已删除', 'info');
+    } catch (err: any) {
+      addToast(err.message || '删除失败', 'error');
+    }
+  }
 
   async function generateContent() {
     await withGenerating(async () => {
@@ -158,7 +172,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
     addToast(`正在${action}...`, 'info'); setLogs([]); setPublishing(true); publishRef.current = true;
-    const pubPromise = queueApi.publish(index, opts);
+    const pubPromise = queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
     pollLogs(0, { signal: ac.signal });
@@ -260,6 +274,25 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">已发布</span>
             )}
           </div>
+          {/* Account selector */}
+          {wechatAccounts.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-muted shrink-0">发布到</span>
+              <div className="w-44">
+                <Select
+                  value={selectedAccountId}
+                  onChange={setSelectedAccountId}
+                  options={[
+                    { label: '默认账号', value: '' },
+                    ...wechatAccounts.map(acc => ({
+                      label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
+                      value: acc.account_id,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
+          )}
           <label>标题
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" disabled={isPublished} />
           </label>
@@ -317,18 +350,28 @@ const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: Que
   const navigate = useNavigate();
   const { addToast, setQueue } = useStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const tags = item.tags || [];
 
+  useEffect(() => {
+    wechatAccountApi.list().then(({ accounts }) => setWechatAccounts(accounts)).catch(() => {});
+  }, []);
+
   async function deleteItem() {
-    await queueApi.remove(index);
-    setQueue((await queueApi.get()).queue);
-    addToast('已删除', 'info');
+    try {
+      await queueApi.remove(index);
+      setQueue((await queueApi.get()).queue);
+      addToast('已删除', 'info');
+    } catch (err: any) {
+      addToast(err.message || '删除失败', 'error');
+    }
   }
 
   async function publish(opts: { save_draft?: boolean }) {
     addToast(`正在${opts.save_draft ? '保存草稿' : '发布'}...`, 'info');
     try {
-      const r = await queueApi.publish(index, opts);
+      const r = await queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
       addToast(r.success ? `${opts.save_draft ? '保存' : '发布'}成功` : `失败：${r.message}`, r.success ? 'success' : 'error');
       setQueue((await queueApi.get()).queue);
     } catch (err: any) {
@@ -385,6 +428,25 @@ const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: Que
             </div>
           )}
 
+          {/* 账号选择 */}
+          {wechatAccounts.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-muted shrink-0">发布到</span>
+              <div className="w-44">
+                <Select
+                  value={selectedAccountId}
+                  onChange={setSelectedAccountId}
+                  options={[
+                    { label: '默认账号', value: '' },
+                    ...wechatAccounts.map(acc => ({
+                      label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
+                      value: acc.account_id,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
+          )}
           {/* 操作按钮 */}
           <div className="flex gap-2 flex-wrap pt-1">
             <button className="btn btn-sm" onClick={() => navigate(`/articles`)}>

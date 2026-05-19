@@ -69,7 +69,8 @@ class TestAppState:
     def test_add_operation(self, temp_data_dir):
         state = AppState()
         state.add_operation("test_action", "test_detail")
-        ops = state.get_operations(10)
+        ops, total = state.get_operations()
+        assert total >= 1
         assert any(op["action"] == "test_action" for op in ops)
 
     def test_discovery_results(self, temp_data_dir):

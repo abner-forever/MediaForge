@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, THEME_PRESETS } from '../stores';
-import { settingsApi, type SettingsData, type WeiboLoginEvent } from '../api/client';
+import { settingsApi, wechatAccountApi, type SettingsData, type WeiboLoginEvent, type WeChatLoginEvent } from '../api/client';
 import Select from '../components/Select';
 import NumberInput from '../components/NumberInput';
 import Slider from '../components/Slider';
@@ -177,6 +177,7 @@ function SystemTab({ data, save, onReload }: { data: SettingsData; save: (u: Rec
     { id: 'llm', label: '大模型配置' },
     { id: 'weibo', label: '微博配置' },
     { id: 'toutiao', label: '今日头条配置' },
+    { id: 'wechat', label: '微信配置' },
     { id: 'watermark', label: '水印过滤' },
     { id: 'materials', label: '素材保存位置' },
   ];
@@ -201,6 +202,7 @@ function SystemTab({ data, save, onReload }: { data: SettingsData; save: (u: Rec
         {subTab === 'llm' && <LLMSection data={data} save={save} />}
         {subTab === 'weibo' && <WeiboSection data={data} save={save} onReload={onReload} />}
         {subTab === 'toutiao' && <ToutiaoSection data={data} save={save} />}
+        {subTab === 'wechat' && <WechatSection data={data} onReload={onReload} />}
         {subTab === 'watermark' && <WatermarkSection data={data} save={save} />}
         {subTab === 'materials' && <MaterialsSection data={data} save={save} />}
       </div>
@@ -214,7 +216,7 @@ const PROVIDERS: Record<string, { name: string; models: string[]; baseUrl: strin
   openai: { name: 'OpenAI', models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'], baseUrl: 'https://api.openai.com/v1', keyName: 'OPENAI_API_KEY', urlHint: 'OpenAI API 地址，格式：https://api.openai.com/v1' },
   glm: { name: '智谱 GLM', models: ['GLM-5.1', 'GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.7-Flash', 'GLM-4.6', 'GLM-4.5-Air', 'GLM-4-Long'], baseUrl: 'https://open.bigmodel.cn/api/paas/v4', keyName: 'GLM_API_KEY', urlHint: '智谱 API 地址，格式：https://open.bigmodel.cn/api/paas/v4' },
   qwen: { name: '千问 Qwen', models: ['qwen3.6-max-preview', 'qwen3.5-max', 'qwen3.5-plus', 'qwen3.5-flash', 'qwen3-max-thinking', 'qwen3-max', 'qwen3-plus', 'qwen3-flash'], baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', keyName: 'QWEN_API_KEY', urlHint: '阿里云 DashScope 兼容地址，格式：https://dashscope.aliyuncs.com/compatible-mode/v1' },
-  minimax: { name: 'MiniMax', models: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'], baseUrl: 'https://api.minimax.io/v1', keyName: 'MINIMAX_API_KEY', urlHint: 'MiniMax API 地址，格式：https://api.minimax.io/v1' },
+  minimax: { name: 'MiniMax', models: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'], baseUrl: 'https://api.minimaxi.com/v1', keyName: 'MINIMAX_API_KEY', urlHint: 'MiniMax API 地址，格式：https://api.minimaxi.com/v1' },
 };
 
 function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
@@ -230,7 +232,31 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
   const [testMessage, setTestMessage] = useState('');
   const current = PROVIDERS[provider];
 
-  function handleProviderChange(p: string) { setProvider(p); const c = PROVIDERS[p]; if (c) { setBaseUrl(c.baseUrl); setModel(c.models[0]); } setApiKey(''); setFullKey(''); setTestState('idle'); setTestMessage(''); }
+  // 预加载完整 API Key，使复制操作可以同步执行（避免异步丢失用户手势上下文）
+  useEffect(() => {
+    if (data.ai_api_keys?.[provider]) {
+      settingsApi.getKey(provider).then(({ key }) => {
+        if (key) setFullKey(key);
+      }).catch(() => {});
+    }
+  }, [provider]);
+
+  function handleProviderChange(p: string) {
+    const prev = provider;
+    setProvider(p);
+    const c = PROVIDERS[p];
+    if (c) { setBaseUrl(c.baseUrl); setModel(c.models[0]); }
+    setApiKey('');
+    setFullKey('');
+    setTestState('idle');
+    setTestMessage('');
+    // 如果该 provider 已有保存的 key，从后端加载并显示（mask 状态）
+    if (p !== prev && !data.ai_api_keys?.[p]) {
+      settingsApi.getKey(p).then(({ key }) => {
+        if (key) setApiKey(key);
+      }).catch(() => {});
+    }
+  }
   async function testConnection() {
     setTestState('testing');
     setTestMessage('');
@@ -255,17 +281,31 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
     if (!fullKey) { try { setFullKey((await settingsApi.getKey(provider)).key); } catch {} }
     setShowKey(true);
   }
+  function copyToClipboard(text: string) {
+    // 优先使用 Clipboard API，回退到 textarea + execCommand
+    navigator.clipboard.writeText(text).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  }
+
   async function copyApiKey() {
     const text = fullKey || apiKey;
     if (text) {
-      await navigator.clipboard.writeText(text);
+      copyToClipboard(text);
       addToast('已复制', 'success');
       return;
     }
     try {
       const { key } = await settingsApi.getKey(provider);
       if (key) {
-        await navigator.clipboard.writeText(key);
+        copyToClipboard(key);
         addToast('已复制', 'success');
         setFullKey(key);
       }
@@ -274,7 +314,7 @@ function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<strin
   const currentKey = data.ai_api_keys?.[provider] || '';
   const displayValue = showKey
     ? (fullKey || apiKey)
-    : (apiKey ? maskKey(apiKey) : maskKey(currentKey));
+    : (apiKey ? maskKey(apiKey) : (currentKey ? maskKey(currentKey) : ''));
 
   return (
     <div className="card space-y-4">
@@ -561,6 +601,143 @@ function ToutiaoSection({ data, save }: { data: SettingsData; save: (u: Record<s
       <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { TOUTIAO_USER_ID: userId, TOUTIAO_FETCH_MODE: fetchMode, TOUTIAO_SEARCH_TAGS: searchTags }; if (cookie) u.TOUTIAO_COOKIE = cookie; await save(u); })} disabled={saving}>
         {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存头条配置'}
       </button>
+    </div>
+  );
+}
+
+function WechatSection({ data, onReload }: { data: SettingsData; onReload?: () => Promise<void> }) {
+  const { addToast } = useStore();
+  const [accounts, setAccounts] = useState(data.wechat_accounts || []);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [loginState, setLoginState] = useState<Record<string, { loading: boolean; message: string }>>({});
+
+  async function refreshAccounts() {
+    try {
+      const { accounts: list } = await wechatAccountApi.list();
+      setAccounts(list);
+    } catch { /* ignore */ }
+  }
+
+  async function handleAdd() {
+    const name = newName.trim();
+    if (!name) { addToast('请输入公众号名称', 'error'); return; }
+    setAdding(true);
+    try {
+      const { account } = await wechatAccountApi.add(name);
+      setNewName('');
+      await refreshAccounts();
+      addToast(`「${account.name}」已添加`, 'success');
+
+      // 添加后自动触发登录
+      handleLogin(account.account_id);
+    } catch (err: any) {
+      addToast(err.message || '添加失败', 'error');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleLogin(accountId: string) {
+    setLoginState(s => ({ ...s, [accountId]: { loading: true, message: '正在启动浏览器...' } }));
+    try {
+      await wechatAccountApi.login(accountId, (evt: WeChatLoginEvent) => {
+        if (evt.type === 'progress') {
+          setLoginState(s => ({ ...s, [accountId]: { loading: true, message: evt.message || '' } }));
+        } else if (evt.type === 'done') {
+          setLoginState(s => ({ ...s, [accountId]: { loading: false, message: '登录成功' } }));
+          addToast('登录成功', 'success');
+          refreshAccounts();
+        } else if (evt.type === 'error') {
+          setLoginState(s => ({ ...s, [accountId]: { loading: false, message: evt.message || '登录失败' } }));
+          addToast(evt.message || '登录失败', 'error');
+        }
+      });
+    } catch (err: any) {
+      setLoginState(s => ({ ...s, [accountId]: { loading: false, message: err.message } }));
+    }
+  }
+
+  async function handleDelete(accountId: string, name: string) {
+    if (!window.confirm(`确定删除公众号「${name}」及其所有数据吗？`)) return;
+    try {
+      await wechatAccountApi.remove(accountId);
+      addToast(`「${name}」已删除`, 'success');
+      await refreshAccounts();
+    } catch (err: any) {
+      addToast(err.message || '删除失败', 'error');
+    }
+  }
+
+  async function handleLogout(accountId: string) {
+    try {
+      await wechatAccountApi.logout(accountId);
+      addToast('已清除登录态', 'info');
+      await refreshAccounts();
+    } catch (err: any) {
+      addToast(err.message || '操作失败', 'error');
+    }
+  }
+
+  return (
+    <div className="card space-y-4">
+      <div className="section-header">微信配置</div>
+      <p className="text-xs text-text-muted">管理多个微信公众号，每个账号有独立的浏览器配置和登录态</p>
+
+      {/* 账号列表 */}
+      {accounts.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-sm text-text-muted">暂无公众号账号，请添加</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {accounts.map(acc => {
+            const ls = loginState[acc.account_id];
+            return (
+              <div key={acc.account_id} className="flex items-center gap-3 p-3 rounded-xl bg-bg-secondary border border-border">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${acc.logged_in ? 'bg-success' : 'bg-text-muted/40'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text truncate">{acc.name}</p>
+                  <p className="text-xs text-text-muted">
+                    {acc.logged_in ? '已登录' : '未登录'}
+                    {acc.last_used ? ` · 最后使用: ${new Date(acc.last_used).toLocaleString()}` : ''}
+                  </p>
+                </div>
+                {ls?.loading ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" />
+                    <span className="text-xs text-text-muted">{ls.message}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    {acc.logged_in ? (
+                      <>
+                        <button className="btn btn-sm" onClick={() => handleLogin(acc.account_id)} title="重新登录">重登</button>
+                        <button className="btn btn-sm btn-ghost" onClick={() => handleLogout(acc.account_id)} title="清除登录态">注销</button>
+                      </>
+                    ) : (
+                      <button className="btn btn-sm" onClick={() => handleLogin(acc.account_id)}>登录</button>
+                    )}
+                    <button className="btn btn-sm btn-ghost text-danger" onClick={() => handleDelete(acc.account_id, acc.name)}>删除</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 添加账号 */}
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="text-xs text-text-muted">公众号名称</label>
+          <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
+            placeholder="例如：娱乐号、时尚号" className="w-full" />
+        </div>
+        <button className="btn btn-primary" onClick={handleAdd} disabled={adding}>
+          {adding ? '添加中...' : '添加公众号'}
+        </button>
+      </div>
     </div>
   );
 }

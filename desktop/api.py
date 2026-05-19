@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -31,6 +30,7 @@ from services.ai import (
     generate_article,
     generate_article_title,
     generate_content,
+    optimize_layout,
     polish_article,
 )
 from services.downloader import download_images
@@ -105,6 +105,7 @@ class EnqueueRequest(BaseModel):
 class PublishRequest(BaseModel):
     dry_run: bool = False
     save_draft: bool = True
+    account_id: Optional[str] = None
 
 
 # ── 文章请求模型 ───────────────────────────────────
@@ -147,6 +148,7 @@ class ArticleChatRequest(BaseModel):
 class ArticlePublishRequest(BaseModel):
     save_draft: bool = False
     dry_run: bool = False
+    account_id: Optional[str] = None
 
 
 # ── 首页 ──────────────────────────────────────────────
@@ -190,6 +192,15 @@ def _get_provider_key(env: dict, provider: str) -> str:
     return env.get(key_map.get(provider, ""), "") or ""
 
 
+def _get_wechat_accounts_list() -> list:
+    """获取微信账号列表（含登录状态）。"""
+    try:
+        from utils.wechat_auth_store import list_accounts
+        return list_accounts()
+    except Exception:
+        return []
+
+
 @app.get("/api/settings")
 async def get_settings():
     from utils.weibo_auth_store import read_weibo_auth
@@ -203,7 +214,7 @@ async def get_settings():
 
     # 收集所有供应商的 masked key，用于前端切换展示
     all_keys = {}
-    for prov in ("mimo", "deepseek", "glm", "openai"):
+    for prov in ("mimo", "deepseek", "glm", "openai", "minimax"):
         k = _get_provider_key(cfg, prov)
         if k:
             all_keys[prov] = _mask_key(k)
@@ -256,6 +267,8 @@ async def get_settings():
         # ── 主题设置 ──
         "theme": store.get("APP_THEME", ""),
         "accent": store.get("APP_ACCENT", ""),
+        # ── 微信多账号 ──
+        "wechat_accounts": _get_wechat_accounts_list(),
     }
 
 
@@ -534,6 +547,134 @@ async def clear_weibo():
     return {"success": True}
 
 
+# ── 微信公众号多账号管理 ────────────────────────────
+
+
+@app.get("/api/wechat/accounts")
+async def wechat_list_accounts():
+    """列出所有微信公众号账号及登录状态。"""
+    from utils.wechat_auth_store import list_accounts
+    return {"accounts": list_accounts()}
+
+
+@app.post("/api/wechat/accounts")
+async def wechat_add_account(data: Dict[str, str]):
+    """添加新公众号账号。"""
+    name = (data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "账号名称不能为空")
+    from utils.wechat_auth_store import add_account
+    account = add_account(name)
+    return {"success": True, "account": account}
+
+
+@app.delete("/api/wechat/accounts/{account_id}")
+async def wechat_remove_account(account_id: str):
+    """删除公众号账号及其所有数据。"""
+    from utils.wechat_auth_store import remove_account
+    if not remove_account(account_id):
+        raise HTTPException(404, "账号不存在")
+    return {"success": True}
+
+
+@app.get("/api/wechat/accounts/{account_id}/status")
+async def wechat_account_status(account_id: str):
+    """检查指定账号的登录状态。"""
+    from utils.wechat_auth_store import get_account, get_account_paths
+    account = get_account(account_id)
+    if not account:
+        raise HTTPException(404, "账号不存在")
+    _, state_path = get_account_paths(account_id)
+    return {"logged_in": state_path.exists(), "name": account.get("name", "")}
+
+
+@app.get("/api/wechat/accounts/{account_id}/login")
+async def wechat_account_login(account_id: str):
+    """启动浏览器登录指定公众号。通过 SSE 流式返回登录状态。"""
+    from utils.wechat_auth_store import get_account, get_account_paths
+    account = get_account(account_id)
+    if not account:
+        raise HTTPException(404, "账号不存在")
+
+    import json as _json
+    from queue import Empty, Queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    msg_queue: Queue = Queue()
+
+    profile_dir, state_path = get_account_paths(account_id)
+
+    def run_login():
+        from services.wechat import _ensure_login, _looks_logged_in, logger
+        from playwright.sync_api import sync_playwright
+
+        def _emit(msg: str) -> None:
+            msg_queue.put(("progress", msg))
+
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with sync_playwright() as p:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=str(profile_dir),
+                    headless=False,
+                )
+                page = context.new_page()
+                page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
+                _emit("正在登录微信公众号...")
+
+                if _looks_logged_in(page):
+                    _emit("检测到已登录，无需扫码")
+                else:
+                    _emit("请在弹出的浏览器窗口中扫码登录")
+                    _ensure_login(page, state_path=state_path,
+                                  on_scan_needed=lambda: _emit("等待扫码中，请在浏览器窗口完成扫码"))
+                    _emit("登录成功")
+
+                context.storage_state(path=str(state_path))
+                from utils.wechat_auth_store import update_account
+                update_account(account_id, last_used=datetime.now().isoformat())
+                context.close()
+
+            msg_queue.put(("done", "登录完成"))
+        except Exception as e:
+            msg_queue.put(("error", str(e)))
+
+    ThreadPoolExecutor(1).submit(run_login)
+
+    def event_stream():
+        while True:
+            try:
+                msg = msg_queue.get(timeout=0.5)
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+
+            if msg[0] == "progress":
+                yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg[0] == "done":
+                yield f"data: {_json.dumps({'type': 'done', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+            elif msg[0] == "error":
+                yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/wechat/accounts/{account_id}/logout")
+async def wechat_account_logout(account_id: str):
+    """清除指定公众号的登录态（删除 state.json）。"""
+    from utils.wechat_auth_store import get_account, get_account_paths
+    account = get_account(account_id)
+    if not account:
+        raise HTTPException(404, "账号不存在")
+    _, state_path = get_account_paths(account_id)
+    if state_path.exists():
+        state_path.unlink()
+    return {"success": True}
+
+
 @app.get("/api/platforms")
 async def get_platforms():
     """返回所有已注册平台的元数据，供前端动态构建平台选择器。"""
@@ -618,18 +759,19 @@ async def recent_runs():
 
 
 @app.get("/api/dashboard/operations")
-async def recent_operations():
-    return app_state.get_operations()
+async def recent_operations(page: int = Query(1), page_size: int = Query(10)):
+    items, total = app_state.get_operations(page=page, page_size=page_size)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @app.post("/api/dashboard/operations/delete")
 async def delete_operations(data: Dict[str, Any]):
-    """批量删除操作记录。data = {indices: [0, 2, 5]} 或 {clear: true}。"""
+    """删除操作记录。data = {ids: ["uuid1", "uuid2"]} 或 {clear: true}。"""
     if data.get("clear"):
         app_state.clear_all_operations()
         return {"success": True, "deleted": -1}
-    indices = data.get("indices", [])
-    deleted = app_state.delete_operations(indices)
+    op_ids = data.get("ids", [])
+    deleted = app_state.delete_operations_by_id(op_ids)
     return {"success": True, "deleted": deleted}
 
 
@@ -1023,24 +1165,24 @@ async def publish_from_queue(index: int, req: PublishRequest):
         cover=abs_cover,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
+        account_id=req.account_id,
         on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
         on_confirm_needed=lambda t: True,
         on_log=_on_log,
     )
     app_state.finish_publish()
+    updates = {"publish_logs": app_state.get_publish_logs()}
     if result.get("success"):
         action = "保存草稿" if req.save_draft else "发布"
         app_state.add_operation(action, f"「{title}」")
-        # 标记状态标签（已保存/已发布），不删除队列项
-        status = "saved" if req.save_draft else "published"
-        app_state.update_queue_item(index, {
-            "publish_logs": app_state.get_publish_logs(),
-            "status": status,
-        })
+        updates["status"] = "saved" if req.save_draft else "published"
+    # 用 id 定位（兼容队列中途变动导致的索引偏移）
+    # 无 id 的老数据回退到索引定位，找不到说明已被删除则跳过
+    item_id = item.get("id")
+    if item_id:
+        app_state.update_queue_item_by_id(item_id, updates)
     else:
-        app_state.update_queue_item(index, {
-            "publish_logs": app_state.get_publish_logs(),
-        })
+        app_state.update_queue_item(index, updates)
     return result
 
 
@@ -1104,40 +1246,17 @@ async def serve_image(path: str):
     return FileResponse(str(file_path))
 
 
-_CT_EXT_MAP = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
-_EXT_CT_MAP = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
-
-_PROXY_CACHE = {}  # url → (content, content_type) 内存缓存
+_PROXY_CACHE: dict[str, tuple[bytes, str]] = {}  # url → (content, content_type)
 
 
 def _proxy_cache_get(url: str) -> tuple[bytes | None, str | None]:
-    """从内存/磁盘缓存读取已代理的图片。"""
-    # 内存
-    if url in _PROXY_CACHE:
-        return _PROXY_CACHE[url]
-    # 磁盘
-    cache_dir = DOWNLOAD_DIR / "__proxy_cache__"
-    if not cache_dir.exists():
-        return None, None
-    key = hashlib.md5(url.encode()).hexdigest()
-    for ext in (".jpg", ".png", ".webp", ".gif", ".jpeg"):
-        p = cache_dir / f"{key}{ext}"
-        if p.exists():
-            ct = _EXT_CT_MAP.get(ext, "image/jpeg")
-            data = p.read_bytes()
-            _PROXY_CACHE[url] = (data, ct)
-            return data, ct
-    return None, None
+    """从内存缓存读取代理图片。"""
+    return _PROXY_CACHE.get(url, (None, None))
 
 
 def _proxy_cache_set(url: str, content: bytes, content_type: str) -> None:
-    """保存代理图片到内存和磁盘缓存。"""
+    """保存代理图片到内存缓存（不写磁盘）。"""
     _PROXY_CACHE[url] = (content, content_type)
-    cache_dir = DOWNLOAD_DIR / "__proxy_cache__"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    key = hashlib.md5(url.encode()).hexdigest()
-    ext = _CT_EXT_MAP.get(content_type.split(";")[0].strip(), ".jpg")
-    (cache_dir / f"{key}{ext}").write_bytes(content)
 
 
 _PLATFORM_REFERERS = {
@@ -1625,8 +1744,6 @@ async def article_cover_search(keyword: str = Query("")):
                 break
             if not path.is_file() or path.suffix.lower() not in _IMAGE_EXT:
                 continue
-            if "__covers__" in path.relative_to(root).parts:
-                continue
             rel = path.relative_to(root).as_posix()
             if kw and kw not in rel.lower():
                 continue
@@ -1886,6 +2003,22 @@ async def generate_article_title_endpoint(article_id: str):
     return {"success": bool(title), "title": title}
 
 
+@app.post("/api/articles/{article_id}/optimize-layout")
+async def optimize_article_layout(article_id: str):
+    """AI 优化文章排版结构。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+    content = article.get("content", "")
+    if not content:
+        raise HTTPException(400, "正文为空")
+
+    optimized = optimize_layout(content)
+    app_state.update_article(article_id, {"content": optimized})
+    app_state.add_operation("AI 优化排版", f"「{article.get('title', '') or '无标题'}」")
+    return {"success": True, "content": optimized}
+
+
 @app.post("/api/articles/{article_id}/chat")
 async def chat_article_content(article_id: str, req: ArticleChatRequest):
     """AI 对话式修改/生成正文。"""
@@ -1969,6 +2102,7 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
         cover=abs_cover,
         dry_run=req.dry_run,
         save_draft=req.save_draft,
+        account_id=req.account_id,
         on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
         on_confirm_needed=lambda t: True,
         on_log=_on_log,

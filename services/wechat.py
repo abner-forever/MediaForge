@@ -1,6 +1,7 @@
 import random
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -44,7 +45,8 @@ def _looks_logged_in(page) -> bool:
     return False
 
 
-def _ensure_login(page, on_scan_needed: Optional[Callable[[], None]] = None) -> None:
+def _ensure_login(page, state_path: Optional[Path] = None,
+                   on_scan_needed: Optional[Callable[[], None]] = None) -> None:
     if "mp.weixin.qq.com" not in page.url:
         page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
     if not _looks_logged_in(page):
@@ -63,7 +65,8 @@ def _ensure_login(page, on_scan_needed: Optional[Callable[[], None]] = None) -> 
         if not _looks_logged_in(page):
             raise RuntimeError("扫码后仍未检测到登录成功，请确认浏览器页面已进入公众号后台")
     logger.info("登录成功，当前页面: %s", page.url)
-    page.context.storage_state(path=str(WECHAT_STATE_PATH))
+    path_to_use = state_path or WECHAT_STATE_PATH
+    page.context.storage_state(path=str(path_to_use))
 
 
 def _extract_token_from_url(url: str) -> str:
@@ -272,8 +275,8 @@ def _confirm_cover_dialogs(page, on_log=None) -> bool:
         "button:has-text('下一张')",
         "[class*='next']",
         ".weui-desktop-btn_primary",
-    ], wait_ms=2000)
-    _human_sleep(0.3, 0.2)
+    ], wait_ms=4000)
+    _human_sleep(0.5, 0.3)
 
     _emit("封面弹窗：确认选择...", on_log)
     _click_first_available(page, [
@@ -281,15 +284,15 @@ def _confirm_cover_dialogs(page, on_log=None) -> bool:
         "button:has-text('确认')",
         "button:has-text('完成')",
         "button:has-text('保存')",
-    ], wait_ms=2000)
-    _human_sleep(0.3, 0.2)
+    ], wait_ms=4000)
+    _human_sleep(0.5, 0.3)
 
     _emit("封面弹窗：裁剪完成...", on_log)
     _click_first_available(page, [
         "button:has-text('完成')",
         "button:has-text('确定')",
         "button:has-text('保存')",
-    ], wait_ms=2000)
+    ], wait_ms=4000)
     _human_sleep(0.5, 0.3)
 
     _emit("封面设置流程完成", on_log)
@@ -367,32 +370,23 @@ def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = N
                     _emit(f"封面图片已上传: {Path(cover_path).name}", on_log)
                     _human_sleep(3.0, 1.0)
 
-                    # 在弹窗中找到刚上传的图片缩略图并点击选中
-                    _emit("正在选中已上传的封面图片...", on_log)
-                    for attempt_sel in range(5):
-                        try:
-                            for f_sel in [page] + page.frames:
-                                # 在弹窗内找可见的 img 元素
-                                dialog = f_sel.locator("[role='dialog'], .weui-desktop-dialog").first
-                                if dialog.is_visible(timeout=500):
-                                    imgs = dialog.locator("img")
-                                    cnt = imgs.count()
-                                    for idx in range(cnt):
-                                        try:
-                                            img = imgs.nth(idx)
-                                            if img.is_visible(timeout=300):
-                                                img.click()
-                                                _emit("已选中封面图片", on_log)
-                                                _human_sleep(0.5, 0.3)
-                                                return _confirm_cover_dialogs(page, on_log)
-                                        except Exception:
-                                            continue
-                        except Exception:
-                            pass
-                        _human_sleep(1.0, 0.5)
-                    _emit("未能在弹窗中选中封面图片", on_log)
-                except Exception:
+                    # 封面上传后直接点击确定/完成，不需要再选缩略图
+                    _emit("封面弹窗：确认上传...", on_log)
+                    _click_first_available(page, [
+                        "button:has-text('确定')",
+                        "button:has-text('确认')",
+                        "button:has-text('完成')",
+                        "button:has-text('保存')",
+                        ".weui-desktop-btn_primary",
+                    ], wait_ms=4000)
+                    _human_sleep(0.8, 0.3)
+                    _emit("封面设置流程完成", on_log)
+                    return True
+                except Exception as e:
+                    _emit(f"上传封面失败: {e}", on_log)
                     continue
+
+            _emit("未能找到文件输入框上传封面", on_log)
 
     # 3. 降级：从正文选择
     _emit("尝试从正文选择封面...", on_log)
@@ -487,6 +481,7 @@ def publish_article(
     cover: Optional[str] = None,
     dry_run: bool = False,
     save_draft: bool = False,
+    account_id: Optional[str] = None,
     on_scan_needed: Optional[Callable[[], None]] = None,
     on_confirm_needed: Optional[Callable[[str], bool]] = None,
     on_log: Optional[Callable[[str], None]] = None,
@@ -497,6 +492,7 @@ def publish_article(
     Args:
         save_draft: True 则保存草稿不发布，False 则直接发布
         cover: 封面图片的绝对路径，有则直接上传，无则从正文选择
+        account_id: 多账号 ID，指定使用哪个公众号的浏览器配置
         on_scan_needed: 需要扫码时的回调（UI 模式下用于显示提示）
         on_confirm_needed: 需要确认时的回调，接收 title，返回 True 确认发布
                            为 None 时使用 input() 阻塞等待（CLI 模式）
@@ -510,8 +506,16 @@ def publish_article(
 
     try:
         with sync_playwright() as p:
-            user_data_dir = DATA_DIR / "state" / "wechat_chromium_profile"
+            # 根据 account_id 解析浏览器配置文件和 state 路径
+            if account_id:
+                from utils.wechat_auth_store import get_account_paths, update_account
+                user_data_dir, state_path = get_account_paths(account_id)
+                state_path_global = state_path
+            else:
+                user_data_dir = DATA_DIR / "state" / "wechat_chromium_profile"
+                state_path_global = WECHAT_STATE_PATH
             user_data_dir.mkdir(parents=True, exist_ok=True)
+            state_path_global.parent.mkdir(parents=True, exist_ok=True)
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
                 headless=False,
@@ -519,7 +523,7 @@ def publish_article(
             page = context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             _emit("正在登录微信公众号...", on_log)
-            _ensure_login(page, on_scan_needed=on_scan_needed)
+            _ensure_login(page, state_path=state_path_global, on_scan_needed=on_scan_needed)
             _emit("登录成功", on_log)
 
             # 直接用 token 跳转新建图文页，避免逐个点击导航链接的等待
@@ -620,7 +624,9 @@ def publish_article(
                     _human_sleep(1.0, 0.3)
                 if not save_ok:
                     _emit("未检测到保存成功的提示，但可能已保存", on_log)
-                context.storage_state(path=str(WECHAT_STATE_PATH))
+                context.storage_state(path=str(state_path_global))
+                if account_id:
+                    update_account(account_id, last_used=datetime.now().isoformat())
                 context.close()
                 _emit("草稿保存成功", on_log)
                 msg = "已保存为草稿" + ("（未设置封面）" if not cover_ok else "")
@@ -644,7 +650,9 @@ def publish_article(
                 ):
                     raise RuntimeError("未找到发布按钮")
                 _human_sleep(2.0, 1.0)
-                context.storage_state(path=str(WECHAT_STATE_PATH))
+                context.storage_state(path=str(state_path_global))
+                if account_id:
+                    update_account(account_id, last_used=datetime.now().isoformat())
                 context.close()
 
         _emit("发布成功", on_log)

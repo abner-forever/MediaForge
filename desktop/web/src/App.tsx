@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Loading from './components/Loading';
 
@@ -25,7 +26,9 @@ export default function App() {
             <Suspense fallback={<PageLoading />}><ArticlePublish /></Suspense>
           } />
           <Route path="/queue" element={
-            <Suspense fallback={<PageLoading />}><Queue /></Suspense>
+            <Suspense fallback={<PageLoading />}>
+              <ErrorBoundary><Queue /></ErrorBoundary>
+            </Suspense>
           } />
           <Route path="/materials" element={
             <Suspense fallback={<PageLoading />}><Materials /></Suspense>

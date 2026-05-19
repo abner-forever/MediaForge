@@ -28,6 +28,13 @@ export default defineConfig({
           if (id.includes('/node_modules/zustand/')) {
             return 'vendor-state';
           }
+          if (id.includes('/node_modules/marked/')) {
+            return 'vendor-marked';
+          }
+          const cmMatch = id.match(/\/node_modules\/@codemirror\/([^/]+)/);
+          if (cmMatch) {
+            return `cm-${cmMatch[1]}`;
+          }
         },
       },
     },
