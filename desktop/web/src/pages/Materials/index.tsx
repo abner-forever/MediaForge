@@ -1,25 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useStore } from '../stores';
-import { materialsApi, queueApi } from '../api/client';
-import type { TreeNode, BrowseFolder, BrowseFile } from '../api/client';
-import ContextMenu, { type MenuItem } from '../components/ContextMenu';
-import ConfirmDialog from '../components/ConfirmDialog';
-import Loading from '../components/Loading';
-import Checkbox from '../components/Checkbox';
-import { useLoading } from '../hooks/useLoading';
-
-const imgSrc = (p: string) => {
-  if (p.startsWith('http')) return `/proxy?url=${encodeURIComponent(p)}`;
-  if (!p.startsWith('/')) return `/images/${encodeURIComponent(p).replace(/%2F/g, '/')}`;
-  const idx = p.indexOf('data/images/');
-  const rel = idx >= 0 ? p.slice(idx + 'data/images/'.length) : (p.split('/').pop() || '');
-  return `/images/${encodeURIComponent(rel).replace(/%2F/g, '/')}`;
-};
-
-const formatSize = (bytes: number) => {
-  const kb = bytes / 1024;
-  return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`;
-};
+import { useStore } from '../../stores';
+import { materialsApi, queueApi } from '../../api/client';
+import type { TreeNode, BrowseFolder, BrowseFile } from '../../api/client';
+import ContextMenu, { type MenuItem } from '../../components/ContextMenu';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import Modal from '../../components/Modal';
+import Loading from '../../components/Loading';
+import Checkbox from '../../components/Checkbox';
+import { useLoading } from '../../hooks/useLoading';
+import { imgSrc, formatSize } from './utils';
+import FolderTree from './FolderTree';
+import FolderCard from './FolderCard';
+import ImageCard from './ImageCard';
 
 export default function Materials() {
   const {
@@ -45,7 +37,6 @@ export default function Materials() {
   const { loading: deleting, withLoading: withDeleting } = useLoading();
   const { loading: renaming, withLoading: withRenaming } = useLoading();
 
-  // 初始化加载
   useEffect(() => {
     Promise.all([
       materialsApi.tree().then(r => setFolderTree(r.tree)),
@@ -57,7 +48,6 @@ export default function Materials() {
     ]).finally(() => setLoading(false));
   }, []);
 
-  // 导航到文件夹
   const navigateTo = useCallback(async (path: string) => {
     setLoading(true);
     setCurrentPath(path);
@@ -71,7 +61,6 @@ export default function Materials() {
     setLoading(false);
   }, []);
 
-  // 刷新当前目录
   const refreshCurrent = useCallback(async () => {
     try {
       const r = await materialsApi.browse(currentPath || '');
@@ -81,7 +70,6 @@ export default function Materials() {
     } catch { /* ignore */ }
   }, [currentPath]);
 
-  // 新建文件夹
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     await withCreating(async () => {
@@ -91,7 +79,6 @@ export default function Materials() {
         setNewFolderName('');
         setShowNewFolder(false);
         await refreshCurrent();
-        // 刷新树
         const tree = await materialsApi.tree();
         setFolderTree(tree.tree);
       } catch (err: any) {
@@ -100,7 +87,6 @@ export default function Materials() {
     });
   };
 
-  // 重命名文件夹
   const handleRename = async () => {
     if (!renameTarget || !renameValue.trim()) return;
     await withRenaming(async () => {
@@ -117,7 +103,6 @@ export default function Materials() {
     });
   };
 
-  // 删除文件夹
   const handleDeleteFolder = async (path: string) => {
     try {
       await materialsApi.deleteFolder(path);
@@ -131,7 +116,6 @@ export default function Materials() {
     }
   };
 
-  // 批量删除文件
   const handleBatchDelete = async () => {
     if (!matSelected.size) return;
     await withDeleting(async () => {
@@ -148,7 +132,6 @@ export default function Materials() {
     });
   };
 
-  // 批量加入发布队列
   const handleBatchEnqueue = async () => {
     if (!matSelected.size) return;
     await withEnqueuing(async () => {
@@ -163,14 +146,12 @@ export default function Materials() {
     });
   };
 
-  // 打开图片灯箱
   const openLightboxFor = (path: string) => {
     const all = [...currentFiles.map(f => f.path)];
     const idx = all.indexOf(path);
     openLightbox(all.map(imgSrc), idx >= 0 ? idx : 0);
   };
 
-  // 拖拽处理
   const handleDragStart = (e: React.DragEvent, path: string) => {
     e.dataTransfer.setData('text/plain', path);
     e.dataTransfer.effectAllowed = 'move';
@@ -187,7 +168,6 @@ export default function Materials() {
     try {
       await materialsApi.moveItems([sourcePath], folderPath);
       addToast('已移动', 'success');
-      // 如果当前路径是被移动的文件夹或其子路径，回到父级
       if (currentPath && (currentPath === sourcePath || currentPath.startsWith(sourcePath + '/'))) {
         const parent = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : '';
         await navigateTo(parent);
@@ -201,7 +181,6 @@ export default function Materials() {
     }
   };
 
-  // 右键菜单
   const handleContextMenu = (e: React.MouseEvent, target: string, type: 'file' | 'folder') => {
     e.preventDefault();
     setCtxMenu({ x: e.clientX, y: e.clientY, target, type });
@@ -214,7 +193,7 @@ export default function Materials() {
       return [
         { label: '打开', onClick: () => navigateTo(target) },
         { label: '重命名', onClick: () => { setRenameTarget({ path: target, name }); setRenameValue(name); } },
-        { label: `删除文件夹`, danger: true, onClick: () => setShowDeleteFolderConfirm(target) },
+        { label: '删除文件夹', danger: true, onClick: () => setShowDeleteFolderConfirm(target) },
       ];
     }
     return [
@@ -238,12 +217,10 @@ export default function Materials() {
 
   return (
     <div className="space-y-4 animate-in">
-      {/* 顶部 */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text tracking-tight">本地素材</h1>
       </div>
 
-      {/* 面包屑 */}
       <div className="flex items-center gap-1 text-sm flex-wrap">
         {breadcrumb.map((item, i) => (
           <React.Fragment key={i}>
@@ -257,9 +234,7 @@ export default function Materials() {
         ))}
       </div>
 
-      {/* 主体：双栏布局 */}
       <div className="flex gap-4 min-h-[600px]">
-        {/* 左侧文件夹树 */}
         <div className="w-[220px] shrink-0 card p-2 overflow-y-auto max-h-[75vh]">
           <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 px-2">文件夹</div>
           <FolderTree
@@ -276,12 +251,9 @@ export default function Materials() {
           />
         </div>
 
-        {/* 右侧内容区 */}
         <div className="flex-1 min-w-0">
-          {/* 工具栏 */}
           <div className="card p-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* 视图切换 */}
               <div className="flex bg-bg-base rounded-lg p-0.5 border border-border">
                 <button className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="网格视图">
                   <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
@@ -293,7 +265,6 @@ export default function Materials() {
 
               <div className="w-px h-5 bg-border mx-1" />
 
-              {/* 新建文件夹 */}
               <button className="btn btn-sm" onClick={() => { setNewFolderName(''); setShowNewFolder(true); }}>
                 <svg className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 新建文件夹
@@ -301,7 +272,6 @@ export default function Materials() {
 
               <div className="w-px h-5 bg-border mx-1" />
 
-              {/* 选择操作 */}
               <button className="btn btn-sm" onClick={() => matSelectAll(allSelectable)}>
                 {matSelected.size === allSelectable.length && allSelectable.length > 0 ? '取消全选' : '全选'}
               </button>
@@ -318,7 +288,6 @@ export default function Materials() {
             </div>
           </div>
 
-          {/* 内容区 */}
           {loading ? (
             <div className="card flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
           ) : currentFolders.length === 0 && currentFiles.length === 0 ? (
@@ -331,7 +300,6 @@ export default function Materials() {
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
-              {/* 文件夹卡片 */}
               {currentFolders.map(folder => (
                 <FolderCard
                   key={folder.path}
@@ -344,7 +312,6 @@ export default function Materials() {
                   setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
                 />
               ))}
-              {/* 图片卡片 */}
               {currentFiles.map(file => (
                 <ImageCard
                   key={file.path}
@@ -358,7 +325,6 @@ export default function Materials() {
               ))}
             </div>
           ) : (
-            /* 列表视图 */
             <div className="card overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -414,7 +380,6 @@ export default function Materials() {
         </div>
       </div>
 
-      {/* 确认对话框 */}
       <ConfirmDialog open={showBatchDeleteConfirm} title="批量删除"
         message={`确认删除 ${matSelected.size} 张图片？`} confirmText="删除" danger
         onConfirm={() => { setShowBatchDeleteConfirm(false); handleBatchDelete(); }}
@@ -425,250 +390,39 @@ export default function Materials() {
         onConfirm={() => { if (showDeleteFolderConfirm) handleDeleteFolder(showDeleteFolderConfirm); }}
         onCancel={() => setShowDeleteFolderConfirm(null)} />
 
-      {/* 右键菜单 */}
       {ctxMenu && (
         <ContextMenu items={getCtxMenuItems()} position={{ x: ctxMenu.x, y: ctxMenu.y }}
           onClose={() => setCtxMenu(null)} />
       )}
 
-      {/* 新建文件夹对话框 */}
-      {showNewFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowNewFolder(false)}>
-          <div className="card p-4 w-80" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-text mb-3">新建文件夹</h3>
-            <input type="text" className="w-full text-sm mb-3" placeholder="输入文件夹名称"
-              value={newFolderName}
-              onChange={e => setNewFolderName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
-              autoFocus />
-            <div className="flex gap-2 justify-end">
-              <button className="btn btn-sm" onClick={() => setShowNewFolder(false)}>取消</button>
-              <button className="btn btn-sm btn-primary" onClick={handleCreateFolder} disabled={creating}>
-                {creating ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 创建中</> : '确定'}
-              </button>
-            </div>
-          </div>
+      <Modal open={showNewFolder} onClose={() => setShowNewFolder(false)} className="w-80">
+        <h3 className="text-sm font-bold text-text mb-3">新建文件夹</h3>
+        <input type="text" className="w-full text-sm mb-3" placeholder="输入文件夹名称"
+          value={newFolderName}
+          onChange={e => setNewFolderName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setShowNewFolder(false); }}
+          autoFocus />
+        <div className="flex gap-2 justify-end">
+          <button className="btn btn-sm" onClick={() => setShowNewFolder(false)}>取消</button>
+          <button className="btn btn-sm btn-primary" onClick={handleCreateFolder} disabled={creating}>
+            {creating ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 创建中</> : '确定'}
+          </button>
         </div>
-      )}
+      </Modal>
 
-      {/* 重命名对话框 */}
-      {renameTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setRenameTarget(null)}>
-          <div className="card p-4 w-80" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-text mb-3">重命名文件夹</h3>
-            <input type="text" className="w-full text-sm mb-3" value={renameValue}
-              onChange={e => setRenameValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenameTarget(null); }}
-              autoFocus />
-            <div className="flex gap-2 justify-end">
-              <button className="btn btn-sm" onClick={() => setRenameTarget(null)} disabled={renaming}>取消</button>
-              <button className="btn btn-sm btn-primary" onClick={handleRename} disabled={renaming}>
-                {renaming ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 重命名中</> : '确定'}
-              </button>
-            </div>
-          </div>
+      <Modal open={!!renameTarget} onClose={() => setRenameTarget(null)} className="w-80">
+        <h3 className="text-sm font-bold text-text mb-3">重命名文件夹</h3>
+        <input type="text" className="w-full text-sm mb-3" value={renameValue}
+          onChange={e => setRenameValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenameTarget(null); }}
+          autoFocus />
+        <div className="flex gap-2 justify-end">
+          <button className="btn btn-sm" onClick={() => setRenameTarget(null)} disabled={renaming}>取消</button>
+          <button className="btn btn-sm btn-primary" onClick={handleRename} disabled={renaming}>
+            {renaming ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 重命名中</> : '确定'}
+          </button>
         </div>
-      )}
-    </div>
-  );
-}
-
-/* ── 子组件 ───────────────────────────────── */
-
-function FolderTree({
-  items, currentPath, onNavigate, expandedFolders, onToggle,
-  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver,
-}: {
-  items: TreeNode[]; currentPath: string;
-  onNavigate: (path: string) => void;
-  expandedFolders: Set<string>; onToggle: (path: string) => void;
-  onContextMenu: (e: React.MouseEvent, path: string, type: 'file' | 'folder') => void;
-  dragOverFolder: string | null; setDragOverFolder: (path: string | null) => void;
-  onDrop: (e: React.DragEvent, path: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-}) {
-  return (
-    <div className="space-y-0.5">
-      {/* 根目录入口 */}
-      <div
-        className={`folder-tree-item ${currentPath === '' ? 'active' : ''} ${dragOverFolder === '' ? 'drag-over' : ''}`}
-        style={{ paddingLeft: '12px' }}
-        onClick={() => onNavigate('')}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', '');
-          e.dataTransfer.effectAllowed = 'move';
-        }}
-        onDragOver={(e) => { onDragOver(e); setDragOverFolder(''); }}
-        onDragLeave={() => setDragOverFolder(null)}
-        onDrop={(e) => onDrop(e, '')}
-      >
-        <span className="w-3 shrink-0" />
-        <svg className="w-4 h-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
-        <span className="truncate text-sm font-medium">全部素材</span>
-      </div>
-      {items.map(node => (
-        <FolderTreeItem
-          key={node.path}
-          node={node}
-          currentPath={currentPath}
-          onNavigate={onNavigate}
-          expandedFolders={expandedFolders}
-          onToggle={onToggle}
-          depth={0}
-          onContextMenu={onContextMenu}
-          dragOverFolder={dragOverFolder}
-          setDragOverFolder={setDragOverFolder}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-        />
-      ))}
-    </div>
-  );
-}
-
-function FolderTreeItem({
-  node, currentPath, onNavigate, expandedFolders, onToggle, depth,
-  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver,
-}: {
-  node: TreeNode; currentPath: string;
-  onNavigate: (path: string) => void;
-  expandedFolders: Set<string>; onToggle: (path: string) => void; depth: number;
-  onContextMenu: (e: React.MouseEvent, path: string, type: 'file' | 'folder') => void;
-  dragOverFolder: string | null; setDragOverFolder: (path: string | null) => void;
-  onDrop: (e: React.DragEvent, path: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-}) {
-  const isExpanded = expandedFolders.has(node.path);
-  const isActive = currentPath === node.path;
-  const isDragOver = dragOverFolder === node.path;
-
-  return (
-    <div>
-      <div
-        className={`folder-tree-item ${isActive ? 'active' : ''} ${isDragOver ? 'drag-over' : ''}`}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-        onClick={() => onNavigate(node.path)}
-        onContextMenu={(e) => onContextMenu(e, node.path, 'folder')}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', node.path);
-          e.dataTransfer.effectAllowed = 'move';
-        }}
-        onDragOver={(e) => { onDragOver(e); setDragOverFolder(node.path); }}
-        onDragLeave={() => setDragOverFolder(null)}
-        onDrop={(e) => onDrop(e, node.path)}
-      >
-        {/* 展开/折叠箭头 */}
-        {node.children.length > 0 ? (
-          <span
-            className={`tree-arrow ${isExpanded ? 'expanded' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onToggle(node.path); }}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-          </span>
-        ) : <span className="w-3 shrink-0" />}
-        {/* 文件夹图标 */}
-        <svg className="w-4 h-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
-        <span className="truncate text-sm">{node.name}</span>
-        <span className="ml-auto text-[10px] text-text-muted tabular-nums">{node.item_count}</span>
-      </div>
-      {/* 子节点 */}
-      {isExpanded && node.children.length > 0 && (
-        <div>
-          {node.children.map(child => (
-            <FolderTreeItem
-              key={child.path}
-              node={child}
-              currentPath={currentPath}
-              onNavigate={onNavigate}
-              expandedFolders={expandedFolders}
-              onToggle={onToggle}
-              depth={depth + 1}
-              onContextMenu={onContextMenu}
-              dragOverFolder={dragOverFolder}
-              setDragOverFolder={setDragOverFolder}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FolderCard({
-  folder, onDoubleClick, onContextMenu, onDragOver, onDrop, isDragOver, setDragOver,
-}: {
-  folder: BrowseFolder;
-  onDoubleClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  isDragOver: boolean;
-  setDragOver: (v: boolean) => void;
-}) {
-  return (
-    <div
-      className={`folder-card ${isDragOver ? 'drag-over' : ''}`}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={onContextMenu}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', folder.path);
-        e.dataTransfer.effectAllowed = 'move';
-      }}
-      onDragOver={(e) => { onDragOver(e); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { setDragOver(false); onDrop(e); }}
-    >
-      <div className="folder-card-icon">
-        <svg className="w-10 h-10 text-accent" viewBox="0 0 48 48" fill="currentColor">
-          <path d="M6 14a4 4 0 014-4h10l4 6h18a4 4 0 014 4v16a4 4 0 01-4 4H10a4 4 0 01-4-4V14z" opacity="0.9"/>
-          <path d="M6 14a4 4 0 014-4h10l4 6h18a4 4 0 014 4v2H6v-8z" opacity="0.15"/>
-        </svg>
-      </div>
-      <div className="folder-card-name">{folder.name}</div>
-      <div className="folder-card-count">{folder.item_count} 张</div>
-    </div>
-  );
-}
-
-function ImageCard({
-  file, selected, onToggleSelect, onOpenLightbox, onContextMenu, onDragStart,
-}: {
-  file: BrowseFile;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onOpenLightbox: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onDragStart: (e: React.DragEvent) => void;
-}) {
-  return (
-    <div
-      className={`relative rounded-xl overflow-hidden border transition-all group/image ${selected ? 'border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}
-      onContextMenu={onContextMenu}
-      draggable
-      onDragStart={onDragStart}
-    >
-      <div className="relative">
-        <img src={imgSrc(file.path)} alt="" className="w-full h-[150px] object-cover cursor-pointer" onClick={onOpenLightbox} loading="lazy" />
-        <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 transition-colors pointer-events-none rounded-t-xl" />
-        {/* 选择框 */}
-        <div className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-          <Checkbox checked={selected} onChange={onToggleSelect} />
-        </div>
-        {selected && (
-          <div className="absolute top-2 right-2" onClick={e => e.stopPropagation()}>
-            <Checkbox checked={selected} onChange={onToggleSelect} />
-          </div>
-        )}
-      </div>
-      <div className="px-2.5 py-1.5">
-        <div className="text-[10px] text-text-muted truncate">{file.name}</div>
-        {!selected && <div className="text-[9px] text-text-muted/60 tabular-nums mt-0.5">{formatSize(file.size)}</div>}
-      </div>
+      </Modal>
     </div>
   );
 }

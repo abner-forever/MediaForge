@@ -276,6 +276,7 @@ export interface WeChatAccount {
   created_at?: string;
   last_used?: string;
   logged_in: boolean;
+  is_default?: boolean;
 }
 
 export interface WeChatLoginEvent {
@@ -289,6 +290,7 @@ export const wechatAccountApi = {
   remove: (id: string) => del<{ success: boolean }>(`/api/wechat/accounts/${id}`),
   status: (id: string) => get<{ logged_in: boolean; name: string }>(`/api/wechat/accounts/${id}/status`),
   logout: (id: string) => post<{ success: boolean }>(`/api/wechat/accounts/${id}/logout`),
+  setDefault: (id: string) => post<{ success: boolean }>(`/api/wechat/accounts/${id}/default`),
   login: (id: string, onEvent: (evt: WeChatLoginEvent) => void): Promise<void> => {
     return fetch(`/api/wechat/accounts/${id}/login`).then(async (res) => {
       const reader = res.body!.getReader();

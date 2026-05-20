@@ -1,0 +1,74 @@
+import { I, CARD_THEMES } from './Icons';
+
+const actionList = [
+  { icon: I.search(36), title: '发现图文', desc: '从微博 / 头条搜索优质内容', path: '/discovery', theme: CARD_THEMES[0] },
+  { icon: I.edit(36), title: '发布队列', desc: '管理和发布待处理内容', path: '/queue', theme: CARD_THEMES[1] },
+  { icon: I.gear(36), title: '系统设置', desc: '配置大模型和平台账号', path: '/settings', theme: CARD_THEMES[3] },
+];
+
+export default function StudioActions({ navigate }: { navigate: (path: string) => void }) {
+  return (
+    <section>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #4f8cff, #a855f7)' }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>创作工作室</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        {actionList.map((a) => (
+          <div
+            key={a.path}
+            onClick={() => navigate(a.path)}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              background: `${a.theme.bg}, #ffffff`,
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: `1px solid ${a.theme.border}`,
+              borderRadius: 12,
+              padding: '32px 24px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = a.theme.accent;
+              e.currentTarget.style.transform = 'translateY(-3px)';
+              e.currentTarget.style.boxShadow = `0 8px 25px ${a.theme.glow}`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = a.theme.border;
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: '25%',
+              right: '25%',
+              height: 2.5,
+              background: `linear-gradient(90deg, transparent, ${a.theme.accent}, transparent)`,
+              borderRadius: '0 0 3px 3px',
+            }} />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{
+                marginBottom: 16,
+                color: a.theme.accent,
+                transition: 'transform 0.3s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15) rotate(-3deg)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+              >
+                {a.icon}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{a.title}</div>
+              <div style={{ fontSize: 13, color: '#64748b' }}>{a.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}

@@ -46,7 +46,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
         onClick={() => !disabled && setOpen((v) => !v)}
         className={`
           w-full flex items-center justify-between
-          px-3 py-[9px] rounded-lg border text-[13px] text-left
+          px-3 py-[8px] rounded-lg border text-[13px] text-left
           transition-all duration-150
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}

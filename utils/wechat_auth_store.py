@@ -50,6 +50,10 @@ def list_accounts() -> List[Dict]:
     """返回所有账号列表，附加 logged_in 和 last_used 信息。"""
     accounts = _ensure_index()
     result = []
+    default_id = _get_default_account_id(accounts)
+    # 没有显式默认账号时，以第一个为默认
+    if not default_id and accounts:
+        default_id = accounts[0].get("account_id", "")
     for acc in accounts:
         aid = acc.get("account_id", "")
         state_path = ACCOUNTS_DATA_DIR / aid / "state.json"
@@ -59,8 +63,17 @@ def list_accounts() -> List[Dict]:
             "created_at": acc.get("created_at", ""),
             "last_used": acc.get("last_used", ""),
             "logged_in": state_path.exists(),
+            "is_default": aid == default_id,
         })
     return result
+
+
+def _get_default_account_id(accounts: List[Dict]) -> str:
+    """从账号列表中找出默认账号 ID。"""
+    for acc in accounts:
+        if acc.get("is_default"):
+            return acc.get("account_id", "")
+    return ""
 
 
 def get_account(account_id: str) -> Optional[Dict]:
@@ -81,6 +94,9 @@ def add_account(name: str) -> Dict:
         "last_used": "",
     }
     accounts = _ensure_index()
+    # 第一个账号自动设为默认
+    if not accounts:
+        account["is_default"] = True
     accounts.append(account)
     _save_index(accounts)
 
@@ -123,6 +139,21 @@ def update_account(account_id: str, **kwargs) -> bool:
             _save_index(accounts)
             return True
     return False
+
+
+def set_default_account(account_id: str) -> bool:
+    """设置指定账号为默认账号，清除其他账号的默认标记。"""
+    accounts = _ensure_index()
+    found = False
+    for acc in accounts:
+        if not found and acc.get("account_id") == account_id:
+            acc["is_default"] = True
+            found = True
+        else:
+            acc.pop("is_default", None)
+    if found:
+        _save_index(accounts)
+    return found
 
 
 def get_account_paths(account_id: str) -> Tuple[Path, Path]:

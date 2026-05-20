@@ -1,94 +1,13 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useStore } from '../stores';
-import { queueApi, publishLogsApi, wechatAccountApi, type QueueItem, type WeChatAccount } from '../api/client';
-import Select from '../components/Select';
-import ConfirmDialog from '../components/ConfirmDialog';
-import { useLoading } from '../hooks/useLoading';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useStore } from '../../stores';
+import { queueApi, publishLogsApi, wechatAccountApi, type QueueItem, type WeChatAccount } from '../../api/client';
+import Select from '../../components/Select';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import { useLoading } from '../../hooks/useLoading';
+import { imgSrc } from './utils';
+import ArticleCard from './ArticleCard';
 
-const imgSrc = (p: string) => {
-  if (p.startsWith('http')) return `/proxy?url=${encodeURIComponent(p)}`;
-  // 相对路径（相对 DOWNLOAD_DIR）
-  if (!p.startsWith('/')) return `/images/${encodeURIComponent(p).replace(/%2F/g, '/')}`;
-  // 绝对路径向后兼容（包含 data/images/）
-  const idx = p.indexOf('data/images/');
-  const rel = idx >= 0 ? p.slice(idx + 'data/images/'.length) : (p.split('/').pop() || '');
-  return `/images/${encodeURIComponent(rel).replace(/%2F/g, '/')}`;
-};
-
-function formatTime(timeStr?: string): string {
-  if (!timeStr) return '';
-  const now = Date.now();
-  const time = new Date(timeStr).getTime();
-  if (isNaN(time)) return '';
-  const diff = now - time;
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return '刚刚';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}天前`;
-  const months = Math.floor(days / 30);
-  return `${months}个月前`;
-}
-
-export default function Queue() {
-  const { queue, setQueue, addToast } = useStore();
-  useEffect(() => { queueApi.get().then(d => setQueue(d.queue)); }, [setQueue]);
-
-  return (
-    <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="text-2xl font-bold text-text tracking-tight">发布队列</h1>
-        <p className="text-sm text-text-secondary mt-1">预览和发布图文内容到公众号</p>
-      </div>
-
-      {queue.length === 0 ? (
-        <div className="card">
-          <div className="empty-state py-16">
-            <div className="empty-state-icon">📭</div>
-            <div className="empty-state-title">发布队列为空</div>
-            <div className="empty-state-desc">请在「图片发现」页面选图并加入发布队列</div>
-          </div>
-        </div>
-      ) : (
-        (() => {
-          const sortedIndices = queue
-            .map((item, i) => ({ item, i }))
-            .sort((a, b) => {
-              const tA = a.item.time || '';
-              const tB = b.item.time || '';
-              return tB.localeCompare(tA);
-            });
-          return (
-            <div className="relative">
-              {sortedIndices.length > 1 && (
-                <div className="absolute left-[10px] top-0 bottom-0 w-0.5 bg-border -translate-x-1/2" />
-              )}
-              {sortedIndices.map(({ i }, idx) => (
-                <div key={i} className="flex gap-4">
-                  {/* Timeline dot */}
-                  <div className="w-5 flex justify-center shrink-0">
-                    <div className={`relative z-10 w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${
-                      idx === 0 ? 'bg-accent ring-[3px] ring-accent/15' : 'bg-border'
-                    }`} />
-                  </div>
-                  {/* Content */}
-                  <div className={`flex-1 min-w-0 ${idx < sortedIndices.length - 1 ? 'pb-7' : ''}`}>
-                    <div className="text-[11px] text-text-muted/60 leading-none mb-2 mt-1.5">{formatTime(queue[i].time)}</div>
-                    <QueueCard item={queue[i]} index={i} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()
-      )}
-    </div>
-  );
-}
+const MAX_VISIBLE_THUMBS = 9;
 
 const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueItem; index: number }) {
   const { openLightbox, addToast, setQueue } = useStore();
@@ -105,13 +24,19 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logsLenRef = useRef(logs.length);
+  const [thumbStart, setThumbStart] = useState(0);
 
   useEffect(() => {
-    wechatAccountApi.list().then(({ accounts }) => setWechatAccounts(accounts)).catch(() => {});
-  }, []);
+    wechatAccountApi.list().then(({ accounts }) => {
+      setWechatAccounts(accounts);
+      if (!item.account_id) {
+        const def = accounts.find(a => a.is_default);
+        if (def) setSelectedAccountId(def.account_id);
+      }
+    }).catch(() => {});
+  }, [item.account_id]);
 
   useEffect(() => {
-    // 只在日志追加时（发布过程中）滚动到底部，挂载时已有的日志不触发
     if (logs.length > logsLenRef.current) {
       const el = logContainerRef.current;
       if (el) {
@@ -166,7 +91,6 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     setPublishing(false);
   }, []);
 
-  // 发布结束时通过 abortController 中止轮询，不再依赖全局 publish_active 标志
   const publishRef = useRef(false);
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
@@ -184,32 +108,26 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   }
 
   const images = item.images || [];
-
-  /* ── 文章类型卡片 ─────────────────────────── */
-  if (item.type === 'article') {
-    return <ArticleCard item={item} index={index} />;
-  }
-
-  /* ── 缩略图分页：最多展示 9 张，左右滑动 ── */
-  const MAX_VISIBLE_THUMBS = 9;
-  const [thumbStart, setThumbStart] = useState(0);
   const visibleImages = images.slice(thumbStart, thumbStart + MAX_VISIBLE_THUMBS);
   const hiddenCount = images.length - (thumbStart + MAX_VISIBLE_THUMBS);
   const canScrollLeft = thumbStart > 0;
   const canScrollRight = hiddenCount > 0;
   const thumbScroll = (dir: -1 | 1) => {
     setThumbStart(prev => {
-      const step = Math.min(MAX_VISIBLE_THUMBS, 3); // 按 3 格步进，不跳太远
+      const step = Math.min(MAX_VISIBLE_THUMBS, 3);
       if (dir === -1) return Math.max(0, prev - step);
       const max = images.length - 1;
       return Math.min(max, prev + step);
     });
   };
 
+  if (item.type === 'article') {
+    return <ArticleCard item={item} index={index} />;
+  }
+
   return (
     <div className="card overflow-hidden">
       <div className="flex flex-col md:flex-row">
-        {/* Cover / Images Sidebar */}
         <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0">
           {cover && (
             <div className="relative mb-3 rounded-xl overflow-hidden cursor-pointer group"
@@ -220,7 +138,6 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/40 text-white/70 text-[10px] font-medium backdrop-blur">封面</div>
             </div>
           )}
-          {/* Thumbnail strip with carousel */}
           <div className="relative">
             {canScrollLeft && (
               <button onClick={() => thumbScroll(-1)}
@@ -257,9 +174,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-4 space-y-3">
-          {/* Header: celebrity name + status tag */}
           <div className="flex items-center gap-2 flex-wrap text-sm">
             {item.celebrity && (
               <>
@@ -274,7 +189,6 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">已发布</span>
             )}
           </div>
-          {/* Account selector */}
           {wechatAccounts.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted shrink-0">发布到</span>
@@ -282,13 +196,10 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
                 <Select
                   value={selectedAccountId}
                   onChange={setSelectedAccountId}
-                  options={[
-                    { label: '默认账号', value: '' },
-                    ...wechatAccounts.map(acc => ({
+                  options={wechatAccounts.map(acc => ({
                       label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
                       value: acc.account_id,
-                    })),
-                  ]}
+                    }))}
                 />
               </div>
             </div>
@@ -303,7 +214,6 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
             <Select value={cover} onChange={v => { setCover(v); updateField('cover', v); }} options={images.map(img => ({ label: img.split('/').pop() || img, value: img }))} disabled={isPublished} />
           </label>
 
-          {/* Actions */}
           <div className="flex gap-2 flex-wrap pt-1">
             {!isPublished && (
               <>
@@ -326,7 +236,6 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
           <ConfirmDialog open={showDeleteConfirm} title="删除发布队列项" message={`确认删除《${title || '无标题'}》？`} confirmText="删除" danger onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }} onCancel={() => setShowDeleteConfirm(false)} />
 
-          {/* Logs */}
           {(logs.length > 0 || publishing) && (
             <div ref={logContainerRef} className="bg-bg-secondary border border-border rounded-xl p-3 max-h-44 overflow-y-auto">
               <div className="flex items-center gap-2 mb-2">
@@ -345,134 +254,4 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   );
 });
 
-/* ── 文章类型卡片 ────────────────────────────── */
-const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: QueueItem; index: number }) {
-  const navigate = useNavigate();
-  const { addToast, setQueue } = useStore();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
-  const tags = item.tags || [];
-
-  useEffect(() => {
-    wechatAccountApi.list().then(({ accounts }) => setWechatAccounts(accounts)).catch(() => {});
-  }, []);
-
-  async function deleteItem() {
-    try {
-      await queueApi.remove(index);
-      setQueue((await queueApi.get()).queue);
-      addToast('已删除', 'info');
-    } catch (err: any) {
-      addToast(err.message || '删除失败', 'error');
-    }
-  }
-
-  async function publish(opts: { save_draft?: boolean }) {
-    addToast(`正在${opts.save_draft ? '保存草稿' : '发布'}...`, 'info');
-    try {
-      const r = await queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
-      addToast(r.success ? `${opts.save_draft ? '保存' : '发布'}成功` : `失败：${r.message}`, r.success ? 'success' : 'error');
-      setQueue((await queueApi.get()).queue);
-    } catch (err: any) {
-      addToast(err.message, 'error');
-    }
-  }
-
-  const isPublished = item.status === 'published';
-
-  return (
-    <div className="card overflow-hidden">
-      <div className="flex flex-col md:flex-row">
-        {/* 文章图标侧栏 */}
-        <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 flex flex-col items-center justify-center min-h-[140px]">
-          <svg className="w-12 h-12 text-[var(--accent)]/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          <span className="text-xs text-[var(--text-muted)] mt-2">文章</span>
-        </div>
-
-        {/* 内容 */}
-        <div className="flex-1 p-4 space-y-3">
-          {/* 状态 */}
-          <div className="flex items-center gap-2 flex-wrap text-sm">
-            {item.celebrity && (
-              <span className="font-medium text-[var(--text-secondary)]">{item.celebrity}</span>
-            )}
-            {item.status === 'saved' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">保存成功</span>
-            )}
-            {item.status === 'published' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success border border-success/20">已发布</span>
-            )}
-          </div>
-
-          {/* 标题 */}
-          <h3 className="text-base font-semibold leading-snug">{item.title || '无标题'}</h3>
-
-          {/* 正文摘要 */}
-          {item.content && (
-            <p className="text-sm text-[var(--text-secondary)] line-clamp-4 leading-relaxed">{item.content}</p>
-          )}
-
-          {/* 标签 */}
-          {tags.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap">
-              {tags.map((tag, i) => (
-                <span key={i} className="px-2 py-0.5 rounded-full text-[11px] bg-[var(--bg-secondary)] text-[var(--text-muted)]">{tag}</span>
-              ))}
-            </div>
-          )}
-
-          {/* 账号选择 */}
-          {wechatAccounts.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted shrink-0">发布到</span>
-              <div className="w-44">
-                <Select
-                  value={selectedAccountId}
-                  onChange={setSelectedAccountId}
-                  options={[
-                    { label: '默认账号', value: '' },
-                    ...wechatAccounts.map(acc => ({
-                      label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
-                      value: acc.account_id,
-                    })),
-                  ]}
-                />
-              </div>
-            </div>
-          )}
-          {/* 操作按钮 */}
-          <div className="flex gap-2 flex-wrap pt-1">
-            <button className="btn btn-sm" onClick={() => navigate(`/articles`)}>
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-              编辑
-            </button>
-            {!isPublished && (
-              <>
-                <button className="btn btn-sm" onClick={() => publish({ save_draft: true })}>保存草稿</button>
-                <button className="btn btn-sm" onClick={() => publish({ save_draft: false })}>直接发布</button>
-                <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={() => setShowDeleteConfirm(true)}>删除</button>
-              </>
-            )}
-          </div>
-
-          <ConfirmDialog
-            open={showDeleteConfirm}
-            title="删除发布队列项"
-            message={`确认删除《${item.title || '无标题'}》？`}
-            confirmText="删除"
-            danger
-            onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-        </div>
-      </div>
-    </div>
-  );
-});
+export default QueueCard;

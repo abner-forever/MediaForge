@@ -675,6 +675,15 @@ async def wechat_account_logout(account_id: str):
     return {"success": True}
 
 
+@app.post("/api/wechat/accounts/{account_id}/default")
+async def wechat_set_default_account(account_id: str):
+    """设置指定账号为默认公众号。"""
+    from utils.wechat_auth_store import set_default_account
+    if not set_default_account(account_id):
+        raise HTTPException(404, "账号不存在")
+    return {"success": True}
+
+
 @app.get("/api/platforms")
 async def get_platforms():
     """返回所有已注册平台的元数据，供前端动态构建平台选择器。"""
