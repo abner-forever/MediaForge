@@ -5,16 +5,26 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 
-自动化的微信公众号内容发布工具。从微博/头条发现优质图文 → AI 智能评分与文案生成 → 一键发布到微信公众号。
+自动化的微信公众号内容发布工具。从微博/头条发现优质图文 → 图片下载与水印过滤 → AI 智能评分/写作 → 草稿管理 → 一键保存草稿或发布到微信公众号。
+
+## 当前实现进展
+
+- **CLI 流水线已可用**：支持微博/头条抓取、去重缓存、图片下载、水印过滤、AI 标题生成、封面选择、微信公众号发布或 dry-run。
+- **桌面 GUI 已成型**：FastAPI + React + PyWebView，包含首页、图片发现、文章发布、发布队列、本地素材、系统设置 6 个工作区。
+- **文章发布工作台已接入**：支持本地文章草稿、Markdown 编辑、AI 生成正文、校对润色、去 AI 味儿、标题生成、排版优化、对话式改写、灵感搜索和封面搜索/下载。
+- **微信公众号多账号已实现**：每个账号使用独立 Chromium profile 与 `storage_state`，可设置默认账号、登录、登出、删除账号。
+- **本地配置与密钥存储已落地**：设置页写入 `data/state/settings.json`，AI Key 独立保存，微博鉴权独立保存并支持清空。
+- **测试与打包链路已建立**：`pytest`、前端 TypeScript 构建、PyInstaller、macOS DMG、Windows Inno Setup、GitHub Actions 自动构建与 semantic-release 发布。
 
 ## 功能特性
 
 - **多平台图文发现** — 支持微博（明星列表、本人时间线、超话、关键词五种模式）和今日头条
-- **微博扫码登录 (TODO)** — 内置 WebView 扫码获取 Cookie（跨平台 Cookie 获取不稳定，待完善）
+- **微博扫码登录** — 内置系统 WebView 扫码获取 Cookie，减少手动复制 Cookie
 - **智能水印过滤** — 基于边缘检测的启发式算法，自动识别并过滤水印图片
 - **AI 图片评分** — Vision API + 启发式回退，多维度评分筛选优质图片
-- **AI 文案生成** — 自动生成标题，支持 Mimo / DeepSeek / GLM / OpenAI 多供应商
-- **发布队列管理** — 编辑文案、选择封面、保存草稿或直接发布
+- **AI 内容生产** — 标题、正文、校对、去 AI 味儿、排版优化，支持 Mimo / DeepSeek / GLM / OpenAI / Qwen / MiniMax 等 OpenAI 兼容接口
+- **文章草稿与发布队列** — 独立文章工作台 + 队列管理，可编辑正文、选择封面、保存草稿或直接发布
+- **微信公众号多账号** — 多公众号账号注册、默认账号、独立登录态与浏览器配置
 - **双模式运行** — 命令行批量处理 + 桌面 GUI 交互式管理
 - **主题系统** — 浅色/深色/跟随系统，4 套主题配色可切换
 - **素材管理** — 按艺人+场景分组的本地图片浏览与管理
@@ -33,7 +43,7 @@ playwright install chromium   # 微信发布需要浏览器引擎；安装包已
 | 变量 | 说明 |
 |------|------|
 | `WEIBO_COOKIE` | 微博登录 Cookie |
-| `AI_API_KEY` | AI 模型 API Key |
+| `AI_API_KEY` | 通用 AI 模型 API Key（也可使用供应商专用 Key） |
 | `AI_BASE_URL` | OpenAI 兼容 API 地址 |
 | `WEIBO_CELEBRITIES` | 明星列表（逗号分隔） |
 
@@ -106,7 +116,7 @@ MediaForge/
 │   │   ├── base.py         #   PlatformService 协议
 │   │   ├── weibo.py        #   微博数据采集
 │   │   └── toutiao.py      #   今日头条数据采集
-│   ├── ai.py               # AI 文案生成
+│   ├── ai.py               # AI 标题/文章生成、润色、排版优化
 │   ├── downloader.py       # 图片下载与水印过滤
 │   ├── extensions.py       # 图片评分/封面/排版
 │   ├── watermark.py        # 水印检测
@@ -116,7 +126,10 @@ MediaForge/
 │   ├── logger.py           # 日志
 │   ├── file.py             # 文件与缓存
 │   ├── audit.py            # 审计日志（操作记录）
-│   ├── api_key_store.py    # API Key 本地加密存储
+│   ├── api_key_store.py    # API Key 本地存储
+│   ├── settings_store.py   # 桌面 GUI 设置持久化
+│   ├── wechat_auth_store.py# 微信公众号多账号登录态
+│   ├── weibo_auth_store.py # 微博 Cookie/UID/头像信息
 │   └── pathsafe.py         # 安全路径处理
 ├── desktop/
 │   ├── main.py             # 桌面应用入口
@@ -129,8 +142,8 @@ MediaForge/
 │   ├── static/             # 前端构建产物
 │   └── web/                # React 前端源码
 │       └── src/
-│           ├── pages/      # Dashboard / Discovery / Queue / Materials / Settings
-│           ├── components/ # ConfirmDialog / ContextMenu / Layout / Lightbox / 等
+│           ├── pages/      # Dashboard / Discovery / ArticlePublish / Queue / Materials / Settings
+│           ├── components/ # ConfirmDialog / ContextMenu / RichTextEditor / Layout / Lightbox / 等
 │           ├── hooks/      # useLoading
 │           ├── api/        # API 客户端
 │           ├── stores/     # Zustand 全局状态
@@ -138,13 +151,18 @@ MediaForge/
 └── data/                   # 运行时数据
     ├── images/             # 下载图片（按艺人/场景/帖子组织）
     ├── posts.json          # 去重缓存
+    ├── queue.json          # 发布队列
     ├── state/              # 持久化状态
-    │   ├── queue.json      #   发布队列
+    │   ├── settings.json   #   桌面设置
+    │   ├── articles.json   #   文章草稿
     │   ├── operations.json #   操作记录
     │   ├── wechat.json     #   公众号登录态
+    │   ├── wechat_accounts.json
+    │   ├── wechat_accounts/ #  多账号独立 Chromium profile + storage_state
+    │   ├── weibo_auth.json #   微博鉴权
     │   ├── weibo_uid_map.json
     │   ├── weibo_topic_map.json
-    │   ├── api_keys.json   #   加密存储的 API Key
+    │   ├── api_keys.json   #   API Key 本地存储
     │   └── wechat_chromium_profile/  # Chromium 用户数据
     └── logs/               # 运行日志
 ```
@@ -157,7 +175,8 @@ MediaForge/
 | 前端 | React 18, TypeScript, Vite, Tailwind CSS |
 | 状态管理 | Zustand |
 | 浏览器自动化 | Playwright (Chromium) |
-| AI | OpenAI 兼容 API（Mimo/DeepSeek/GLM/OpenAI） |
+| AI | OpenAI 兼容 API（Mimo/DeepSeek/GLM/OpenAI/Qwen/MiniMax） |
+| 编辑器 | CodeMirror + Markdown 编辑，Tiptap JSON 兼容层 |
 | 图片处理 | Pillow |
 | 桌面壳 | PyWebView |
 
@@ -178,7 +197,7 @@ MediaForge/
 | | `TOUTIAO_USER_ID` | 用户 ID | — |
 | | `TOUTIAO_FETCH_MODE` | 抓取模式: `feed` / `user` / `keyword` | feed |
 | | `TOUTIAO_SEARCH_TAGS` | 搜索标签 | 时尚,明星,穿搭 |
-| **AI 模型** | `AI_PROVIDER` | 供应商: `mimo` / `deepseek` / `glm` / `openai` | mimo |
+| **AI 模型** | `AI_PROVIDER` | 供应商: `mimo` / `deepseek` / `glm` / `openai` / `qwen` / `minimax` | mimo |
 | | `AI_MODEL` | 模型名 | mimo-chat |
 | | `AI_API_KEY` | 通用 API Key | — |
 | | `AI_BASE_URL` | 自定义 API 地址 | — |
@@ -186,6 +205,8 @@ MediaForge/
 | | `DEEPSEEK_API_KEY` | DeepSeek 专用 Key | — |
 | | `GLM_API_KEY` | GLM 专用 Key | — |
 | | `OPENAI_API_KEY` | OpenAI 专用 Key | — |
+| | `QWEN_API_KEY` | Qwen 专用 Key | — |
+| | `MINIMAX_API_KEY` | MiniMax 专用 Key | — |
 | **水印过滤** | `WATERMARK_FILTER` | 启用过滤 | true |
 | | `WATERMARK_CORNER_RATIO` | 角部边缘强度阈值 | 1.38 |
 | | `WATERMARK_BOTTOM_RATIO` | 底部边缘强度阈值 | 1.48 |

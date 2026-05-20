@@ -4,11 +4,11 @@
 
 ## 项目概述
 
-**MediaForge**（图文工坊）是一个自动化微信公众号内容发布系统。核心流程：微博图文发现 → 图片下载与水印过滤 → AI 智能评分与文案生成 → 一键发布到微信公众号。
+**MediaForge**（图文工坊）是一个自动化微信公众号内容发布系统。核心流程：微博/头条图文发现 → 图片下载与水印过滤 → AI 智能评分/写作 → 文章草稿与发布队列 → 一键保存草稿或发布到微信公众号。
 
 双界面共享同一套后端服务：
 - **命令行模式**（`main.py`）：线性流水线，支持 dry-run 试跑，适合批量定时任务
-- **桌面 GUI**（`desktop/`）：FastAPI + React 前端 + PyWebView 原生窗口，交互式可视化操作
+- **桌面 GUI**（`desktop/`）：FastAPI + React 前端 + PyWebView 原生窗口，交互式可视化操作，包含文章发布工作台和多公众号账号管理
 
 ## 常用命令
 
@@ -75,8 +75,8 @@ iscc /dMyAppVersion="$(python -c "import tomllib; print(tomllib.load(open('pypro
 
 推送到 `main` 分支自动触发 GitHub Actions 构建桌面安装包：
 - **macOS** — PyInstaller 构建 `.app` → `hdiutil` 打包为 `.dmg`（未签名）
-- **Windows** — PyInstaller 构建目录 → `7z` 打包为 `.zip`
-- **Release** — 构建完成后自动**发布 Release**，版本号 `vYYYYMMDD-HHMMSS`，可在 GitHub 仓库 **Releases** 页面查看和下载
+- **Windows** — PyInstaller 构建目录 → Inno Setup 打包为 `.exe` 安装包
+- **Release** — semantic-release 根据 conventional commits 自动生成 `v{semver}` tag，并上传 DMG/EXE 到 GitHub Release
 
 手动触发：GitHub 仓库 Actions 页面 → "构建桌面安装包" → "Run workflow"
 
@@ -103,44 +103,50 @@ PyInstaller 配置：`desktop/build.spec`
 ### 数据流
 ```
 微博/头条抓取 -> 图片下载（线程池 + 水印过滤）
-  -> AI 评分（Vision / 启发式）-> AI 生成标题
-  -> HTML 排版 -> Playwright 自动化发布到微信公众号
+  -> AI 评分（Vision / 启发式）-> AI 生成标题/正文
+  -> 文章草稿/发布队列 -> HTML 排版 -> Playwright 自动化保存草稿或发布到微信公众号
 ```
 
 ### 服务层（`services/`）
 - **platforms/** — 平台插件架构，基类 `base.py` 定义 `PlatformService` 协议。内置微博（`weibo.py`）和今日头条（`toutiao.py`）实现。
 - **weibo_login.py** — 内置 WebView 微博扫码登录，自动获取 Cookie。
 - **downloader.py** — 并发下载图片到 `data/images/<celebrity>/<scene>/<post_id>/`，每张独立水印过滤。
-- **ai.py** — OpenAI 兼容 chat completions 生成标题（≤20字）。支持 Mimo/DeepSeek/GLM/OpenAI 多供应商，失败时回退硬编码。
-- **wechat.py** — Playwright Chromium 自动化，处理扫码登录、文章编辑、图片上传、封面选择、发布。
+- **ai.py** — OpenAI 兼容 chat completions，支持标题生成、文章生成、校对润色、去 AI 味儿、排版优化和对话式改写。支持 Mimo/DeepSeek/GLM/OpenAI/Qwen/MiniMax 多供应商，失败时回退硬编码。
+- **wechat.py** — Playwright Chromium 自动化，处理扫码登录、文章编辑、图片上传、封面选择、保存草稿/发布，多账号通过独立 profile 与 `storage_state` 隔离。
 - **extensions.py** — 图片评分（Vision API + 启发式回退）、封面选取（最高分或首图）、HTML 排版生成。
 - **watermark.py** — 基于 PIL 的启发式水印检测，分析角部/底部与中心的边缘强度比。
 
 ### 工具层（`utils/`）
 - **audit.py** — 审计日志，记录操作到 `data/state/operations.json`
-- **api_key_store.py** — API Key 本地加密存储
+- **api_key_store.py** — API Key 本地存储
 - **file.py** — 文件读取/写入，JSON 缓存，文本 hash
 - **pathsafe.py** — 安全路径处理
 - **logger.py** — 日志配置，按天轮转
+- **settings_store.py** — 桌面设置持久化到 `data/state/settings.json`
+- **weibo_auth_store.py** — 微博 Cookie/UID/头像本地存储与清空
+- **wechat_auth_store.py** — 微信公众号多账号注册表、默认账号、独立 profile/state 路径
 
 ### 桌面 API（`desktop/api.py`）
-FastAPI 路由，约 30 个端点：
+FastAPI 路由，覆盖 50+ 个端点：
 - 设置 CRUD（读写配置）
+- 微信公众号账号（新增、登录、登出、默认账号、删除）
 - 仪表盘（健康检查、统计、操作记录）
 - 发现（搜索、下载、评分、水印检测、SSE 流式下载进度）
+- 文章（草稿 CRUD、灵感搜索、封面搜索/下载、AI 写作工具、加入队列、发布）
 - 队列（增删改、AI 润色、发布、发布日志轮询）
-- 素材（列表浏览、批量删除）
+- 素材（列表浏览、文件夹树、移动、重命名、新建文件夹、批量删除）
 - 图片代理（本地图片静态服务、远程图片 proxy）
 
 ### 前端（`desktop/web/src/`）
-React 单页应用，5 个页面：
+React 单页应用，6 个页面：
 - **Dashboard** — 健康状态、统计数据、快捷操作、最近操作记录
 - **Discovery** — 搜索参数配置、帖子列表、本地图片画廊、AI 评分
+- **ArticlePublish** — 文章草稿、Markdown 编辑、灵感搜索、封面搜索、AI 写作工具、发布流转
 - **Queue** — 发布队列管理、AI 润色、保存草稿/直接发布/删除
 - **Materials** — 按艺人+场景分组的本地素材管理、右键菜单
-- **Settings** — 主题切换（3 种模式 + 4 套配色）、大模型配置、微博配置、水印参数
+- **Settings** — 主题切换（3 种模式 + 4 套配色）、大模型配置、微博/头条配置、微信公众号多账号、素材目录、水印参数
 
-全局 Zustand store 管理：toast、lightbox、进度浮层、选中状态。
+全局 Zustand store 管理：toast、lightbox、进度浮层、选中状态、文章列表、灵感结果。
 
 ### 配置
 `config.py` 是 `Settings` dataclass 单例。
@@ -151,10 +157,15 @@ React 单页应用，5 个页面：
 ### 数据存储
 - `data/images/` — 下载图片，按艺人/场景/帖子组织
 - `data/posts.json` — 去重缓存（已处理帖子 ID + hash）
-- `data/state/queue.json` — 发布队列持久化
+- `data/queue.json` — 发布队列持久化
+- `data/state/settings.json` — 桌面 GUI 配置
+- `data/state/articles.json` — 文章草稿
 - `data/state/operations.json` — 操作记录
-- `data/state/wechat.json` — 公众号登录态
+- `data/state/wechat.json` — 旧版单账号公众号登录态
+- `data/state/wechat_accounts.json` — 微信公众号多账号索引
+- `data/state/wechat_accounts/` — 多账号独立 Chromium profile 与 storage_state
 - `data/state/wechat_chromium_profile/` — Chromium 用户数据
+- `data/state/weibo_auth.json` — 微博 Cookie/UID/头像
 - `data/state/weibo_uid_map.json` — 昵称→UID 缓存
 - `data/state/weibo_topic_map.json` — 超话名→hash 缓存
 - `data/logs/` — 运行日志
