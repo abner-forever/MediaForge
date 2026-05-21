@@ -28,6 +28,51 @@ if _pyproject_path.exists():
 else:
     APP_VERSION = '0.0.0'
 
+# ── 自动生成应用图标（如果不存在）───────────────────────
+# 确保 PyInstaller 构建产物拥有正确图标，而非 Python 默认小火箭
+if system == 'Darwin':
+    _mac_icon = PROJECT_ROOT / 'build' / 'app.icns'
+    if not _mac_icon.exists():
+        _src_icon = SPEC_DIR / 'static' / 'logo-icon.png'
+        if _src_icon.exists():
+            try:
+                from PIL import Image
+                import subprocess, shutil
+                _img = Image.open(str(_src_icon))
+                _size = min(_img.size)
+                _left = (_img.width - _size) // 2
+                _top = (_img.height - _size) // 2
+                _img = _img.crop((_left, _top, _left + _size, _top + _size))
+                _iconset = _mac_icon.parent / 'icon.iconset'
+                _iconset.mkdir(parents=True, exist_ok=True)
+                for _s in [16, 32, 64, 128, 256, 512, 1024]:
+                    _resized = _img.resize((_s, _s), Image.LANCZOS)
+                    _resized.save(str(_iconset / f'icon_{_s}x{_s}.png'))
+                    if _s * 2 <= 1024:
+                        _resized.save(str(_iconset / f'icon_{_s}x{_s}@2x.png'))
+                subprocess.run(['iconutil', '-c', 'icns', str(_iconset), '-o', str(_mac_icon)], check=True)
+                shutil.rmtree(_iconset)
+                print(f"[build.spec] [OK] Auto-generated icon: {_mac_icon}")
+            except Exception as _e:
+                print(f"[build.spec] [WARN] Could not auto-generate .icns: {_e}")
+elif system == 'Windows':
+    _win_icon = SPEC_DIR / 'build' / 'app.ico'
+    if not _win_icon.exists():
+        _src_icon = SPEC_DIR / 'static' / 'logo-icon.png'
+        if _src_icon.exists():
+            try:
+                from PIL import Image
+                _win_icon.parent.mkdir(parents=True, exist_ok=True)
+                _img = Image.open(str(_src_icon))
+                _size = min(_img.size)
+                _left = (_img.width - _size) // 2
+                _top = (_img.height - _size) // 2
+                _img = _img.crop((_left, _top, _left + _size, _top + _size))
+                _img.save(str(_win_icon), sizes=[(256, 256)])
+                print(f"[build.spec] [OK] Auto-generated icon: {_win_icon}")
+            except Exception as _e:
+                print(f"[build.spec] [WARN] Could not auto-generate .ico: {_e}")
+
 block_cipher = None
 
 # ── Playwright 浏览器打包 ─────────────────────────────

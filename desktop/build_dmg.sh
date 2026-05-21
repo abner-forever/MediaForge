@@ -6,10 +6,15 @@
 set -euo pipefail
 
 ARCH="${1:-$(uname -m)}"
+VERSION="${2:-}"
 APP_SRC="dist/MediaForge.app"
 APP_NAME="图文工坊"
 APP_DST="${APP_NAME}.app"
-DMG_NAME="MediaForge-macOS-${ARCH}.dmg"
+if [ -n "$VERSION" ]; then
+    DMG_NAME="MediaForge-macOS-${ARCH}-${VERSION}.dmg"
+else
+    DMG_NAME="MediaForge-macOS-${ARCH}.dmg"
+fi
 VOLNAME="图文工坊"
 DMG_TEMP="$(pwd)/dmg_temp.dmg"
 BG_DIR=".background"

@@ -41,17 +41,24 @@ def _set_dock_icon() -> bool:
     return False
 
 
-# macOS: 尽早设置 Dock 图标和进程名称，在 uvicorn/webview 等加载前执行
+# macOS: 尽早设置 Dock 图标、进程名称和应用激活策略，在 uvicorn/webview 等加载前执行
+# 注意：setActivationPolicy_ 必须在设置进程名称和 Bundle 信息之后调用，
+# 否则 Dock 会以 "python" 注册应用，之后无法更新悬停名称
 try:
-    from AppKit import NSProcessInfo, NSApplication, NSString, NSImage
+    from AppKit import NSProcessInfo, NSApplication, NSString, NSImage, NSBundle
     import ctypes, ctypes.util
 
-    _set_dock_icon()
+    # 1. 更新 NSBundle 信息（影响 About 面板和 Dock 中的应用名）
+    _bundle = NSBundle.mainBundle()
+    _info = _bundle.infoDictionary()
+    if _info:
+        _info["CFBundleName"] = "图文工坊"
+        _info["CFBundleDisplayName"] = "图文工坊"
 
-    # 设置进程名称（Dock hover tooltip）
+    # 2. 设置进程名称（影响 Activity Monitor 等系统工具）
     NSProcessInfo.processInfo().setProcessName_("图文工坊")
 
-    # Carbon CPSSetProcessName 兜底
+    # 3. Carbon CPSSetProcessName 兜底
     carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
 
     class _PSN(ctypes.Structure):
@@ -60,6 +67,13 @@ try:
     _psn = _PSN(0, 0)
     carbon.GetCurrentProcess(ctypes.byref(_psn))
     carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
+
+    # 4. 设置激活策略为 Regular（前台应用），此操作将应用注册到 Dock
+    #    必须在进程名和 Bundle 信息设置之后调用，确保 Dock 读取到正确名称
+    NSApplication.sharedApplication().setActivationPolicy_(0)
+
+    # 5. 设置 Dock 图标
+    _set_dock_icon()
 except Exception:
     pass
 
@@ -201,6 +215,18 @@ def _start_app() -> None:
     except Exception:
         pass
 
+    # 设置窗口缩略图图标（最小化时右下角显示）
+    try:
+        from AppKit import NSImage
+        for _p in _get_icon_candidates():
+            if _p.exists():
+                _minimg = NSImage.alloc().initWithContentsOfFile_(str(_p))
+                if _minimg:
+                    window.native.setMiniwindowImage_(_minimg)
+                    break
+    except Exception:
+        pass
+
     def _load_app_icon_nsimage() -> object | None:
         """加载应用图标为 NSImage 对象，供 NSAlert.setIcon_ 使用。"""
         try:
@@ -250,13 +276,57 @@ def _start_app() -> None:
         except Exception:
             pass
 
+    # ── macOS: 自定义 About 面板，使用应用自有图标和名称 ──
+    _about_handler = None
+    try:
+        from AppKit import NSObject, NSApplication, NSImage
+
+        class _AboutHandler(NSObject):
+            def handleAbout_(self, sender):
+                opts = {"ApplicationName": "图文工坊"}
+                for _p in _get_icon_candidates():
+                    if _p.exists():
+                        _img = NSImage.alloc().initWithContentsOfFile_(str(_p))
+                        if _img:
+                            opts["ApplicationIcon"] = _img
+                        break
+                NSApplication.sharedApplication().orderFrontStandardAboutPanelWithOptions_(opts)
+
+        _about_handler = _AboutHandler.alloc().init()
+    except Exception:
+        pass
+
+    def _patch_about_menu():
+        """替换 About 菜单项，使用自定义图标和名称。"""
+        if _about_handler is None:
+            return
+        try:
+            from AppKit import NSApplication
+            _app = NSApplication.sharedApplication()
+            _main_menu = _app.mainMenu()
+            if not _main_menu:
+                return
+            _app_menu_item = _main_menu.itemAtIndex_(0)
+            if not _app_menu_item:
+                return
+            _app_menu = _app_menu_item.submenu()
+            if not _app_menu:
+                return
+            _about_item = _app_menu.itemAtIndex_(0)
+            if _about_item and _about_item.action() is not None:
+                _about_item.setTarget_(_about_handler)
+                _about_item.setAction_("handleAbout:")
+        except Exception:
+            pass
+
     def _set_icon_after_start():
-        """PyWebView 启动后通过主线程 runloop 设置图标。"""
+        """PyWebView 启动后通过主线程 runloop 设置图标和 About 面板。"""
         import time as _time
         _time.sleep(1)
         try:
             from PyObjCTools import AppHelper
             AppHelper.callAfter(_set_main_thread_icon)
+            AppHelper.callAfter(_patch_about_menu)
         except Exception:
             pass
 
