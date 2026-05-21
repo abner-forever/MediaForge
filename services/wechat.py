@@ -299,12 +299,12 @@ def _confirm_cover_dialogs(page, on_log=None) -> bool:
     return True
 
 
-def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = None) -> bool:
-    """选择封面：有封面图片则直接上传，否则从正文选择。
+def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = None, force_from_body: bool = False) -> bool:
+    """选择封面：有封面图片则从正文选择，否则尝试直接上传或从正文选择。
 
     微信编辑器当前封面选择弹窗有三个 tab：
       AI配图 / 从正文选择 / 上传
-    优先使用「上传」直接传封面图，降级用「从正文选择」。
+    force_from_body=True 时强制使用「从正文选择」（封面已预先上传到正文首张）。
     """
     _human_sleep(1.0, 0.5)
     _emit("正在查找封面设置区域...", on_log)
@@ -331,8 +331,8 @@ def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = N
     _emit("已点击选择封面", on_log)
     _human_sleep(0.8, 0.3)
 
-    # 2. 有封面图片路径 → 直接上传
-    if cover_path and Path(cover_path).exists():
+    # 2. 有封面图片路径且非强制从正文选择 → 尝试直接上传
+    if cover_path and Path(cover_path).exists() and not force_from_body:
         _emit("已有封面图片，尝试直接上传...", on_log)
         # 弹窗中找"上传" tab/选项
         upload_tab_found = False
@@ -520,7 +520,9 @@ def publish_article(
                 user_data_dir=str(user_data_dir),
                 headless=False,
             )
-            page = context.new_page()
+            # 使用浏览器默认打开的页面，避免创建新页面导致出现空白窗口
+            pages = context.pages
+            page = pages[0] if pages else context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             _emit("正在登录微信公众号...", on_log)
             _ensure_login(page, state_path=state_path_global, on_scan_needed=on_scan_needed)
@@ -580,23 +582,63 @@ def publish_article(
             if not upload:
                 raise RuntimeError("未找到图片上传入口")
             _emit("正在上传图片...", on_log)
-            for i, img in enumerate(images):
+
+            # 有封面时：先把封面上传到正文最顶部，再传其他图片
+            all_images = list(images)
+            has_cover_uploaded = cover and Path(cover).exists()
+            if has_cover_uploaded and cover not in all_images:
+                all_images.insert(0, cover)
+
+            for i, img in enumerate(all_images):
                 if Path(img).exists():
                     upload.set_input_files(img)
-                    _emit(f"已上传图片 {i+1}/{len(images)}: {Path(img).name}", on_log)
+                    _emit(f"已上传图片 {i+1}/{len(all_images)}: {Path(img).name}", on_log)
                     _human_sleep(2.0, 1.0)
 
             # 等待图片上传完成并渲染（多图需更长时间）
             _emit("等待图片上传完成...", on_log)
             _human_sleep(max(3.0, len(images) * 0.5), 1.0)
+
+            # 有封面时：将封面图移动到正文最前面（封面在上传列表第一个，对应正文中第一个 img）
+            if has_cover_uploaded:
+                _emit("正在将封面图移动到正文最前面...", on_log)
+                for f in [editor_frame, page.main_frame] + page.frames:
+                    if f.is_detached():
+                        continue
+                    try:
+                        moved = f.evaluate("""() => {
+                            const ed = document.querySelector('#js_content') || document.querySelector('[contenteditable="true"]');
+                            if (!ed) return false;
+                            const firstImg = ed.querySelector('img');
+                            if (!firstImg) return false;
+                            const firstChild = ed.firstChild;
+                            if (firstChild && firstChild.contains(firstImg)) return true;
+                            const para = firstImg.closest('p') || firstImg.parentElement;
+                            if (para && para !== ed) {
+                                ed.insertBefore(para, ed.firstChild);
+                            } else {
+                                ed.insertBefore(firstImg, ed.firstChild);
+                            }
+                            ed.dispatchEvent(new Event('input', { bubbles: true }));
+                            return true;
+                        }""")
+                        if moved:
+                            _emit("封面图已移动到正文最前面", on_log)
+                            break
+                    except Exception as e:
+                        logger.debug("移动封面图失败: %s", e)
+                        continue
+
             _emit("正在选择封面...", on_log)
-            cover_ok = _select_cover(page, editor_frame, on_log, cover)
+
+            # 有封面时：从正文选择首张图片作为封面
+            cover_ok = _select_cover(page, editor_frame, on_log, cover, force_from_body=has_cover_uploaded)
             if not cover_ok:
                 _emit("封面未设置（不影响草稿保存）", on_log)
 
             # 保存草稿或发布
             if save_draft:
-                _emit("正在保存草稿...", on_log)
+                _emit("正在保存草稿（第一遍：含封面）...", on_log)
                 if not _click_first_available(
                     editor_frame,
                     [
@@ -610,20 +652,85 @@ def publish_article(
                 ):
                     raise RuntimeError("未找到保存草稿按钮")
                 # 等待保存确认（微信编辑器异步保存，需等待成功提示出现）
-                save_ok = False
-                for s in range(15):
-                    for hint in ["保存成功", "已保存", "草稿已保存"]:
-                        try:
-                            if page.locator(f"text={hint}").first.is_visible(timeout=800):
-                                save_ok = True
-                                break
-                        except Exception:
-                            continue
-                    if save_ok:
-                        break
-                    _human_sleep(1.0, 0.3)
+                def _wait_save_done(page) -> bool:
+                    for s in range(15):
+                        for hint in ["保存成功", "已保存", "草稿已保存"]:
+                            try:
+                                if page.locator(f"text={hint}").first.is_visible(timeout=800):
+                                    return True
+                            except Exception:
+                                continue
+                        _human_sleep(1.0, 0.3)
+                    return False
+
+                save_ok = _wait_save_done(page)
                 if not save_ok:
-                    _emit("未检测到保存成功的提示，但可能已保存", on_log)
+                    _emit("未检测到第一次保存成功的提示，但可能已保存", on_log)
+
+                # 如果有封面已上传到正文，执行两步保存：保存后删除正文首张封面图，再次保存
+                if has_cover_uploaded and cover_ok:
+                    _emit("正在删除正文中的封面图（两步保存）...", on_log)
+                    _human_sleep(1.0, 0.5)
+
+                    # 重新获取 editor_frame（第一次保存后 iframe 可能已刷新）
+                    editor_frame = _resolve_editor_frame(page)
+
+                    # 在编辑器 frame 中删除正文第一个 img（封面）
+                    removed = False
+                    for f in [editor_frame, page.main_frame] + page.frames:
+                        if f.is_detached():
+                            continue
+                        try:
+                            ok = f.evaluate("""() => {
+                                const ed = document.querySelector('#js_content') || document.querySelector('[contenteditable="true"]');
+                                if (!ed) return false;
+                                const imgs = ed.querySelectorAll('img');
+                                if (imgs.length === 0) return false;
+                                const first = imgs[0];
+                                // 删除图片所在的整个段落，避免留空行
+                                let target = first;
+                                const parent = first.parentElement;
+                                if (parent && parent.tagName === 'P' && parent.closest('#js_content, [contenteditable]')) {
+                                    target = parent;
+                                }
+                                target.remove();
+                                ed.dispatchEvent(new Event('input', { bubbles: true }));
+                                // 确认图片已删除
+                                return ed.querySelectorAll('img').length === imgs.length - 1;
+                            }""")
+                            if ok:
+                                _emit("正文首张封面图片已删除", on_log)
+                                removed = True
+                                break
+                        except Exception as e:
+                            logger.debug("删除封面图失败 (frame %s): %s", f.url[:60], e)
+                            continue
+
+                    if not removed:
+                        _emit("未能在正文中找到封面图片，但封面已在第一步设置完成", on_log)
+
+                    _human_sleep(0.5, 0.3)
+
+                    _emit("正在保存草稿（第二遍：已删除封面）...", on_log)
+                    if not _click_first_available(
+                        editor_frame,
+                        [
+                            "button:has-text('保存为草稿')",
+                            "a:has-text('保存为草稿')",
+                            "button:has-text('保存草稿')",
+                            "a:has-text('保存草稿')",
+                            "button:has-text('保存')",
+                        ],
+                        wait_ms=5000,
+                    ):
+                        _emit("未找到第二遍保存草稿按钮，但封面已上传设置完成", on_log)
+                    else:
+                        save_ok2 = _wait_save_done(page)
+                        if save_ok2:
+                            _emit("第二遍草稿保存成功（封面已从正文移除）", on_log)
+                        else:
+                            _emit("第二遍保存未检测到确认提示", on_log)
+
                 context.storage_state(path=str(state_path_global))
                 if account_id:
                     update_account(account_id, last_used=datetime.now().isoformat())

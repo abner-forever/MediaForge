@@ -254,6 +254,9 @@ def build_html(desc: str, images: List[str]) -> str:
             return f'<blockquote style="border-left:3px solid var(--accent);padding-left:1em;color:var(--text-secondary);margin:0.75em 0;">{quotes}</blockquote>'
         return re.sub(r'^>\s*(.+)$', repl, text, flags=re.MULTILINE)
 
+    # 预处理：将 Markdown 图片转为 HTML（在 esc 之前，避免被转义）
+    desc = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', r'<img src="\2" alt="\1" style="max-width:100%;border-radius:8px;margin:0.75em 0;display:block;" />', desc)
+
     # 预处理：转义 HTML 特殊字符
     def esc(t: str) -> str:
         return t.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')

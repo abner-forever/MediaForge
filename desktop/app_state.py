@@ -11,6 +11,8 @@ from utils.file import read_json, write_json
 
 OPLOG_CACHE_PATH = DATA_DIR / "state" / "operations.json"
 ARTICLES_CACHE_PATH = DATA_DIR / "state" / "articles.json"
+MATERIALS_META_PATH = DATA_DIR / "state" / "materials_meta.json"
+PUBLISH_EFFECTS_PATH = DATA_DIR / "state" / "publish_effects.json"
 
 
 class AppState:
@@ -127,7 +129,8 @@ class AppState:
         for i, a in enumerate(self.articles):
             if a.get("id") == article_id:
                 allowed = {"title", "content", "summary", "cover", "images",
-                           "tags", "celebrity", "source", "ai_generated", "status"}
+                           "tags", "celebrity", "source", "ai_generated", "status",
+                           "account_id", "error"}
                 for k, v in updates.items():
                     if k in allowed:
                         self.articles[i][k] = v
@@ -143,6 +146,93 @@ class AppState:
                 self._save_articles()
                 return True
         return False
+
+    # ── 素材元数据 ───────────────────────────────────
+    @staticmethod
+    def _load_materials_meta() -> Dict[str, Any]:
+        return read_json(MATERIALS_META_PATH, default={})
+
+    def _save_materials_meta(self) -> None:
+        write_json(MATERIALS_META_PATH, self._materials_meta)
+
+    def _ensure_materials_meta(self) -> Dict[str, Any]:
+        if not hasattr(self, '_materials_meta'):
+            self._materials_meta = self._load_materials_meta()
+        return self._materials_meta
+
+    def get_materials_meta(self, path: Optional[str] = None) -> Any:
+        meta = self._ensure_materials_meta()
+        if path:
+            return meta.get(path)
+        return dict(meta)
+
+    def update_materials_meta(self, path: str, updates: Dict[str, Any]) -> None:
+        meta = self._ensure_materials_meta()
+        if path not in meta:
+            meta[path] = {"path": path, "tags": [], "source_platform": "", "source_url": "",
+                          "used_count": 0, "used_in_articles": [], "is_cover": False,
+                          "celebrity": "", "scene": "", "scored": False,
+                          "score": 0, "score_reason": ""}
+        meta[path].update(updates)
+        self._save_materials_meta()
+
+    def batch_update_materials_meta(self, updates: Dict[str, Dict[str, Any]]) -> None:
+        for path, data in updates.items():
+            self.update_materials_meta(path, data)
+
+    def get_all_materials_tags(self) -> Dict[str, list]:
+        meta = self._ensure_materials_meta()
+        tags: set = set()
+        celebrities: set = set()
+        scenes: set = set()
+        for path, data in meta.items():
+            for t in data.get("tags", []):
+                tags.add(t)
+            if data.get("celebrity"):
+                celebrities.add(data["celebrity"])
+            if data.get("scene"):
+                scenes.add(data["scene"])
+        return {"tags": sorted(tags), "celebrities": sorted(celebrities), "scenes": sorted(scenes)}
+
+    def delete_materials_meta(self, paths: List[str]) -> int:
+        meta = self._ensure_materials_meta()
+        deleted = 0
+        for p in paths:
+            if p in meta:
+                del meta[p]
+                deleted += 1
+        if deleted:
+            self._save_materials_meta()
+        return deleted
+
+    # ── 发布效果 ──────────────────────────────────────
+    @staticmethod
+    def _load_publish_effects() -> Dict[str, Any]:
+        return read_json(PUBLISH_EFFECTS_PATH, default={})
+
+    def _save_publish_effects(self) -> None:
+        write_json(PUBLISH_EFFECTS_PATH, self._publish_effects)
+
+    def _ensure_publish_effects(self) -> Dict[str, Any]:
+        if not hasattr(self, '_publish_effects'):
+            self._publish_effects = self._load_publish_effects()
+        return self._publish_effects
+
+    def get_publish_effects(self, item_id: Optional[str] = None) -> Any:
+        effects = self._ensure_publish_effects()
+        if item_id:
+            return effects.get(item_id)
+        return dict(effects)
+
+    def update_publish_effect(self, item_id: str, data: Dict[str, Any]) -> None:
+        effects = self._ensure_publish_effects()
+        data["updated_at"] = datetime.now().isoformat()
+        if item_id in effects:
+            effects[item_id].update(data)
+        else:
+            data["item_id"] = item_id
+            effects[item_id] = data
+        self._save_publish_effects()
 
     # ── 操作记录 ──────────────────────────────────────
     @staticmethod

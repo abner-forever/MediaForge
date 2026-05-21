@@ -393,6 +393,16 @@ def _post_from_card(
     }
 
 
+def _is_substantive_post_text(text: str, celebrity_name: str) -> bool:
+    """判断正文是否有实质内容，用于过滤关键词搜索中「无关用户+纯标签」的噪音帖子。
+
+    去掉明星名字后，剩下的有效内容（中文、英文、数字）不足 5 个字符即视为无实质内容。
+    """
+    remaining = text.replace(celebrity_name, "").strip()
+    meaningful = re.sub(r"[^a-zA-Z0-9一-鿿]", "", remaining)
+    return len(meaningful) >= 5
+
+
 def _parse_mblogs_from_cards_payload(payload: dict) -> List[dict]:
     out: List[dict] = []
     cards = payload.get("data", {}).get("cards", []) or []
@@ -576,6 +586,9 @@ def fetch_celebrity_discovery_posts(
         else:
             logger.error("未能解析昵称「%s」的微博 UID：请手动在控制台确认名称，或稍后补 UID 映射", name)
 
+        # 从时间线中收集明星本人的 screen_name，用于后续判断
+        known_screen_names = {tp.get("screen_name", "") for tp in timeline_posts if tp.get("screen_name")}
+
         for tag in tag_list or ("美图",):
             keyword = f"{name} {tag}".strip()
             for pg in kw_page_range:
@@ -584,6 +597,16 @@ def fetch_celebrity_discovery_posts(
                 fetched = fetch_keyword_timeline_mobile(
                     keyword, page=pg, celebrity=name, scene=tag
                 )
+                # 过滤：作者不是明星本人、且正文缺乏实质内容（纯标签/短评）的噪音帖子
+                if known_screen_names:
+                    before = len(fetched)
+                    fetched = [
+                        p for p in fetched
+                        if p.get("screen_name") in known_screen_names
+                        or _is_substantive_post_text(p.get("text", ""), name)
+                    ]
+                    if before - len(fetched):
+                        logger.info("关键词搜索「%s」页%s过滤噪音帖子 %s 条", keyword, pg, before - len(fetched))
                 search_posts.extend(fetched)
                 if progress_callback:
                     progress_callback(f"✓ 「{keyword}」第{pg}页 → {len(fetched)} 条含图帖子")

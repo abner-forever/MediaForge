@@ -1,12 +1,24 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../../stores';
-import { queueApi } from '../../api/client';
+import { queueApi, wechatAccountApi } from '../../api/client';
+import type { WeChatAccount } from '../../api/client';
 import { formatTime } from './utils';
 import QueueCard from './QueueCard';
+import Select from '../../components/Select';
 
 export default function Queue() {
   const { queue, setQueue } = useStore();
-  useEffect(() => { queueApi.get().then(d => setQueue(d.queue)); }, [setQueue]);
+  const [accounts, setAccounts] = useState<WeChatAccount[]>([]);
+  const [filterAccount, setFilterAccount] = useState('');
+
+  useEffect(() => {
+    queueApi.get().then(d => setQueue(d.queue));
+    wechatAccountApi.list().then(d => setAccounts(d.accounts)).catch(() => {});
+  }, [setQueue]);
+
+  const filteredQueue = filterAccount
+    ? queue.filter(item => item.account_id === filterAccount)
+    : queue;
 
   return (
     <div className="space-y-6 animate-in">
@@ -15,7 +27,26 @@ export default function Queue() {
         <p className="text-sm text-text-secondary mt-1">预览和发布图文内容到公众号</p>
       </div>
 
-      {queue.length === 0 ? (
+      {accounts.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-text-muted shrink-0">按账号筛选</span>
+          <div className="w-44">
+            <Select
+              value={filterAccount}
+              onChange={setFilterAccount}
+              options={[
+                { label: '全部账号', value: '' },
+                ...accounts.map(acc => ({
+                  label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
+                  value: acc.account_id,
+                })),
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {filteredQueue.length === 0 ? (
         <div className="card">
           <div className="empty-state py-16">
             <div className="empty-state-icon">📭</div>
@@ -25,8 +56,8 @@ export default function Queue() {
         </div>
       ) : (
         (() => {
-          const sortedIndices = queue
-            .map((item, i) => ({ item, i }))
+          const sortedIndices = filteredQueue
+            .map((item) => ({ item, i: queue.indexOf(item) }))
             .sort((a, b) => {
               const tA = a.item.time || '';
               const tB = b.item.time || '';

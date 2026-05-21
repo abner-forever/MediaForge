@@ -34,7 +34,7 @@ def _set_dock_identity() -> None:
         return
 
     try:
-        from AppKit import NSImage, NSApplication, NSProcessInfo, NSString
+        from AppKit import NSImage, NSApplication, NSProcessInfo, NSString, NSBundle
         import ctypes, ctypes.util
 
         # ── 设置进程名称（Dock hover tooltip）──
@@ -52,11 +52,22 @@ def _set_dock_identity() -> None:
         carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
 
         # ── 设置 Dock 图标 ──
-        icon_path = os.path.join(meipass, "desktop", "static", "logo-icon.png")
-        if os.path.isfile(icon_path):
-            img = NSImage.alloc().initWithContentsOfFile_(icon_path)
-            if img:
-                NSApplication.sharedApplication().setApplicationIconImage_(img)
+        icon_candidates = [
+            os.path.join(meipass, "desktop", "static", "logo-icon.png"),
+        ]
+        for icon_path in icon_candidates:
+            if os.path.isfile(icon_path):
+                img = NSImage.alloc().initWithContentsOfFile_(icon_path)
+                if img:
+                    NSApplication.sharedApplication().setApplicationIconImage_(img)
+                    break
+
+        # 更新 NSBundle 信息（影响 About 面板的应用名称）
+        bundle = NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info:
+            info.setObject_forKey_("图文工坊", "CFBundleName")
+            info.setObject_forKey_("图文工坊", "CFBundleDisplayName")
     except Exception:
         pass
 

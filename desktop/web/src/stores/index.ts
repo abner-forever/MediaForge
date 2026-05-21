@@ -106,6 +106,10 @@ interface AppState {
   setCurrentArticle: (article: ArticleItem | null) => void;
   setArticleFilter: (filter: 'all' | 'draft' | 'queued' | 'published') => void;
   setInspirationResults: (results: InspirationTopic[]) => void;
+
+  // WeChat sidebar sync
+  wechatRefreshKey: number;
+  incWechatRefreshKey: () => void;
 }
 
 const THEME_KEY = 'w2w-theme';
@@ -278,6 +282,10 @@ export const useStore = create<AppState>((set, get) => ({
   setCurrentArticle: (article) => set({ currentArticle: article }),
   setArticleFilter: (filter) => set({ articleFilter: filter }),
   setInspirationResults: (results) => set({ inspirationResults: results }),
+
+  // WeChat sidebar sync
+  wechatRefreshKey: 0,
+  incWechatRefreshKey: () => set((s) => ({ wechatRefreshKey: s.wechatRefreshKey + 1 })),
 }));
 
 // Apply initial theme

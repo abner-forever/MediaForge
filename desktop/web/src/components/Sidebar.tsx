@@ -1,4 +1,7 @@
 import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { wechatAccountApi, type WeChatAccount } from '../api/client';
+import { useStore } from '../stores';
 
 function Icon({ children, className = 'w-4 h-4' }: { children: React.ReactNode; className?: string }) {
   return (
@@ -26,6 +29,15 @@ const NAV_ITEMS = [
 ] as const;
 
 export default function Sidebar() {
+  const [account, setAccount] = useState<WeChatAccount | null>(null);
+  const wechatRefreshKey = useStore(s => s.wechatRefreshKey);
+
+  useEffect(() => {
+    wechatAccountApi.list().then(({ accounts }) => {
+      setAccount(accounts.find(a => a.is_default) || accounts[0] || null);
+    }).catch(() => setAccount(null));
+  }, [wechatRefreshKey]);
+
   return (
     <aside style={{
       display: 'flex',
@@ -71,6 +83,24 @@ export default function Sidebar() {
 
       {/* Bottom */}
       <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <NavLink
+          to="/settings"
+          className="block rounded-lg px-3 py-2 mb-2 hover:bg-white/[0.04]"
+          style={{ textDecoration: 'none', border: '1px solid rgba(255,255,255,0.06)' }}
+          title="进入公众号账号设置"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: account?.logged_in ? '#22c55e' : '#ef4444', flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: '#d0d6e0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {account?.name || '未设置公众号'}
+              </div>
+              <div style={{ fontSize: 11, color: account?.logged_in ? '#6ee7b7' : '#fca5a5' }}>
+                {account?.logged_in ? '默认账号已登录' : '需要扫码登录'}
+              </div>
+            </div>
+          </div>
+        </NavLink>
         <NavLink
           to="/settings"
           end

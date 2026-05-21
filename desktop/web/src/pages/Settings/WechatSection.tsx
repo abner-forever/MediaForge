@@ -1,19 +1,26 @@
-import { useState } from 'react';
-import type { SettingsData, WeChatLoginEvent } from '../../api/client';
+import { useEffect, useState } from 'react';
+import type { SettingsData, WeChatLoginEvent, PublishHistoryItem } from '../../api/client';
 import { useStore } from '../../stores';
 import { wechatAccountApi } from '../../api/client';
+import Modal from '../../components/Modal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function WechatSection({ data, onReload }: { data: SettingsData; onReload?: () => Promise<void> }) {
-  const { addToast } = useStore();
+  const { addToast, incWechatRefreshKey } = useStore();
   const [accounts, setAccounts] = useState(data.wechat_accounts || []);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [loginState, setLoginState] = useState<Record<string, { loading: boolean; message: string }>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ accountId: string; name: string } | null>(null);
+
+  // 每次挂载时从 API 刷新账号列表，避免子选项卡切换导致的数据过期
+  useEffect(() => { refreshAccounts(); }, []);
 
   async function refreshAccounts() {
     try {
       const { accounts: list } = await wechatAccountApi.list();
       setAccounts(list);
+      incWechatRefreshKey();
     } catch { /* ignore */ }
   }
 
@@ -55,14 +62,7 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
   }
 
   async function handleDelete(accountId: string, name: string) {
-    if (!window.confirm(`确定删除公众号「${name}」及其所有数据吗？`)) return;
-    try {
-      await wechatAccountApi.remove(accountId);
-      addToast(`「${name}」已删除`, 'success');
-      await refreshAccounts();
-    } catch (err: any) {
-      addToast(err.message || '删除失败', 'error');
-    }
+    setDeleteConfirm({ accountId, name });
   }
 
   async function handleLogout(accountId: string) {
@@ -72,6 +72,23 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
       await refreshAccounts();
     } catch (err: any) {
       addToast(err.message || '操作失败', 'error');
+    }
+  }
+
+  const [historyModal, setHistoryModal] = useState<{ accountId: string; name: string } | null>(null);
+  const [historyItems, setHistoryItems] = useState<PublishHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  async function openHistory(accountId: string, name: string) {
+    setHistoryModal({ accountId, name });
+    setLoadingHistory(true);
+    try {
+      const { items } = await wechatAccountApi.history(accountId);
+      setHistoryItems(items);
+    } catch {
+      setHistoryItems([]);
+    } finally {
+      setLoadingHistory(false);
     }
   }
 
@@ -135,6 +152,7 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
                     ) : (
                       <button className="btn btn-sm" onClick={() => handleLogin(acc.account_id)}>登录</button>
                     )}
+                    <button className="btn btn-sm btn-ghost" onClick={() => openHistory(acc.account_id, acc.name)} title="发布历史">历史</button>
                     <button className="btn btn-sm btn-ghost text-danger" onClick={() => handleDelete(acc.account_id, acc.name)}>删除</button>
                   </div>
                 )}
@@ -154,6 +172,60 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
           {adding ? '添加中...' : '添加公众号'}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteConfirm}
+        title="删除公众号账号"
+        message={`确定删除公众号「${deleteConfirm?.name}」及其所有数据吗？`}
+        confirmText="删除"
+        danger
+        onConfirm={async () => {
+          const dc = deleteConfirm;
+          if (!dc) return;
+          setDeleteConfirm(null);
+          try {
+            await wechatAccountApi.remove(dc.accountId);
+            addToast(`「${dc.name}」已删除`, 'success');
+            await refreshAccounts();
+          } catch (err: any) {
+            addToast(err.message || '删除失败', 'error');
+          }
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      <Modal open={!!historyModal} onClose={() => setHistoryModal(null)} className="w-[640px] max-w-[calc(100vw-32px)] max-h-[80vh] overflow-y-auto">
+        <h3 className="text-lg font-bold text-text mb-4">发布历史 — {historyModal?.name}</h3>
+        {loadingHistory ? (
+          <div className="py-8 text-center text-sm text-text-muted">加载中...</div>
+        ) : historyItems.length === 0 ? (
+          <div className="py-8 text-center text-sm text-text-muted">暂无发布记录</div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-3 text-xs text-text-muted px-3 py-2">
+              <span>标题</span>
+              <span>状态</span>
+              <span>时间</span>
+            </div>
+            {historyItems.map((item, i) => (
+              <div key={`${item.id}-${i}`} className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-3 py-2 rounded-lg hover:bg-bg-secondary transition-colors">
+                <div className="text-sm text-text truncate">
+                  <span className="text-[10px] text-text-muted mr-1.5">{item.type === 'article' ? '📄' : '🖼'}</span>
+                  {item.title || '无标题'}
+                </div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  item.status === 'published' ? 'bg-success/10 text-success'
+                    : item.status === 'saved_to_wechat' ? 'bg-warning/10 text-warning'
+                      : 'bg-danger/10 text-danger'
+                }`}>
+                  {item.status === 'published' ? '已发布' : item.status === 'saved_to_wechat' ? '草稿' : '失败'}
+                </span>
+                <span className="text-xs text-text-muted tabular-nums">{item.publish_time ? new Date(item.publish_time).toLocaleString() : '-'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -46,6 +46,29 @@ def _save_index(accounts: List[Dict]) -> None:
     )
 
 
+def validate_login_state(account_id: str) -> bool:
+    """验证 state.json 中的登录态是否仍然有效（检查 cookie 是否过期）。
+
+    读取 Playwright storage_state，检查是否有未过期的微信公众号 cookie。
+    比单纯检查文件存在更准确，但不涉及启动浏览器。
+    """
+    _, state_path = get_account_paths(account_id)
+    if not state_path.exists():
+        return False
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+        cookies = data.get("cookies", [])
+        now = datetime.now().timestamp()
+        for cookie in cookies:
+            domain = cookie.get("domain", "")
+            expires = cookie.get("expires", 0)
+            if "weixin.qq.com" in domain and (expires == -1 or expires > now):
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def list_accounts() -> List[Dict]:
     """返回所有账号列表，附加 logged_in 和 last_used 信息。"""
     accounts = _ensure_index()
@@ -56,13 +79,12 @@ def list_accounts() -> List[Dict]:
         default_id = accounts[0].get("account_id", "")
     for acc in accounts:
         aid = acc.get("account_id", "")
-        state_path = ACCOUNTS_DATA_DIR / aid / "state.json"
         result.append({
             "account_id": aid,
             "name": acc.get("name", ""),
             "created_at": acc.get("created_at", ""),
             "last_used": acc.get("last_used", ""),
-            "logged_in": state_path.exists(),
+            "logged_in": validate_login_state(aid),
             "is_default": aid == default_id,
         })
     return result

@@ -216,6 +216,8 @@ export default function RichTextEditor({
   const wordCount = plainText.replace(/\s/g, '').length;
   const charCount = plainText.length;
 
+  const [linkInput, setLinkInput] = useState<{ url: string } | null>(null);
+
   const run = useCallback((fn: (view: EditorView) => void) => {
     const view = editorViewRef.current;
     if (view) fn(view);
@@ -267,10 +269,7 @@ export default function RichTextEditor({
 
         {/* Link */}
         <ToolbarButton
-          onClick={() => {
-            const url = window.prompt('输入链接地址');
-            if (url) run((v) => wrapSelection(v, '[', `](${url})`));
-          }}
+          onClick={() => setLinkInput({ url: '' })}
           active={false}
           title="链接"
         >
@@ -284,6 +283,35 @@ export default function RichTextEditor({
         <ToolbarButton onClick={() => setViewMode('preview')} active={viewMode === 'preview'} title="纯预览">👁</ToolbarButton>
         <ToolbarButton onClick={() => setViewMode('split')} active={viewMode === 'split'} title="分屏">⫿</ToolbarButton>
       </div>
+
+      {/* Link input bar */}
+      {linkInput !== null && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-bg-secondary border-b border-border">
+          <span className="text-xs text-text-muted shrink-0">链接地址：</span>
+          <input
+            type="text"
+            autoFocus
+            value={linkInput.url}
+            onChange={e => setLinkInput({ url: e.target.value })}
+            placeholder="https://..."
+            className="flex-1 text-sm"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && linkInput.url) {
+                run((v) => wrapSelection(v, '[', `](${linkInput.url})`));
+                setLinkInput(null);
+              }
+              if (e.key === 'Escape') setLinkInput(null);
+            }}
+          />
+          <button className="btn btn-sm btn-primary" disabled={!linkInput.url} onClick={() => {
+            if (linkInput.url) {
+              run((v) => wrapSelection(v, '[', `](${linkInput.url})`));
+              setLinkInput(null);
+            }
+          }}>确认</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => setLinkInput(null)}>取消</button>
+        </div>
+      )}
 
       {/* Content area */}
       <div className="rte-content-area">

@@ -1,21 +1,35 @@
+import { useState } from 'react';
 import Checkbox from '../../components/Checkbox';
 import Loading from '../../components/Loading';
 import { fmtTime } from './utils';
+
+const MAX_PREVIEW = 6;
 
 export default function PostList({
   filteredIndices, discoveryPosts, selectedPosts, allLocalImages,
   onTogglePostSelect, onHandleSelectAllFiltered,
   onDownload, onRemovePost, setRemoveConfirmIndex,
   onOpenLightbox, downloading, loadMore, searching, currentPage, minImages,
-  imgSrc,
+  imgSrc, thumbSrc,
 }: {
   filteredIndices: number[]; discoveryPosts: any[]; selectedPosts: Set<number>; allLocalImages: any[];
   onTogglePostSelect: (i: number) => void; onHandleSelectAllFiltered: () => void;
   onDownload: (indices: string) => void; onRemovePost: (i: number) => void; setRemoveConfirmIndex: (i: number | null) => void;
   onOpenLightbox: (pi: number, ii: number) => void;
   downloading: boolean; loadMore: () => void; searching: boolean; currentPage: number;
-  minImages: number; imgSrc: (p: string) => string;
+  minImages: number; imgSrc: (p: string) => string; thumbSrc: (p: string) => string;
 }) {
+  const [expandedPosts, setExpandedPosts] = useState<Set<number>>(new Set());
+
+  function toggleExpand(origIdx: number) {
+    setExpandedPosts(prev => {
+      const next = new Set(prev);
+      if (next.has(origIdx)) next.delete(origIdx);
+      else next.add(origIdx);
+      return next;
+    });
+  }
+
   return (
     <>
       <div className="flex items-center gap-2 mb-4">
@@ -30,6 +44,9 @@ export default function PostList({
             const remoteImgs = p.images || [];
             const displayImgs = imgs.length ? imgs : remoteImgs;
             const isChecked = selectedPosts.has(origIdx);
+            const isExpanded = expandedPosts.has(origIdx);
+            const showImgs = isExpanded ? displayImgs : displayImgs.slice(0, MAX_PREVIEW);
+            const hiddenCount = displayImgs.length - MAX_PREVIEW;
             return (
               <div key={origIdx} className={`rounded-xl p-4 border transition-all ${isChecked ? 'bg-accent-soft border-accent' : 'bg-bg-card border-border hover:border-accent/30'}`}>
                   <div className="flex items-center gap-2 mb-3">
@@ -50,11 +67,26 @@ export default function PostList({
                   </div>
                   {p.text && <div className="text-xs text-text-muted mb-3 line-clamp-2 leading-relaxed">{p.text.slice(0, 100)}</div>}
                   <div className="flex flex-wrap gap-2">
-                    {displayImgs.slice(0, 12).map((img: string, ii: number) => (
-                      <img key={ii} src={imgSrc(img)} alt="" className="w-[80px] h-[80px] object-cover rounded-xl border border-border cursor-pointer transition-all hover:border-accent hover:shadow-md hover:-translate-y-0.5" onClick={() => onOpenLightbox(origIdx, ii)} onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+                    {showImgs.map((img: string, ii: number) => (
+                      <img key={ii} src={thumbSrc(img)} alt="" className="w-[80px] h-[80px] object-cover rounded-xl border border-border cursor-pointer transition-all hover:border-accent hover:shadow-md hover:-translate-y-0.5" onClick={() => onOpenLightbox(origIdx, ii)} onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
                     ))}
-                    {displayImgs.length > 12 && (
-                      <div className="w-[80px] h-[80px] rounded-xl border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary">+{displayImgs.length - 12}</div>
+                    {hiddenCount > 0 && !isExpanded && (
+                      <button
+                        className="w-[80px] h-[80px] rounded-xl border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-bg-tertiary hover:border-accent/50 transition-all cursor-pointer"
+                        onClick={() => toggleExpand(origIdx)}
+                        title="展开全部图片"
+                      >
+                        +{hiddenCount}
+                      </button>
+                    )}
+                    {isExpanded && displayImgs.length > MAX_PREVIEW && (
+                      <button
+                        className="w-[80px] h-[80px] rounded-xl border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-bg-tertiary hover:border-accent/50 transition-all cursor-pointer"
+                        onClick={() => toggleExpand(origIdx)}
+                        title="收起图片"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="18 15 12 9 6 15" /></svg>
+                      </button>
                     )}
                   </div>
                 </div>

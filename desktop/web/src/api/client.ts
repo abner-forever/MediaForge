@@ -6,9 +6,20 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const res = await fetch(path, opts);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || '请求失败');
+    throw new Error(toUserError(err.detail || err.message || res.statusText));
   }
   return res.json();
+}
+
+function toUserError(message: string): string {
+  const text = String(message || '');
+  const low = text.toLowerCase();
+  if (low.includes('weibo_cookie') || text.includes('Cookie 无效')) return '微博登录已失效，请到设置页重新扫码登录。';
+  if (low.includes('base url') || low.includes('base_url')) return '当前 AI 服务需要配置 Base URL，请到设置页补全后重试。';
+  if (low.includes('api_key') || low.includes('api key') || low.includes('401')) return '当前 AI 服务 API Key 不可用，请检查密钥配置。';
+  if (text.includes('公众号未登录') || low.includes('mp.weixin') || low.includes('login')) return '公众号账号未登录，请先到设置页完成扫码登录。';
+  if (low.includes('playwright') || low.includes('locator') || low.includes('iframe') || low.includes('timeout')) return '微信后台页面结构可能已更新或加载超时，请重试；若仍失败请保留日志排查。';
+  return text || '请求失败';
 }
 
 const get = <T>(p: string) => request<T>('GET', p);
@@ -69,13 +80,15 @@ export interface DiscoveryResult {
 }
 
 export interface QueueItem {
+  id?: string;
   title: string;
   desc: string;
   images: string[];
   cover: string;
   celebrity?: string;
   publish_logs?: string[];
-  status?: 'saved' | 'published';
+  status?: 'draft' | 'reviewing' | 'queued' | 'saved' | 'saved_to_wechat' | 'published' | 'failed';
+  error?: string;
   time?: string;
   /** 文章类型队列项 */
   type?: 'image' | 'article';
@@ -243,7 +256,9 @@ export interface ArticleItem {
   celebrity?: string;
   source?: string;
   ai_generated: boolean;
-  status: 'draft' | 'queued' | 'published';
+  status: 'draft' | 'reviewing' | 'queued' | 'saved_to_wechat' | 'published' | 'failed';
+  account_id?: string;
+  error?: string;
   created_at: string;
   updated_at: string;
 }
@@ -311,7 +326,21 @@ export const wechatAccountApi = {
       }
     });
   },
+  history: (accountId?: string) => {
+    const path = accountId ? `/api/wechat/accounts/${accountId}/history` : '/api/wechat/accounts/history';
+    return get<{ items: PublishHistoryItem[]; total: number }>(path);
+  },
 };
+
+export interface PublishHistoryItem {
+  id: string;
+  title: string;
+  type: 'image' | 'article';
+  status: string;
+  publish_time: string;
+  images_count: number;
+  account_id: string;
+}
 
 /* ── Dashboard API ────────────────────────────── */
 
@@ -481,6 +510,18 @@ export const materialsApi = {
   deleteFolder: (path: string) => del<{ success: boolean }>(`/api/materials/folder?path=${encodeURIComponent(path)}`),
   moveItems: (items: string[], destination: string) =>
     post<{ success: boolean; moved: number }>('/api/materials/move', { items, destination }),
+
+  // 评分
+  score: (paths: string[], useVision = true) =>
+    post<{ success: boolean; scores: Record<string, ScoreInfo>; vision_count: number; heuristic_count: number }>(
+      '/api/materials/score', { image_paths: paths, use_vision: useVision }
+    ),
+
+  // 元数据
+  getMeta: (path?: string) => get<MetadataResponse>(`/api/materials/meta${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  updateMeta: (path: string, data: Partial<MaterialMeta>) =>
+    put<{ success: boolean; meta: MaterialMeta }>('/api/materials/meta', { path, ...data }),
+  getTags: () => get<MaterialsTagsResponse>('/api/materials/tags'),
 };
 
 /* ── Publish Log Polling ──────────────────────── */
@@ -524,6 +565,48 @@ export interface ArticleContentResponse {
   title?: string;
 }
 
+export interface TitleCandidate {
+  type: string;
+  title: string;
+}
+
+export interface MaterialMeta {
+  path: string;
+  tags: string[];
+  source_platform: string;
+  source_url: string;
+  used_count: number;
+  used_in_articles: string[];
+  is_cover: boolean;
+  celebrity: string;
+  scene: string;
+  scored: boolean;
+  score: number;
+  score_reason: string;
+}
+
+export interface MaterialsTagsResponse {
+  tags: string[];
+  celebrities: string[];
+  scenes: string[];
+}
+
+export interface MetadataResponse {
+  meta: Record<string, MaterialMeta> | MaterialMeta | null;
+}
+
+export interface PublishEffect {
+  item_id: string;
+  title?: string;
+  account_id?: string;
+  publish_time?: string;
+  reads: number;
+  likes: number;
+  shares: number;
+  favorites: number;
+  updated_at: string;
+}
+
 export interface InspirationResponse {
   topics: InspirationTopic[];
 }
@@ -539,7 +622,16 @@ export const articleApi = {
   update: (id: string, data: Partial<ArticleItem>) =>
     put<{ success: boolean; article: ArticleItem }>(`/api/articles/${id}`, data),
   delete: (id: string) => del<{ success: boolean }>(`/api/articles/${id}`),
-  generate: (id: string, params: { topic?: string; title?: string }) =>
+  generate: (id: string, params: {
+    topic?: string;
+    title?: string;
+    article_type?: string;
+    tone?: string;
+    word_count?: string;
+    with_subtitles?: boolean;
+    gallery_friendly?: boolean;
+    template_prompt?: string;
+  }) =>
     post<ArticleContentResponse>(`/api/articles/${id}/generate`, params),
   polish: (id: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/polish`),
@@ -547,6 +639,8 @@ export const articleApi = {
     post<ArticleContentResponse>(`/api/articles/${id}/de-ai`),
   generateTitle: (id: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/generate-title`),
+  titleCandidates: (id: string) =>
+    post<{ success: boolean; candidates: TitleCandidate[] }>(`/api/articles/${id}/title-candidates`),
   optimizeLayout: (id: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/optimize-layout`),
   publish: (id: string, opts: { save_draft?: boolean; dry_run?: boolean; account_id?: string }) =>
@@ -561,4 +655,24 @@ export const articleApi = {
     post<{ success: boolean; path: string }>('/api/articles/cover-download', { url }),
   chat: (id: string, instruction: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/chat`, { instruction }),
+};
+
+/* ── Compliance API ──────────────────────────── */
+
+export interface DuplicateCheckResult {
+  duplicate: boolean;
+  similar_titles: { title: string; source: string; similarity: number }[];
+}
+
+export const complianceApi = {
+  duplicate: (title: string) => get<DuplicateCheckResult>(`/api/compliance/duplicate?title=${encodeURIComponent(title)}`),
+};
+
+/* ── Publish Effects API ──────────────────────── */
+
+export const effectsApi = {
+  list: () => get<{ effects: PublishEffect[] }>('/api/effects'),
+  get: (itemId: string) => get<{ effect: PublishEffect | null }>(`/api/effects/${itemId}`),
+  save: (itemId: string, data: Partial<PublishEffect>) =>
+    post<{ success: boolean; effect: PublishEffect }>(`/api/effects/${itemId}`, data),
 };

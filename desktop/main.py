@@ -16,24 +16,37 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+
+def _get_icon_candidates() -> list[Path]:
+    """返回应用图标候选路径列表，按优先级排列。"""
+    _root = Path(__file__).parent.parent  # 项目根目录
+    _desktop = Path(__file__).parent      # desktop/
+    return [
+        _desktop / "web" / "public" / "logo-icon.png",   # dev 模式：web/public
+        _desktop / "static" / "logo-icon.png",            # build 后：static/
+        _root / "build" / "app.icns",                     # 打包用 ICNS
+    ]
+
+
+def _set_dock_icon() -> bool:
+    """遍历候选路径设置 NSApplication 图标，成功返回 True。"""
+    from AppKit import NSImage, NSApplication
+    NSApplication.sharedApplication()
+    for p in _get_icon_candidates():
+        if p.exists():
+            img = NSImage.alloc().initWithContentsOfFile_(str(p))
+            if img:
+                NSApplication.sharedApplication().setApplicationIconImage_(img)
+                return True
+    return False
+
+
 # macOS: 尽早设置 Dock 图标和进程名称，在 uvicorn/webview 等加载前执行
 try:
     from AppKit import NSProcessInfo, NSApplication, NSString, NSImage
     import ctypes, ctypes.util
 
-    NSApplication.sharedApplication()
-
-    # 设置 Dock 图标
-    _icon_candidates = [
-        Path(__file__).parent / "static" / "logo-icon.png",
-        Path(__file__).parent.parent / "build" / "app.icns",
-    ]
-    for _icon_path in _icon_candidates:
-        if _icon_path.exists():
-            _img = NSImage.alloc().initWithContentsOfFile_(str(_icon_path))
-            if _img:
-                NSApplication.sharedApplication().setApplicationIconImage_(_img)
-            break
+    _set_dock_icon()
 
     # 设置进程名称（Dock hover tooltip）
     NSProcessInfo.processInfo().setProcessName_("图文工坊")
@@ -86,7 +99,7 @@ def _start_app() -> None:
         NSApplication.sharedApplication()
         NSProcessInfo.processInfo().setProcessName_("图文工坊")
 
-        # Carbon CPSSetProcessName 兜底，直接更新 Dock/Launch Services 名称
+        # Carbon CPSSetProcessName 兜底
         carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
         class _PSN(ctypes.Structure):
             _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
@@ -95,16 +108,7 @@ def _start_app() -> None:
         carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
 
         # 设置 Dock 图标
-        icon_candidates = [
-            Path(__file__).parent / "static" / "logo-icon.png",
-            Path(__file__).parent.parent / "build" / "app.icns",
-        ]
-        for icon_path in icon_candidates:
-            if icon_path.exists():
-                img = NSImage.alloc().initWithContentsOfFile_(str(icon_path))
-                if img:
-                    NSApplication.sharedApplication().setApplicationIconImage_(img)
-                break
+        _set_dock_icon()
 
         # 更新 bundle info 显示名称
         bundle = NSBundle.mainBundle()
@@ -189,16 +193,28 @@ def _start_app() -> None:
         localization=localization,
     )
 
-    # PyWebView create_window 内部可能重置 Dock 图标，在此重新设置
+    # PyWebView create_window 内部可能重置 Dock 图标与名称，在此重新设置
+    _set_dock_icon()
     try:
-        _icon_path = Path(__file__).parent / "static" / "logo-icon.png"
-        if _icon_path.exists():
-            from AppKit import NSImage, NSApplication
-            _img = NSImage.alloc().initWithContentsOfFile_(str(_icon_path))
-            if _img:
-                NSApplication.sharedApplication().setApplicationIconImage_(_img)
+        from AppKit import NSProcessInfo
+        NSProcessInfo.processInfo().setProcessName_("图文工坊")
     except Exception:
         pass
+
+    def _load_app_icon_nsimage() -> object | None:
+        """加载应用图标为 NSImage 对象，供 NSAlert.setIcon_ 使用。"""
+        try:
+            from AppKit import NSImage
+            for p in _get_icon_candidates():
+                if p.exists():
+                    img = NSImage.alloc().initWithContentsOfFile_(str(p))
+                    if img:
+                        return img
+        except Exception:
+            pass
+        return None
+
+    _app_icon_nsimage = _load_app_icon_nsimage()
 
     # 注册窗口关闭前检查
     def _before_close() -> bool:
@@ -212,6 +228,8 @@ def _start_app() -> None:
                 alert.addButtonWithTitle_("取消")
                 alert.setMessageText_("正在发布公众号文章，确定要退出吗？")
                 alert.setAlertStyle_(0)  # NSWarningAlertStyle
+                if _app_icon_nsimage is not None:
+                    alert.setIcon_(_app_icon_nsimage)
                 return alert.runModal() == 1000  # NSAlertFirstButtonReturn
             except Exception:
                 return True
@@ -219,7 +237,30 @@ def _start_app() -> None:
 
     window.events.closing += _before_close
 
-    webview.start(debug=False)
+    def _set_main_thread_icon():
+        """在主线程设置应用图标。"""
+        try:
+            from AppKit import NSImage, NSApplication
+            for _p in _get_icon_candidates():
+                if _p.exists():
+                    _img = NSImage.alloc().initWithContentsOfFile_(str(_p))
+                    if _img:
+                        NSApplication.sharedApplication().setApplicationIconImage_(_img)
+                        break
+        except Exception:
+            pass
+
+    def _set_icon_after_start():
+        """PyWebView 启动后通过主线程 runloop 设置图标。"""
+        import time as _time
+        _time.sleep(1)
+        try:
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(_set_main_thread_icon)
+        except Exception:
+            pass
+
+    webview.start(debug=False, func=_set_icon_after_start)
 
 
 if __name__ == "__main__":

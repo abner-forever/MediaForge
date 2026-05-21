@@ -11,9 +11,10 @@ interface SelectProps {
   options: SelectOption[];
   placeholder?: string;
   disabled?: boolean;
+  menuPosition?: 'bottom' | 'top';
 }
 
-export default function Select({ value, onChange, options, placeholder, disabled }: SelectProps) {
+export default function Select({ value, onChange, options, placeholder, disabled, menuPosition = 'bottom' }: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -72,7 +73,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
 
       {open && (
         <div
-          className="absolute z-50 mt-1.5 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden"
+          className={`absolute z-50 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden ${menuPosition === 'top' ? 'bottom-full mb-1.5' : 'mt-1.5'}`}
           style={{ maxHeight: 240, overflowY: 'auto', animation: 'dropdownIn 0.12s cubic-bezier(0.16, 1, 0.3, 1) both' }}
         >
           {options.map((opt) => {

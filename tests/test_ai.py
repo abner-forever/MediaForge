@@ -14,6 +14,8 @@ import pytest
 from services.ai import (
     _normalize_model_name,
     _resolve_chat_url_candidates,
+    generate_article,
+    generate_article_title_candidates,
     generate_content,
 )
 
@@ -186,3 +188,42 @@ class TestGenerateContent:
         with patch("requests.post", return_value=mock_resp):
             title, desc = generate_content("text")
             assert len(title) <= 20
+
+
+class TestArticlePhaseTwoAI:
+    def test_generate_article_with_template_prompt(self, mock_settings):
+        with patch("services.ai._call_ai", return_value="模板文章") as call:
+            content = generate_article(
+                "街拍",
+                "今日街拍",
+                article_type="图片合集",
+                tone="轻松",
+                word_count="300-500 字",
+                with_subtitles=False,
+                gallery_friendly=True,
+                template_prompt="用清单结构组织。",
+            )
+        assert content == "模板文章"
+        prompt = call.call_args.args[0]
+        assert "图片合集" in prompt
+        assert "用清单结构组织" in prompt
+        assert "是否带小标题：否" in prompt
+
+    def test_title_candidates_from_json(self, mock_settings):
+        raw = json.dumps({
+            "candidates": [
+                {"type": "稳妥版", "title": "春日街拍精选"},
+                {"type": "点击率版", "title": "这组街拍太会穿"},
+            ]
+        }, ensure_ascii=False)
+        with patch("services.ai._call_ai", return_value=raw):
+            candidates = generate_article_title_candidates("正文内容")
+        assert candidates == [
+            {"type": "稳妥版", "title": "春日街拍精选"},
+            {"type": "点击率版", "title": "这组街拍太会穿"},
+        ]
+
+    def test_title_candidates_fallback_lines(self, mock_settings):
+        with patch("services.ai._call_ai", return_value="1. 第一条标题\n2. 第二条标题"):
+            candidates = generate_article_title_candidates("正文内容")
+        assert [c["title"] for c in candidates] == ["第一条标题", "第二条标题"]

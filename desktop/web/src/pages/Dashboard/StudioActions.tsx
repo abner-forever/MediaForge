@@ -1,8 +1,9 @@
 import { I, CARD_THEMES } from './Icons';
 
 const actionList = [
-  { icon: I.search(36), title: '发现图文', desc: '从微博 / 头条搜索优质内容', path: '/discovery', theme: CARD_THEMES[0] },
-  { icon: I.edit(36), title: '发布队列', desc: '管理和发布待处理内容', path: '/queue', theme: CARD_THEMES[1] },
+  { icon: I.search(36), title: '找图发文', desc: '搜索帖子、下载图片、筛选封面并加入队列', path: '/discovery', theme: CARD_THEMES[0] },
+  { icon: I.edit(36), title: '写文章发文', desc: '选择模板、AI 写作、确认后发布', path: '/articles', theme: CARD_THEMES[1] },
+  { icon: I.upload(36), title: '发布队列', desc: '管理和发布待处理内容', path: '/queue', theme: CARD_THEMES[2] },
   { icon: I.gear(36), title: '系统设置', desc: '配置大模型和平台账号', path: '/settings', theme: CARD_THEMES[3] },
 ];
 

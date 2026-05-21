@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../stores';
-import { articleApi, queueApi } from '../../api/client';
-import type { ArticleItem, InspirationTopic, CoverImage } from '../../api/client';
+import { articleApi, wechatAccountApi } from '../../api/client';
+import type { ArticleItem, InspirationTopic, CoverImage, TitleCandidate, WeChatAccount } from '../../api/client';
 import Loading from '../../components/Loading';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import PublishConfirmModal from '../../components/PublishConfirmModal';
+import EffectEntry from '../../components/EffectEntry';
 import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../../components/RichTextEditor';
+import Select from '../../components/Select';
 import AIToolbar from './AIToolbar';
 import ArticleList from './ArticleList';
 import CoverSection from './CoverSection';
@@ -13,8 +16,17 @@ import InspirationPanel from './InspirationPanel';
 import { coverImageUrl, fmtTime } from './utils';
 import type { TabKey } from './utils';
 
+const ARTICLE_TEMPLATES = [
+  { id: 'gallery', name: '图片合集模板', type: '图片合集', tone: '轻松、有画面感', wordCount: '300-500 字', subtitles: true, gallery: true, prompt: '开头点明主题，中段用 3-5 个小标题串联图片亮点，结尾引导读者收藏或留言。' },
+  { id: 'celebrity', name: '明星动态模板', type: '明星动态', tone: '自然、克制、有资讯感', wordCount: '500-700 字', subtitles: true, gallery: true, prompt: '先交代人物和动态，再展开造型、现场氛围、粉丝关注点，避免夸张臆测。' },
+  { id: 'outfit', name: '穿搭解析模板', type: '穿搭解析', tone: '专业但不端着', wordCount: '600-800 字', subtitles: true, gallery: true, prompt: '围绕单品、色彩、版型、适用场景做解析，给出可借鉴的穿搭建议。' },
+  { id: 'daily', name: '今日精选模板', type: '今日精选', tone: '清爽、节奏快', wordCount: '400-600 字', subtitles: true, gallery: true, prompt: '用精选清单结构组织内容，每段聚焦一个看点，适合日更。' },
+  { id: 'short', name: '简短图文模板', type: '简短图文', tone: '简洁、温柔', wordCount: '150-300 字', subtitles: false, gallery: true, prompt: '少铺垫，直接写图集看点和氛围，适合配图发布。' },
+] as const;
+
 export default function ArticlePublish() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox } = useStore();
 
   /* ── 编辑器状态 ────────────────────────────── */
@@ -53,6 +65,12 @@ export default function ArticlePublish() {
   const [coverSearchLoading, setCoverSearchLoading] = useState(false);
   const [coverDownloading, setCoverDownloading] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
+  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [publishConfirm, setPublishConfirm] = useState<'draft' | 'publish' | null>(null);
+  const [templateId, setTemplateId] = useState<(typeof ARTICLE_TEMPLATES)[number]['id']>('gallery');
+  const [titleCandidates, setTitleCandidates] = useState<TitleCandidate[]>([]);
+  const [titleCandidateLoading, setTitleCandidateLoading] = useState(false);
 
   /* ── 加载文章列表 ───────────────────────────── */
   const loadArticles = useCallback(async (filter?: TabKey) => {
@@ -67,6 +85,24 @@ export default function ArticlePublish() {
   }, [addToast, setArticles]);
 
   useEffect(() => { loadArticles(articleFilter); }, []); // eslint-disable-line
+
+  // 回显：从队列编辑跳转时自动选中文章（仅首次）
+  const initialAutoSelectDone = useRef(false);
+  useEffect(() => {
+    if (initialAutoSelectDone.current) return;
+    const editId = searchParams.get('edit');
+    if (!editId || articles.length === 0) return;
+    const target = articles.find(a => a.id === editId);
+    if (target) { selectArticle(target); initialAutoSelectDone.current = true; }
+  }, [searchParams, articles]);
+
+  useEffect(() => {
+    wechatAccountApi.list().then(({ accounts }) => {
+      setWechatAccounts(accounts);
+      const def = accounts.find(a => a.is_default);
+      if (def) setSelectedAccountId(def.account_id);
+    }).catch(() => {});
+  }, []);
 
   const selectArticle = (a: ArticleItem) => {
     setEditingId(a.id); setTitle(a.title); setContent(a.content);
@@ -159,7 +195,7 @@ export default function ArticlePublish() {
       setPublishLoading(true);
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
       await articleApi.update(editingId, { title, content, cover, source, tags });
-      const res = await articleApi.publish(editingId, { save_draft: saveDraft });
+      const res = await articleApi.publish(editingId, { save_draft: saveDraft, account_id: selectedAccountId || undefined });
       addToast(res.message || (saveDraft ? '已保存为草稿' : '发布成功'), 'success');
       loadArticles(articleFilter);
     } catch (e: any) { addToast(e.message || '发布失败', 'error');
@@ -192,7 +228,17 @@ export default function ArticlePublish() {
     try {
       setGenLoading(true);
       const id = await ensureArticleSaved(); if (!id) return;
-      const res = await articleApi.generate(id, { topic: source || title, title });
+      const tpl = ARTICLE_TEMPLATES.find(t => t.id === templateId) || ARTICLE_TEMPLATES[0];
+      const res = await articleApi.generate(id, {
+        topic: source || title,
+        title,
+        article_type: tpl.type,
+        tone: tpl.tone,
+        word_count: tpl.wordCount,
+        with_subtitles: tpl.subtitles,
+        gallery_friendly: tpl.gallery,
+        template_prompt: tpl.prompt,
+      });
       if (res.content) { setContent(res.content); setContentDoc(plainToTiptap(res.content)); addToast('AI 生成完成', 'success'); }
     } catch (e: any) { addToast(e.message || 'AI 生成失败', 'error');
     } finally { setGenLoading(false); }
@@ -229,6 +275,18 @@ export default function ArticlePublish() {
       if (res.title) { setTitle(res.title); addToast('标题已生成', 'success'); }
     } catch (e: any) { addToast(e.message || '生成标题失败', 'error');
     } finally { setTitleLoading(false); }
+  };
+
+  const doGenerateTitleCandidates = async () => {
+    if (!content) { addToast('请先输入正文', 'info'); return; }
+    try {
+      setTitleCandidateLoading(true);
+      const id = await ensureArticleSaved(); if (!id) return;
+      const res = await articleApi.titleCandidates(id);
+      setTitleCandidates(res.candidates || []);
+      if (!res.candidates?.length) addToast('暂未生成标题候选', 'info');
+    } catch (e: any) { addToast(e.message || '生成标题候选失败', 'error');
+    } finally { setTitleCandidateLoading(false); }
   };
 
   const doOptimizeLayout = async () => {
@@ -373,6 +431,35 @@ export default function ArticlePublish() {
               </div>
             </div>
 
+            {/* 文章模板 */}
+            <div className="rounded-xl border border-border bg-bg-card p-3" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ width: 200 }}>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                    文章模板
+                  </label>
+                  <Select
+                    value={templateId}
+                    onChange={(v) => setTemplateId(v as typeof templateId)}
+                    options={ARTICLE_TEMPLATES.map(t => ({ label: t.name, value: t.id }))}
+                  />
+                </div>
+                <div className="flex-1 min-w-[200px] flex items-start gap-2 rounded-lg bg-bg-secondary border border-border/50 px-3 py-2">
+                  <svg className="w-4 h-4 mt-0.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+                  </svg>
+                  <div>
+                    <div className="text-[11px] font-medium text-text-muted mb-0.5">
+                      {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.type} · {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.tone}
+                    </div>
+                    <div className="text-xs text-text-secondary leading-relaxed">
+                      {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.prompt}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* AI 工具栏 */}
             <AIToolbar
               onGenerate={doGenerate} onPolish={doPolish} onDeAi={doDeAi}
@@ -381,6 +468,23 @@ export default function ArticlePublish() {
               deAiLoading={deAiLoading} titleLoading={titleLoading} layoutLoading={layoutLoading}
               content={content}
             />
+
+            <div className="flex gap-2 flex-wrap" style={{ marginBottom: titleCandidates.length ? 10 : 16 }}>
+              <button className="btn btn-sm" onClick={doGenerateTitleCandidates} disabled={titleCandidateLoading || !content}>
+                {titleCandidateLoading ? <Loading size="sm" /> : null} 标题多候选
+              </button>
+              {titleCandidates.map((candidate) => (
+                <button
+                  key={`${candidate.type}-${candidate.title}`}
+                  className="btn btn-sm"
+                  title={candidate.type}
+                  onClick={() => { setTitle(candidate.title); addToast(`已使用${candidate.type}`, 'success'); }}
+                >
+                  <span className="text-text-muted">{candidate.type}</span>
+                  {candidate.title}
+                </button>
+              ))}
+            </div>
 
             {/* 对话输入 */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -478,18 +582,37 @@ export default function ArticlePublish() {
         background: 'var(--bg)',
         zIndex: 10,
       }}>
-        <button className="btn btn-primary" onClick={doSave} disabled={saveLoading}>
-          {saveLoading ? <Loading size="sm" /> : null} 保存草稿
-        </button>
-        <button className="btn" onClick={doQueue} disabled={queueLoading}>
-          {queueLoading ? <Loading size="sm" /> : null} 加入队列
-        </button>
-        <button className="btn" onClick={() => setConfirm({ msg: '确定发布此文章到公众号？', onOk: () => doPublish(false) })} disabled={publishLoading}>
-          {publishLoading ? <Loading size="sm" /> : null} 直接发布
-        </button>
-        <button className="btn btn-ghost" onClick={() => setConfirm({ msg: '保存为公众号草稿？', onOk: () => doPublish(true) })}>
-          公众号草稿
-        </button>
+        {wechatAccounts.length > 0 && (
+          <div style={{ width: 190 }}>
+            <Select
+              value={selectedAccountId}
+              onChange={setSelectedAccountId}
+              options={wechatAccounts.map(acc => ({
+                label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
+                value: acc.account_id,
+              }))}
+              menuPosition="top"
+            />
+          </div>
+        )}
+        {currentArticle?.status === 'published' ? (
+          <EffectEntry itemId={currentArticle.id} title={currentArticle.title} />
+        ) : (
+          <>
+            <button className="btn btn-primary" onClick={doSave} disabled={saveLoading}>
+              {saveLoading ? <Loading size="sm" /> : null} 保存草稿
+            </button>
+            <button className="btn" onClick={doQueue} disabled={queueLoading}>
+              {queueLoading ? <Loading size="sm" /> : null} 加入队列
+            </button>
+            <button className="btn" onClick={() => setPublishConfirm('publish')} disabled={publishLoading}>
+              {publishLoading ? <Loading size="sm" /> : null} 直接发布
+            </button>
+            <button className="btn btn-ghost" onClick={() => setPublishConfirm('draft')} disabled={publishLoading}>
+              公众号草稿
+            </button>
+          </>
+        )}
       </div>
 
       <ConfirmDialog
@@ -498,6 +621,22 @@ export default function ArticlePublish() {
         message={confirm?.msg || ''}
         onConfirm={() => { confirm?.onOk(); setConfirm(null); }}
         onCancel={() => setConfirm(null)}
+      />
+      <PublishConfirmModal
+        open={!!publishConfirm}
+        action={publishConfirm || 'draft'}
+        account={wechatAccounts.find(a => a.account_id === selectedAccountId) || null}
+        title={title}
+        content={content}
+        cover={cover}
+        images={Array.from(new Set([cover, ...(currentArticle?.images || [])].filter(Boolean)))}
+        loading={publishLoading}
+        onConfirm={() => {
+          const action = publishConfirm;
+          setPublishConfirm(null);
+          doPublish(action !== 'publish');
+        }}
+        onCancel={() => setPublishConfirm(null)}
       />
     </div>
   );

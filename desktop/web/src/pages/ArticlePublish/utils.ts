@@ -2,8 +2,11 @@ export type TabKey = 'all' | 'draft' | 'queued' | 'published';
 export const TAB_LABELS: Record<TabKey, string> = { all: '全部', draft: '草稿', queued: '已排队', published: '已发布' };
 export const STATUS_LABELS: Record<string, { text: string }> = {
   draft: { text: '草稿' },
+  reviewing: { text: '待检查' },
   queued: { text: '已排队' },
+  saved_to_wechat: { text: '公众号草稿' },
   published: { text: '已发布' },
+  failed: { text: '发布失败' },
 };
 
 export function coverImageUrl(path: string, source?: string) {

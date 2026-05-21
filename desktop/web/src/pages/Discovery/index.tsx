@@ -6,7 +6,7 @@ import NumberInput from '../../components/NumberInput';
 import SearchLoadingOverlay from '../../components/SearchLoadingOverlay';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useLoading } from '../../hooks/useLoading';
-import { fmtTime, imgSrc } from './utils';
+import { fmtTime, imgSrc, thumbSrc } from './utils';
 import SearchParams from './SearchParams';
 import PostList from './PostList';
 import GalleryTab from './GalleryTab';
@@ -294,6 +294,7 @@ export default function Discovery() {
               currentPage={currentPage}
               minImages={minImages}
               imgSrc={imgSrc}
+              thumbSrc={thumbSrc}
             />
           )}
 
@@ -308,6 +309,7 @@ export default function Discovery() {
               onOpenLightbox={openLightbox}
               enqueuing={enqueuing}
               imgSrc={imgSrc}
+              thumbSrc={thumbSrc}
             />
           )}
         </div>

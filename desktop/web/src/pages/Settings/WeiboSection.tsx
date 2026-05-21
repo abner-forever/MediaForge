@@ -4,6 +4,7 @@ import Select from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 import { settingsApi } from '../../api/client';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function WeiboSection({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload?: () => Promise<void> }) {
   const { loading: saving, withLoading: withSave } = useLoading();
@@ -23,6 +24,7 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
   const [verifyState, setVerifyState] = useState<'idle' | 'verifying' | 'valid' | 'invalid'>('idle');
   const [verifyMessage, setVerifyMessage] = useState('');
   const { addToast } = useStore();
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const rawCookie = cookie || data.weibo_cookie || '';
 
@@ -200,8 +202,19 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
         <button className="btn btn-sm" onClick={handleVerify} disabled={verifyState === 'verifying'}>
           {verifyState === 'verifying' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 验证中</> : '测试连接'}
         </button>
-        <button className="btn btn-sm btn-danger ml-auto" onClick={async () => {
-          if (!window.confirm('确定清空微博鉴权信息（Cookie、UID）吗？')) return;
+        <button className="btn btn-sm btn-danger ml-auto" onClick={() => setShowClearConfirm(true)}>
+          清空
+        </button>
+      </div>
+
+      <ConfirmDialog
+        open={showClearConfirm}
+        title="清空微博鉴权信息"
+        message="确定清空微博鉴权信息（Cookie、UID）吗？"
+        confirmText="清空"
+        danger
+        onConfirm={async () => {
+          setShowClearConfirm(false);
           try {
             await settingsApi.clearWeibo();
             setCookie('');
@@ -215,10 +228,9 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
           } catch (err: any) {
             addToast(err.message, 'error');
           }
-        }}>
-          清空
-        </button>
-      </div>
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
     </div>
   );
 }

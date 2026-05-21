@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '../../stores';
 import { materialsApi, queueApi } from '../../api/client';
-import type { TreeNode, BrowseFolder, BrowseFile } from '../../api/client';
+import type { TreeNode, BrowseFolder, BrowseFile, ScoreInfo, MaterialMeta } from '../../api/client';
 import ContextMenu, { type MenuItem } from '../../components/ContextMenu';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Modal from '../../components/Modal';
@@ -12,6 +12,7 @@ import { imgSrc, formatSize } from './utils';
 import FolderTree from './FolderTree';
 import FolderCard from './FolderCard';
 import ImageCard from './ImageCard';
+import TagEditorModal from './TagEditorModal';
 
 export default function Materials() {
   const {
@@ -36,6 +37,45 @@ export default function Materials() {
   const { loading: enqueuing, withLoading: withEnqueuing } = useLoading();
   const { loading: deleting, withLoading: withDeleting } = useLoading();
   const { loading: renaming, withLoading: withRenaming } = useLoading();
+  const { loading: scoring, withLoading: withScoring } = useLoading();
+  const [scoreMap, setScoreMap] = useState<Record<string, ScoreInfo>>({});
+  const [metaMap, setMetaMap] = useState<Record<string, MaterialMeta>>({});
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [allCelebrities, setAllCelebrities] = useState<string[]>([]);
+  const [allScenes, setAllScenes] = useState<string[]>([]);
+  const [filterTag, setFilterTag] = useState('');
+  const [filterCelebrity, setFilterCelebrity] = useState('');
+  const [filterScene, setFilterScene] = useState('');
+  const [filterUsage, setFilterUsage] = useState<'all' | 'used' | 'unused'>('all');
+  const [tagEditorTarget, setTagEditorTarget] = useState<string | null>(null);
+
+  const loadScoresAndMeta = useCallback(async () => {
+    try {
+      const { meta } = await materialsApi.getMeta();
+      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+        const mm = meta as Record<string, any>;
+        const sm: Record<string, ScoreInfo> = {};
+        const mm2: Record<string, MaterialMeta> = {};
+        for (const [path, data] of Object.entries(mm)) {
+          mm2[path] = data as MaterialMeta;
+          if (data.scored && data.score > 0) {
+            sm[path] = { score: data.score, reason: data.score_reason || '', method: 'vision' };
+          }
+        }
+        setScoreMap(sm);
+        setMetaMap(mm2);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadTags = useCallback(async () => {
+    try {
+      const r = await materialsApi.getTags();
+      setAllTags(r.tags || []);
+      setAllCelebrities(r.celebrities || []);
+      setAllScenes(r.scenes || []);
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -45,6 +85,8 @@ export default function Materials() {
         setCurrentFiles(r.files);
         setBreadcrumb(r.breadcrumb);
       }),
+      loadScoresAndMeta(),
+      loadTags(),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -57,9 +99,11 @@ export default function Materials() {
       setCurrentFolders(r.folders);
       setCurrentFiles(r.files);
       setBreadcrumb(r.breadcrumb);
+      await loadScoresAndMeta();
+      await loadTags();
     } catch { /* ignore */ }
     setLoading(false);
-  }, []);
+  }, [loadScoresAndMeta, loadTags]);
 
   const refreshCurrent = useCallback(async () => {
     try {
@@ -67,8 +111,19 @@ export default function Materials() {
       setCurrentFolders(r.folders);
       setCurrentFiles(r.files);
       setBreadcrumb(r.breadcrumb);
+      await loadScoresAndMeta();
     } catch { /* ignore */ }
-  }, [currentPath]);
+  }, [currentPath, loadScoresAndMeta]);
+
+  const filteredFiles = currentFiles.filter(f => {
+    const m = metaMap[f.path];
+    if (filterTag && !m?.tags?.includes(filterTag)) return false;
+    if (filterCelebrity && m?.celebrity !== filterCelebrity) return false;
+    if (filterScene && m?.scene !== filterScene) return false;
+    if (filterUsage === 'used' && !m?.used_count) return false;
+    if (filterUsage === 'unused' && m?.used_count) return false;
+    return true;
+  });
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -128,6 +183,24 @@ export default function Materials() {
         setFolderTree(tree.tree);
       } catch (err: any) {
         addToast(err.message, 'error');
+      }
+    });
+  };
+
+  const handleScoreAll = async () => {
+    const paths = filteredFiles.map(f => f.path);
+    if (!paths.length) { addToast('当前目录没有图片', 'info'); return; }
+    await withScoring(async () => {
+      try {
+        const r = await materialsApi.score(paths);
+        const m: Record<string, ScoreInfo> = {};
+        for (const [path, info] of Object.entries(r.scores)) {
+          m[path] = info;
+        }
+        setScoreMap(prev => ({ ...prev, ...m }));
+        addToast(`评分完成：${r.vision_count} 张 AI 评分，${r.heuristic_count} 张启发式评分`, 'success');
+      } catch (err: any) {
+        addToast(err.message || '评分失败', 'error');
       }
     });
   };
@@ -198,6 +271,7 @@ export default function Materials() {
     }
     return [
       { label: '查看大图', onClick: () => openLightboxFor(target) },
+      { label: '编辑标签', onClick: () => setTagEditorTarget(target) },
       { label: '加入发布队列', onClick: async () => { try { await queueApi.add({ title: '', desc: '', images: [target], cover: target }); addToast('已加入发布队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); } } },
       { label: name, disabled: true },
       { label: '删除此图片', danger: true, onClick: async () => { try { await materialsApi.delete([target]); addToast('已删除', 'success'); await refreshCurrent(); const t = await materialsApi.tree(); setFolderTree(t.tree); } catch (err: any) { addToast(err.message, 'error'); } } },
@@ -213,7 +287,7 @@ export default function Materials() {
     );
   }
 
-  const allSelectable = [...currentFiles.map(f => f.path), ...currentFolders.map(f => f.path)];
+  const allSelectable = [...filteredFiles.map(f => f.path), ...currentFolders.map(f => f.path)];
 
   return (
     <div className="space-y-4 animate-in">
@@ -233,6 +307,55 @@ export default function Materials() {
           </React.Fragment>
         ))}
       </div>
+
+      {(allTags.length > 0 || allCelebrities.length > 0 || allScenes.length > 0) && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-text-muted">标签</span>
+              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
+                value={filterTag} onChange={e => setFilterTag(e.target.value)}>
+                <option value="">全部</option>
+                {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+          {allCelebrities.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-text-muted">人物</span>
+              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
+                value={filterCelebrity} onChange={e => setFilterCelebrity(e.target.value)}>
+                <option value="">全部</option>
+                {allCelebrities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {allScenes.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-text-muted">场景</span>
+              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
+                value={filterScene} onChange={e => setFilterScene(e.target.value)}>
+                <option value="">全部</option>
+                {allScenes.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted">使用状态</span>
+            <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
+              value={filterUsage} onChange={e => setFilterUsage(e.target.value as any)}>
+              <option value="all">全部</option>
+              <option value="used">已使用</option>
+              <option value="unused">未使用</option>
+            </select>
+          </div>
+          {(filterTag || filterCelebrity || filterScene || filterUsage !== 'all') && (
+            <button className="text-xs text-accent hover:underline" onClick={() => { setFilterTag(''); setFilterCelebrity(''); setFilterScene(''); setFilterUsage('all'); }}>
+              清除筛选
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-4 min-h-[600px]">
         <div className="w-[220px] shrink-0 card p-2 overflow-y-auto max-h-[75vh]">
@@ -275,6 +398,11 @@ export default function Materials() {
               <button className="btn btn-sm" onClick={() => matSelectAll(allSelectable)}>
                 {matSelected.size === allSelectable.length && allSelectable.length > 0 ? '取消全选' : '全选'}
               </button>
+              <div className="w-px h-5 bg-border mx-1" />
+              <button className="btn btn-sm" onClick={handleScoreAll} disabled={scoring || !currentFiles.length}>
+                {scoring ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 评分中</> : 'AI 评分'}
+              </button>
+              <div className="w-px h-5 bg-border mx-1" />
               <button className="btn btn-sm" onClick={matClearSelection} disabled={!matSelected.size}>取消选择</button>
               <button className="btn btn-sm" onClick={handleBatchEnqueue} disabled={!matSelected.size || enqueuing}>
                 {enqueuing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 加入中</> : '加入发布队列'}
@@ -312,7 +440,7 @@ export default function Materials() {
                   setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
                 />
               ))}
-              {currentFiles.map(file => (
+              {filteredFiles.map(file => (
                 <ImageCard
                   key={file.path}
                   file={file}
@@ -321,6 +449,8 @@ export default function Materials() {
                   onOpenLightbox={() => openLightboxFor(file.path)}
                   onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
                   onDragStart={(e) => handleDragStart(e, file.path)}
+                  scoreInfo={scoreMap[file.path] || null}
+                  meta={metaMap[file.path] || null}
                 />
               ))}
             </div>
@@ -353,26 +483,42 @@ export default function Materials() {
                       </td>
                     </tr>
                   ))}
-                  {currentFiles.map(file => (
-                    <tr key={file.path}
-                      className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
-                      onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, file.path)}
-                    >
-                      <td className="py-2 px-3 flex items-center gap-2">
-                        <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
-                        <img src={imgSrc(file.path)} alt="" className="w-8 h-8 object-cover rounded shrink-0" loading="lazy" />
-                        <span className="truncate">{file.name}</span>
-                      </td>
-                      <td className="py-2 px-3 text-right text-text-muted tabular-nums whitespace-nowrap">
-                        {formatSize(file.size)}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredFiles.map(file => {
+                    const s = scoreMap[file.path];
+                    const m = metaMap[file.path];
+                    return (
+                      <tr key={file.path}
+                        className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
+                        onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, file.path)}
+                      >
+                        <td className="py-2 px-3 flex items-center gap-2">
+                          <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
+                          <img src={imgSrc(file.path)} alt="" className="w-8 h-8 object-cover rounded shrink-0" loading="lazy" />
+                          <span className="truncate">{file.name}</span>
+                          {s && s.score > 0 && (
+                            <span className={`ml-2 text-[10px] font-bold px-1 py-0.5 rounded ${s.score >= 70 ? 'text-success bg-success/10' : s.score >= 40 ? 'text-warning bg-warning/10' : 'text-danger bg-danger/10'}`}>
+                              {s.score}
+                            </span>
+                          )}
+                          {m?.used_count > 0 && (
+                            <span className="text-[10px] text-accent bg-accent/5 px-1 py-0.5 rounded">使用 {m.used_count} 次</span>
+                          )}
+                          {m?.is_cover && (
+                            <span className="text-[10px] text-warning bg-warning/5 px-1 py-0.5 rounded">封面</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right text-text-muted tabular-nums whitespace-nowrap">
+                          {m?.source_platform && <span className="text-xs text-text-muted mr-2">{m.source_platform}</span>}
+                          {formatSize(file.size)}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -423,6 +569,14 @@ export default function Materials() {
           </button>
         </div>
       </Modal>
+
+      <TagEditorModal
+        path={tagEditorTarget}
+        meta={tagEditorTarget ? metaMap[tagEditorTarget] || null : null}
+        onClose={() => setTagEditorTarget(null)}
+        onSaved={() => { setTagEditorTarget(null); loadScoresAndMeta(); }}
+        addToast={addToast}
+      />
     </div>
   );
 }
