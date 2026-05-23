@@ -268,7 +268,7 @@ export default function Discovery() {
         celebs={celebs} tags={tags} superTopics={superTopics} toutiaoKeywords={toutiaoKeywords}
         filterWatermark={filterWatermark} searching={searching}
         platforms={platforms} activePlatform={activePlatform} modeOptions={modeOptions}
-        onPlatformChange={handlePlatformChange} onSearch={doSearch}
+        onPlatformChange={handlePlatformChange} onSearch={() => doSearch()}
         onDownloadSelected={doDownloadSelected} onDownloadAll={() => doDownload(filteredIndices.join(','))}
         onScore={doScore} onClear={() => setClearConfirm(true)}
         setMode={setMode} setLimit={setLimit} setMinImages={setMinImages}

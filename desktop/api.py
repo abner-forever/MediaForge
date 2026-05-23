@@ -35,6 +35,7 @@ from services.ai import (
     optimize_layout,
     polish_article,
     recommend_celebrities,
+    strip_emoji,
 )
 from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
@@ -1599,7 +1600,7 @@ async def add_to_queue(req: QueueAddRequest):
 async def update_queue_item(index: int, req: QueueUpdateRequest):
     updates = {}
     if req.title is not None:
-        updates["title"] = req.title
+        updates["title"] = strip_emoji(req.title)
     if req.desc is not None:
         updates["desc"] = req.desc
     if req.images is not None:
@@ -1635,8 +1636,21 @@ async def generate_queue_content(index: int):
     if not settings.ai_api_key:
         return {"success": False, "title": original_title, "desc": original_desc, "message": "暂未配置APIKey"}
 
-    # 以当前标题作为 AI 上下文
+    # 以当前标题作为 AI 上下文（去掉已拼接的明星名前缀，避免 AI 重复生成）
     context = original_title or original_desc
+    if celebrity and context.startswith(f"{celebrity} | "):
+        stripped = context[len(f"{celebrity} | "):]
+        if len(stripped.strip()) >= 4:
+            context = stripped
+        elif original_desc and len(original_desc.strip()) >= 4:
+            # 去掉前缀后内容太少，用正文作为上下文
+            context = original_desc
+        else:
+            # 既没有有效标题也没有正文，直接使用默认标题，不调用 AI
+            new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
+            app_state.update_queue_item(index, {"title": new_title})
+            app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
+            return {"success": True, "title": new_title, "desc": "", "message": ""}
 
     if not context:
         new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
@@ -1645,11 +1659,20 @@ async def generate_queue_content(index: int):
         return {"success": True, "title": new_title, "desc": "", "message": ""}
 
     ai_title, _ = generate_content(context)
+    ai_title = strip_emoji(ai_title)
+
+    # AI 结果过短（纯数字等无意义内容）视为失败
+    if ai_title and (len(ai_title.strip()) < 2 or (ai_title.strip().isdigit() and len(ai_title.strip()) < 4)):
+        ai_title = ""
 
     if not ai_title or ai_title == "今日美图分享":
         msg = "AI 润色失败，已使用原标题"
         app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题失败")
-        return {"success": False, "title": original_title, "desc": "", "message": msg}
+        return {"success": False, "title": original_title, "desc": original_desc, "message": msg}
+
+    # 当传给 AI 的上下文包含明星名时，AI 生成的结果可能也含明星名，去掉以免拼接后重复
+    if celebrity and ai_title.startswith(celebrity):
+        ai_title = ai_title[len(celebrity):].lstrip(" |：,，")
 
     new_title = f"{celebrity} | {ai_title}" if celebrity else ai_title
     app_state.update_queue_item(index, {"title": new_title})
@@ -1663,7 +1686,7 @@ async def publish_from_queue(index: int, req: PublishRequest):
     if index >= len(queue):
         raise HTTPException(404, "队列项不存在")
     item = queue[index]
-    title = item.get("title", "")
+    title = strip_emoji(item.get("title", ""))
     desc = item.get("desc", "")
     images = item.get("images", [])
     cover = item.get("cover", "")
@@ -1675,10 +1698,11 @@ async def publish_from_queue(index: int, req: PublishRequest):
     content = desc
     from services.wechat import publish_article
 
-    app_state.clear_publish_logs()
+    publish_session_id = item.get("id", "")
+    app_state.clear_publish_logs(session_id=publish_session_id)
 
     def _on_log(msg: str) -> None:
-        app_state.add_publish_log(msg)
+        app_state.add_publish_log(msg, session_id=publish_session_id)
 
     # Playwright 需要绝对路径，相对路径转为绝对
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
@@ -1709,13 +1733,13 @@ async def publish_from_queue(index: int, req: PublishRequest):
             on_log=_on_log,
         )
     except Exception as err:
-        app_state.finish_publish()
         msg = _friendly_error_message(err)
         _on_log(msg)
-        app_state.update_queue_item(index, {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs()})
+        app_state.finish_publish()
+        app_state.update_queue_item(index, {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs(session_id=publish_session_id)})
         _raise_friendly(500, err)
     app_state.finish_publish()
-    updates = {"publish_logs": app_state.get_publish_logs()}
+    updates = {"publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
     if result.get("success"):
         action = "保存草稿" if req.save_draft else "发布"
         app_state.add_operation(action, f"「{title}」")
@@ -1741,9 +1765,13 @@ async def publish_from_queue(index: int, req: PublishRequest):
 
 
 @app.get("/api/publish-logs")
-async def get_publish_logs(after: int = 0):
-    """获取发布日志，支持增量拉取。after 为已获取的日志条数。"""
-    logs = app_state.get_publish_logs()
+async def get_publish_logs(after: int = 0, session_id: str = ""):
+    """获取发布日志，支持增量拉取和 session 隔离。
+
+    after: 已获取的日志条数。
+    session_id: 队列项 id，用于隔离并发发布的日志。空字符串则使用全局日志（旧版兼容）。
+    """
+    logs = app_state.get_publish_logs(session_id=session_id)
     return {
         "logs": logs[after:],
         "total": len(logs),

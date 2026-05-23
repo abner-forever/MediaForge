@@ -97,7 +97,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
       try {
         const r = await queueApi.generate(index);
         setTitle(r.title);
-        setDesc('');
+        if (r.success) setDesc('');
         setQueue((await queueApi.get()).queue);
         if (r.message) {
           addToast(r.message, 'error');
@@ -108,23 +108,28 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     });
   }
 
-  const pollLogs = useCallback(async (initialOffset = 0, { signal }: { signal?: AbortSignal } = {}) => {
-    let offset = initialOffset;
-    if (offset === 0) {
-      for (let i = 0; i < 6; i++) {
-        if (signal?.aborted) return;
-        try { const d = await publishLogsApi.get(0); if (d.active) break; } catch {}
-        await new Promise(r => setTimeout(r, 500));
-      }
-    }
-    let done = false;
-    while (true) {
-      if (signal?.aborted) return;
-      try { const d = await publishLogsApi.get(offset); if (d.logs.length) { setLogs(p => [...p, ...d.logs]); offset = d.total; } if (!d.active) { if (done) break; done = true; } } catch {}
+  const logSessionId = item.id || '';
+  const pollLogs = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+    let offset = 0;
+    const sid = logSessionId;
+    // 等待后端发布开始（active=true），最多 3 秒
+    for (let i = 0; i < 6; i++) {
+      if (signal.aborted) return;
+      try { const d = await publishLogsApi.get(0, sid); if (d.active) break; } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
-    setPublishingAction(null);
-  }, []);
+    // 持续轮询直到 publish 完成（信号被主动 abort），不再依赖 active 标志提前停止
+    while (!signal.aborted) {
+      try {
+        const d = await publishLogsApi.get(offset, sid);
+        if (d.logs.length) {
+          setLogs(p => [...p, ...d.logs]);
+          offset = d.total;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }, [logSessionId]);
 
   const publishRef = useRef(false);
 
@@ -134,17 +139,26 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     const pubPromise = queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
-    pollLogs(0, { signal: ac.signal });
+    pollLogs({ signal: ac.signal });
     let success = false;
     try { const r = await pubPromise; success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } catch (err: any) { addToast(err.message, 'error'); }
     publishRef.current = false;
+    // 等待轮询再跑一小段确保拉取最后几条日志（pollLogs 会随 ac.abort() 自动停止）
+    await new Promise(r => setTimeout(r, 800));
     ac.abort();
     // 无论 API 是否报错，都尝试从服务端刷新队列（后端可能已更新状态）
+    const myItemId = item.id;
     try {
       const refreshed = await queueApi.get();
       setQueue(refreshed.queue);
-      // 从刷新后的队列项获取完整发布日志（覆盖 pollLogs 可能未取完的部分）
-      if (index >= 0 && index < refreshed.queue.length) {
+      // 用 id 定位队列项，避免 index 偏移导致取错对象
+      if (myItemId) {
+        const updatedItem = refreshed.queue.find(q => q.id === myItemId);
+        if (updatedItem?.publish_logs) {
+          setLogs(updatedItem.publish_logs);
+        }
+      } else if (index >= 0 && index < refreshed.queue.length) {
+        // 无 id 的老数据回退到索引定位
         const updatedItem = refreshed.queue[index];
         if (updatedItem?.publish_logs) {
           setLogs(updatedItem.publish_logs);
@@ -155,7 +169,14 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     if (!success) {
       const newStatus: QueueItem['status'] = opts.save_draft ? 'saved_to_wechat' : 'published';
       const q = useStore.getState().queue;
-      if (index >= 0 && index < q.length && q[index].status !== newStatus) {
+      if (myItemId) {
+        const idx = q.findIndex(qi => qi.id === myItemId);
+        if (idx >= 0 && q[idx].status !== newStatus) {
+          const newQueue = [...q];
+          newQueue[idx] = { ...newQueue[idx], status: newStatus };
+          setQueue(newQueue);
+        }
+      } else if (index >= 0 && index < q.length && q[index].status !== newStatus) {
         const newQueue = [...q];
         newQueue[index] = { ...newQueue[index], status: newStatus };
         setQueue(newQueue);

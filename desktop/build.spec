@@ -243,7 +243,7 @@ if system == 'Darwin':
         console=False,
         disable_windowed_traceback=False,
         argv_emulation=False,
-        target_arch='universal2',
+        target_arch=None,  # 使用当前架构（避免 single-arch 原生库无法合并为 universal2）
         codesign_identity=None,
         entitlements_file=None,
     )

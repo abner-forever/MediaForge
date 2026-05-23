@@ -59,6 +59,11 @@ export default function PublishConfirmModal({
     else if (images.length < 3) items.push({ level: 'low', text: '图片数量低于建议值，图集内容建议至少 3 张。' });
     if (images.some(riskText) || (cover && riskText(cover))) items.push({ level: 'medium', text: '存在疑似水印或来源标识图片，请人工确认。' });
 
+    // 标题 emoji 检测（微信公众平台不支持标题 emoji）
+    if (/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{FE00}-\u{FE0F}\u{200D}]/u.test(title)) {
+      items.push({ level: 'medium', text: '标题包含 emoji 表情，微信公众号可能不支持显示，建议去除。' });
+    }
+
     // 合规检查：敏感词 & 标题党
     const compliance = { title, content };
     const sensitive = checkSensitiveWords(compliance.title + ' ' + compliance.content);

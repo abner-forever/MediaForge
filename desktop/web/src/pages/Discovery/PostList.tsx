@@ -34,7 +34,7 @@ export default function PostList({
     <>
       <div className="flex items-center gap-2 mb-4">
         {allLocalImages.length > 0 && <span className="tag tag-accent">已下载 {allLocalImages.length} 张</span>}
-        <button className="btn btn-xs ml-auto" onClick={onHandleSelectAllFiltered}>全选/取消</button>
+        <button className="btn btn-sm ml-auto" onClick={onHandleSelectAllFiltered}>全选/取消</button>
       </div>
       {filteredIndices.length > 0 ? (
         <div className="space-y-3">

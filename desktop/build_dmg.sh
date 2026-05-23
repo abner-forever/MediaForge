@@ -1,4 +1,3 @@
-```bash
 #!/bin/bash
 # ============================================================
 # MediaForge macOS DMG Builder
@@ -226,7 +225,7 @@ PYEOF
 echo "  2/5 创建 DMG..."
 
 hdiutil create \
-    -size 1500m \
+    -size 3000m \
     -volname "$VOLNAME" \
     -fs HFS+ \
     "$DMG_TEMP" >/dev/null
@@ -276,7 +275,7 @@ echo "  4/5 设置 Finder 布局..."
 
 if osascript -e 'return true' &>/dev/null; then
 
-osascript <<EOF
+osascript <<EOF || true
 
 tell application "Finder"
 
@@ -305,8 +304,6 @@ tell application "Finder"
             set text size to 14
 
             set label position to bottom
-
-            set background picture to file ".background:background.png"
 
         end tell
 
@@ -387,4 +384,3 @@ echo ""
 echo "运行:"
 echo "  open \"$DMG_NAME\""
 echo ""
-```

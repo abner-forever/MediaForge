@@ -15,7 +15,7 @@ export default function GalleryTab({
     <>
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs text-text-muted">已选 <strong className="text-text tabular-nums">{selectedImages.length}</strong></span>
-        {selectedImages.length > 0 && <button className="btn btn-primary btn-xs" onClick={onEnqueueSelected} disabled={enqueuing}>
+        {selectedImages.length > 0 && <button className="btn btn-primary btn-sm" onClick={onEnqueueSelected} disabled={enqueuing}>
           {enqueuing ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 加入中</> : '加入发布队列'}
         </button>}
       </div>
@@ -30,7 +30,7 @@ export default function GalleryTab({
                 <span className="text-sm font-semibold text-text truncate">{group.celebrity}</span>
                 <span className="text-xs text-text-muted shrink-0">· {group.scene}</span>
                 <span className="text-xs text-text-muted shrink-0">({group.images.length} 张)</span>
-                <button className="btn btn-xs ml-auto" onClick={() => onSelectAllImages(groupPaths)}>
+                <button className="btn btn-sm ml-auto" onClick={() => onSelectAllImages(groupPaths)}>
                   {allSelected ? '取消' : '全选'}
                 </button>
               </div>
@@ -40,7 +40,7 @@ export default function GalleryTab({
                 const scoreClass = s.score >= 70 ? 'score-high' : s.score >= 40 ? 'score-mid' : 'score-low';
                 const isSel = selectedImages.includes(item.path);
                 return (
-                  <div key={item.path} className={`bg-bg-card border rounded-xl overflow-hidden transition-all ${isSel ? 'ring-2 ring-accent border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}>
+                  <div key={item.path} className={`bg-bg-card border rounded-xl overflow-hidden transition-all ${isSel ? 'ring-1 ring-accent border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}>
                     <div className="relative">
                       <img src={thumbSrc(item.path)} alt="" className="w-full h-[160px] object-cover cursor-pointer" onClick={() => { const paths = allLocalImages.map((x: any) => imgSrc(x.path)); onOpenLightbox(paths, allLocalImages.findIndex((x: any) => x.path === item.path)); }} loading="lazy" />
                       <span className={`score-badge absolute top-2 left-2 ${scoreClass}`}>

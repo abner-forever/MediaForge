@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import List, Optional, Tuple
 
@@ -10,10 +11,40 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# ── Emoji 清除 ────────────────────────────────────────
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F300-\U0001F5FF"  # Misc Symbols and Pictographs
+    "\U0001F680-\U0001F6FF"  # Transport and Map
+    "\U0001F1E0-\U0001F1FF"  # Regional Indicator Symbols (flags)
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U000024C2"             # Ⓜ (individual emoji, NOT a range)
+    "\U0001F100-\U0001F1FF"  # Enclosed Alphanumeric Supplement
+    "\U0001F200-\U0001F2FF"  # Enclosed Ideographic Supplement
+    "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+    "\U0001FA00-\U0001FA6F"  # Chess Symbols
+    "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+    "\U00002600-\U000026FF"  # Misc symbols
+    "\U0000FE00-\U0000FE0F"  # Variation Selectors
+    "\U0000200D"             # Zero Width Joiner
+    "]+"
+)
+
+
+def strip_emoji(text: str) -> str:
+    """Remove emoji characters from text."""
+    if not text:
+        return text
+    return _EMOJI_PATTERN.sub("", text).strip()
+
 
 PROMPT_TEMPLATE = """你是公众号运营专家，请润色以下内容，生成吸引点击的标题（20字以内）：
 
-风格：轻松、有吸引力、不违规
+要求：
+- 风格轻松、有吸引力、不违规
+- 禁止使用 emoji、表情符号、特殊符号
+- 仅限纯文本
 
 请严格返回 JSON：{{"title":"..."}}
 参考内容：{text}
@@ -66,6 +97,8 @@ ARTICLE_TITLE_TEMPLATE = """请为以下公众号文章生成一个吸引点击�
 要求：
 - 简洁有力，有吸引力
 - 不要标题党，不违规
+- 禁止使用 emoji、表情符号、特殊符号
+- 仅限纯文本
 - 直接返回标题文本，不要 JSON，不要多余内容
 
 文章内容：
@@ -79,6 +112,8 @@ ARTICLE_TITLE_CANDIDATES_TEMPLATE = """请为以下公众号文章生成 5 个�
 要求：
 - 不违规，不过度标题党
 - 标题适合微信公众号
+- 禁止使用 emoji、表情符号、特殊符号
+- 仅限纯文本
 - 严格返回 JSON，不要额外说明
 
 返回格式：
@@ -206,7 +241,8 @@ def generate_content(text: str) -> Tuple[str, str]:
                         .get("content", "{}")
                     )
                     data = json.loads(raw)
-                    title = str(data.get("title", "")).strip()[:20] or "今日美图分享"
+                    raw_title = str(data.get("title", ""))
+                    title = strip_emoji(raw_title).strip()[:20] or "今日美图分享"
                     return title, ""
                 except Exception as inner_err:
                     last_err = inner_err
@@ -341,8 +377,8 @@ def generate_article_title(content: str) -> str:
         return ""
     prompt = ARTICLE_TITLE_TEMPLATE.format(content=content[:1000])
     title = _call_ai(prompt, "")
-    # 清理可能的引号和多余字符
-    return title.strip('"\' \n')[:20]
+    # 清理可能的引号、多余字符和 emoji
+    return strip_emoji(title.strip('"\' \n')[:20])
 
 
 def generate_article_title_candidates(content: str) -> List[dict]:
@@ -356,13 +392,13 @@ def generate_article_title_candidates(content: str) -> List[dict]:
     try:
         data = json.loads(raw)
         for item in data.get("candidates", []):
-            title = str(item.get("title", "")).strip().strip('"\'')[:20]
+            title = strip_emoji(str(item.get("title", ""))).strip().strip('"\'')[:20]
             kind = str(item.get("type", "")).strip() or fallback_types[len(candidates) % len(fallback_types)]
             if title:
                 candidates.append({"type": kind, "title": title})
     except Exception:
         for line in raw.splitlines():
-            cleaned = line.strip(" -0123456789.、:：\"'")
+            cleaned = strip_emoji(line.strip(" -0123456789.、:：\"'"))
             if cleaned:
                 candidates.append({"type": fallback_types[len(candidates) % len(fallback_types)], "title": cleaned[:20]})
             if len(candidates) >= 5:

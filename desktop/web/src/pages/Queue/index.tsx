@@ -71,7 +71,7 @@ export default function Queue() {
               {sortedIndices.map(({ i }, idx) => (
                 <div key={i} className="flex gap-4">
                   <div className="w-5 flex justify-center shrink-0">
-                    <div className={`relative z-10 w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${
+                    <div className={`relative z-10 w-2.5 h-2.5 rounded-full shrink-0 ${
                       idx === 0 ? 'bg-accent ring-[3px] ring-accent/15' : 'bg-border'
                     }`} />
                   </div>

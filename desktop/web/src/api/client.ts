@@ -626,7 +626,11 @@ export interface PublishLogsResponse {
 }
 
 export const publishLogsApi = {
-  get: (after = 0) => get<PublishLogsResponse>(`/api/publish-logs?after=${after}`),
+  get: (after = 0, sessionId = '') => {
+    let url = `/api/publish-logs?after=${after}`;
+    if (sessionId) url += `&session_id=${encodeURIComponent(sessionId)}`;
+    return get<PublishLogsResponse>(url);
+  },
 };
 
 /* ── Queue API ────────────────────────────────── */

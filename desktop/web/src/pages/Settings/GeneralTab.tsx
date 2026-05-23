@@ -2,12 +2,14 @@ import { useState } from 'react';
 import type { SettingsData } from '../../api/client';
 import ThemeSection from './ThemeSection';
 import RunSection from './RunSection';
+import AboutSection from './AboutSection';
 
 export default function GeneralTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
   const [subTab, setSubTab] = useState('theme');
   const SUB_TABS = [
     { id: 'theme', label: '主题管理' },
     { id: 'run', label: '运行参数' },
+    { id: 'about', label: '关于' },
   ];
   return (
     <div className="flex gap-6">
@@ -29,6 +31,7 @@ export default function GeneralTab({ data, save }: { data: SettingsData; save: (
       <div className="flex-1 min-w-0 animate-in">
         {subTab === 'theme' && <ThemeSection />}
         {subTab === 'run' && <RunSection data={data} save={save} />}
+        {subTab === 'about' && <AboutSection />}
       </div>
     </div>
   );

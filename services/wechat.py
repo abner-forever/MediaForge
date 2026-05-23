@@ -504,6 +504,7 @@ def publish_article(
         logger.info("[DRY-RUN] 跳过发布: title=%s, images=%s", title, len(images))
         return {"success": True, "message": "DRY-RUN 模式，跳过发布", "title": title}
 
+    _save_result = None
     try:
         with sync_playwright() as p:
             # 根据 account_id 解析浏览器配置文件和 state 路径
@@ -640,18 +641,54 @@ def publish_article(
 
             # 保存草稿或发布
             if save_draft:
+                # 上传图片和设置封面后，编辑器 iframe 可能正在重新加载
+                # 先等待片刻让 iframe 有机会完成加载，避免 _resolve_editor_frame 返回主 frame
+                _human_sleep(2.0, 0.5)
+                editor_frame = _resolve_editor_frame(page)
+
+                # 如果解析结果为主 frame，说明编辑器 iframe 尚未就绪，带重试等待
+                if editor_frame == page.main_frame:
+                    _emit("编辑器 iframe 未就绪，等待重试...", on_log)
+                    _iframe_ok = False
+                    for _ in range(8):
+                        _human_sleep(1.0, 0.3)
+                        editor_frame = _resolve_editor_frame(page)
+                        if editor_frame != page.main_frame:
+                            _emit("编辑器 iframe 已就绪", on_log)
+                            _iframe_ok = True
+                            break
+                    if not _iframe_ok:
+                        _emit("编辑器 iframe 重试超时，将在主页面中继续操作", on_log)
+
                 _emit("正在保存草稿（第一遍：含封面）...", on_log)
-                if not _click_first_available(
-                    editor_frame,
-                    [
-                        "button:has-text('保存为草稿')",
-                        "a:has-text('保存为草稿')",
-                        "button:has-text('保存草稿')",
-                        "a:has-text('保存草稿')",
-                        "button:has-text('保存')",
-                    ],
-                    wait_ms=5000,
-                ):
+                # 在多个 frame 中兜底查找保存草稿按钮（编辑器 iframe 可能刚完成导航）
+                _save_btn_found = False
+                _save_btn_scopes = [editor_frame]
+                if editor_frame != page.main_frame:
+                    _save_btn_scopes.append(page.main_frame)
+                for f in page.frames:
+                    if f not in _save_btn_scopes:
+                        _save_btn_scopes.append(f)
+                for scope in _save_btn_scopes:
+                    try:
+                        if scope.is_detached():
+                            continue
+                    except Exception:
+                        continue
+                    if _click_first_available(
+                        scope,
+                        [
+                            "button:has-text('保存为草稿')",
+                            "a:has-text('保存为草稿')",
+                            "button:has-text('保存草稿')",
+                            "a:has-text('保存草稿')",
+                            "button:has-text('保存')",
+                        ],
+                        wait_ms=5000,
+                    ):
+                        _save_btn_found = True
+                        break
+                if not _save_btn_found:
                     raise RuntimeError("未找到保存草稿按钮")
                 # 等待保存确认（微信编辑器异步保存，需等待成功提示出现）
                 def _wait_save_done(page) -> bool:
@@ -714,17 +751,33 @@ def publish_article(
                     _human_sleep(0.5, 0.3)
 
                     _emit("正在保存草稿（第二遍：已删除封面）...", on_log)
-                    if not _click_first_available(
-                        editor_frame,
-                        [
-                            "button:has-text('保存为草稿')",
-                            "a:has-text('保存为草稿')",
-                            "button:has-text('保存草稿')",
-                            "a:has-text('保存草稿')",
-                            "button:has-text('保存')",
-                        ],
-                        wait_ms=5000,
-                    ):
+                    _save2_found = False
+                    _save2_scopes = [editor_frame]
+                    if editor_frame != page.main_frame:
+                        _save2_scopes.append(page.main_frame)
+                    for f in page.frames:
+                        if f not in _save2_scopes:
+                            _save2_scopes.append(f)
+                    for scope in _save2_scopes:
+                        try:
+                            if scope.is_detached():
+                                continue
+                        except Exception:
+                            continue
+                        if _click_first_available(
+                            scope,
+                            [
+                                "button:has-text('保存为草稿')",
+                                "a:has-text('保存为草稿')",
+                                "button:has-text('保存草稿')",
+                                "a:has-text('保存草稿')",
+                                "button:has-text('保存')",
+                            ],
+                            wait_ms=5000,
+                        ):
+                            _save2_found = True
+                            break
+                    if not _save2_found:
                         _emit("未找到第二遍保存草稿按钮，但封面已上传设置完成", on_log)
                     else:
                         save_ok2 = _wait_save_done(page)
@@ -733,13 +786,16 @@ def publish_article(
                         else:
                             _emit("第二遍保存未检测到确认提示", on_log)
 
-                context.storage_state(path=str(state_path_global))
-                if account_id:
-                    update_account(account_id, last_used=datetime.now().isoformat())
-                context.close()
                 _emit("草稿保存成功", on_log)
                 msg = "已保存为草稿" + ("（未设置封面）" if not cover_ok else "")
-                return {"success": True, "message": msg, "title": title}
+                _save_result = {"success": True, "message": msg, "title": title}
+                try:
+                    context.storage_state(path=str(state_path_global))
+                    if account_id:
+                        update_account(account_id, last_used=datetime.now().isoformat())
+                    context.close()
+                except Exception:
+                    pass
             else:
                 _emit("已填充内容，正在发布...", on_log)
                 if on_confirm_needed:
@@ -749,6 +805,8 @@ def publish_article(
                 else:
                     input("确认后按回车继续，程序将尝试点击发布按钮...")
 
+                # 图片上传后 iframe 可能已刷新，重新获取编辑器 frame
+                editor_frame = _resolve_editor_frame(page)
                 if not _click_first_available(
                     editor_frame,
                     [
@@ -759,15 +817,23 @@ def publish_article(
                 ):
                     raise RuntimeError("未找到发布按钮")
                 _human_sleep(2.0, 1.0)
-                context.storage_state(path=str(state_path_global))
-                if account_id:
-                    update_account(account_id, last_used=datetime.now().isoformat())
-                context.close()
+                _save_result = {"success": True, "message": "发布成功" + ("（未设置封面）" if not cover_ok else ""), "title": title}
+                try:
+                    context.storage_state(path=str(state_path_global))
+                    if account_id:
+                        update_account(account_id, last_used=datetime.now().isoformat())
+                    context.close()
+                except Exception:
+                    pass
 
+        if _save_result:
+            return _save_result
         _emit("发布成功", on_log)
         msg = "发布成功" + ("（未设置封面）" if not cover_ok else "")
         return {"success": True, "message": msg, "title": title}
     except Exception as err:
+        if _save_result:
+            return _save_result
         err_msg = str(err)
         if "Executable doesn't exist" in err_msg:
             err_msg = "未找到 Playwright 浏览器引擎，请在终端运行: playwright install chromium"
