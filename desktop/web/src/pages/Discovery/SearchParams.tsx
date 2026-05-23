@@ -9,6 +9,7 @@ export default function SearchParams({
   setMode, setLimit, setMinImages, setCelebs, setTags, setSuperTopics, setToutiaoKeywords,
   setFilterWatermark,
   selectedPosts, downloading, scoring, hasLocalAny, filteredIndices,
+  recommending, recommendedCelebs, onAiRecommend, onSearchCeleb,
 }: {
   platform: string; mode: string; limit: number; minImages: number;
   celebs: string; tags: string; superTopics: string; toutiaoKeywords: string;
@@ -24,6 +25,9 @@ export default function SearchParams({
   setFilterWatermark: (v: boolean) => void;
   selectedPosts: Set<number>; downloading: boolean; scoring: boolean;
   hasLocalAny: boolean; filteredIndices: number[];
+  recommending: boolean; recommendedCelebs: string[];
+  onAiRecommend: () => void;
+  onSearchCeleb: (name: string) => void;
 }) {
   return (
     <div className="card space-y-4">
@@ -67,6 +71,9 @@ export default function SearchParams({
       {platform === 'toutiao' && mode === 'keyword' && (
         <label>搜索关键词<input type="text" value={toutiaoKeywords} onChange={e => setToutiaoKeywords(e.target.value)} placeholder="时尚,明星,穿搭（逗号分隔）" /></label>
       )}
+      {platform === 'xhs' && mode === 'keyword' && (
+        <label>搜索关键词<input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="穿搭,美妆,明星（逗号分隔）" /></label>
+      )}
       <div className="flex justify-start">
         <label className="toggle">
           <input type="checkbox" checked={filterWatermark} onChange={e => setFilterWatermark(e.target.checked)} />
@@ -74,6 +81,33 @@ export default function SearchParams({
           <span className="toggle-label">下载时过滤疑似水印图片</span>
         </label>
       </div>
+
+      {/* AI 推荐热门女星 */}
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <button className="btn btn-ghost text-sm" onClick={onAiRecommend} disabled={recommending}>
+            {recommending ? (
+              <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin inline-block" /> 推荐中…</>
+            ) : (
+              `✨ ${recommendedCelebs.length ? '刷新推荐' : 'AI 推荐当前热门女星'}`
+            )}
+          </button>
+        </div>
+        {recommendedCelebs.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {recommendedCelebs.map((name) => (
+              <button
+                key={name}
+                className="px-3 py-1 text-sm rounded-full border border-border bg-bg-secondary hover:bg-accent hover:text-white hover:border-accent transition-colors cursor-pointer"
+                onClick={() => onSearchCeleb(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         <button className="btn btn-primary" onClick={onSearch} disabled={searching}>
           {searching ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 搜索中</> : '开始搜索'}

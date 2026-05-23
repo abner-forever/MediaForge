@@ -629,12 +629,14 @@ def publish_article(
                         logger.debug("移动封面图失败: %s", e)
                         continue
 
-            _emit("正在选择封面...", on_log)
-
-            # 有封面时：从正文选择首张图片作为封面
-            cover_ok = _select_cover(page, editor_frame, on_log, cover, force_from_body=has_cover_uploaded)
-            if not cover_ok:
-                _emit("封面未设置（不影响草稿保存）", on_log)
+            if cover:
+                _emit("正在选择封面...", on_log)
+                cover_ok = _select_cover(page, editor_frame, on_log, cover, force_from_body=has_cover_uploaded)
+                if not cover_ok:
+                    _emit("封面未设置（不影响草稿保存）", on_log)
+            else:
+                cover_ok = False
+                _emit("无封面设置要求，跳过", on_log)
 
             # 保存草稿或发布
             if save_draft:
@@ -667,8 +669,8 @@ def publish_article(
                 if not save_ok:
                     _emit("未检测到第一次保存成功的提示，但可能已保存", on_log)
 
-                # 如果有封面已上传到正文，执行两步保存：保存后删除正文首张封面图，再次保存
-                if has_cover_uploaded and cover_ok:
+                # 有正文内容的文章才执行两步保存（删除正文首张封面图），纯图片帖子保留所有图片
+                if has_cover_uploaded and cover_ok and content and content.strip():
                     _emit("正在删除正文中的封面图（两步保存）...", on_log)
                     _human_sleep(1.0, 0.5)
 

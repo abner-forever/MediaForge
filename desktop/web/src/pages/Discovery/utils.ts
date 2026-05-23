@@ -26,3 +26,12 @@ export function thumbSrc(p: string) {
   const rel = idx >= 0 ? p.slice(idx + 'data/images/'.length) : (p.split('/').pop() || '');
   return `/images/thumbnail/${encodeURIComponent(rel).replace(/%2F/g, '/')}?size=320`;
 }
+
+/** 大图预览 URL（适中尺寸，比缩略图大但比原图小，兼顾质量和加载速度） */
+export function lightboxSrc(p: string) {
+  if (p.startsWith('http')) return `/proxy?url=${encodeURIComponent(p)}&size=1200`;
+  if (!p.startsWith('/')) return `/images/thumbnail/${encodeURIComponent(p).replace(/%2F/g, '/')}?size=1200`;
+  const idx = p.indexOf('data/images/');
+  const rel = idx >= 0 ? p.slice(idx + 'data/images/'.length) : (p.split('/').pop() || '');
+  return `/images/thumbnail/${encodeURIComponent(rel).replace(/%2F/g, '/')}?size=1200`;
+}

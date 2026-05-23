@@ -12,10 +12,10 @@ export interface ThemePreset {
 }
 
 export const THEME_PRESETS: ThemePreset[] = [
-  { id: 'blue', name: '默认蓝', light: '#00a1d6', dark: '#4dc9f6', hover: '#0090c0' },
-  { id: 'red', name: '小红书红', light: '#FF2442', dark: '#FF5C6E', hover: '#E62038' },
+  { id: 'blue', name: '默认蓝', light: '#0969DA', dark: '#58A6FF', hover: '#0550AE' },
   { id: 'green', name: '清新绿', light: '#10B981', dark: '#34D399', hover: '#059669' },
-  { id: 'github', name: 'GitHub 蓝', light: '#0969DA', dark: '#58A6FF', hover: '#0550AE' },
+  { id: 'purple', name: '创作紫', light: '#5645d4', dark: '#8b6ff0', hover: '#4534b3' },
+  { id: 'orange', name: '暖阳橙', light: '#dd5b00', dark: '#ff8a4a', hover: '#b84900' },
 ];
 
 /* ── Toast ───────────────────────────────────── */
@@ -64,6 +64,10 @@ interface AppState {
   selectedPosts: Set<number>;
   imageScores: Record<string, ScoreInfo>;
   selectedImages: string[];
+  discoveryCelebs: string;
+  discoveryTags: string;
+  discoverySuperTopics: string;
+  discoveryToutiaoKeywords: string;
   setDiscoveryPosts: (posts: Post[]) => void;
   togglePostSelect: (idx: number) => void;
   clearSelectedPosts: () => void;
@@ -72,6 +76,10 @@ interface AppState {
   toggleImageSelect: (path: string) => void;
   selectAllImages: (paths: string[]) => void;
   clearSelectedImages: () => void;
+  setDiscoveryCelebs: (v: string) => void;
+  setDiscoveryTags: (v: string) => void;
+  setDiscoverySuperTopics: (v: string) => void;
+  setDiscoveryToutiaoKeywords: (v: string) => void;
 
   // Materials — 文件夹管理模式
   folderTree: TreeNode[];
@@ -110,6 +118,10 @@ interface AppState {
   // WeChat sidebar sync
   wechatRefreshKey: number;
   incWechatRefreshKey: () => void;
+
+  // AI Recommended Celebrities (cached)
+  recommendedCelebs: string[];
+  setRecommendedCelebs: (celebs: string[]) => void;
 }
 
 const THEME_KEY = 'w2w-theme';
@@ -199,6 +211,10 @@ export const useStore = create<AppState>((set, get) => ({
   selectedPosts: new Set(),
   imageScores: {},
   selectedImages: [],
+  discoveryCelebs: '',
+  discoveryTags: '',
+  discoverySuperTopics: '',
+  discoveryToutiaoKeywords: '',
   setDiscoveryPosts: (posts) => set({ discoveryPosts: posts }),
   togglePostSelect: (idx) =>
     set((s) => {
@@ -231,6 +247,10 @@ export const useStore = create<AppState>((set, get) => ({
       const isAll = s.selectedImages.length === paths.length && paths.every((p) => s.selectedImages.includes(p));
       return { selectedImages: isAll ? [] : [...paths] };
     }),
+  setDiscoveryCelebs: (v) => set({ discoveryCelebs: v }),
+  setDiscoveryTags: (v) => set({ discoveryTags: v }),
+  setDiscoverySuperTopics: (v) => set({ discoverySuperTopics: v }),
+  setDiscoveryToutiaoKeywords: (v) => set({ discoveryToutiaoKeywords: v }),
 
   // Materials — 文件夹管理模式
   folderTree: [],
@@ -286,6 +306,10 @@ export const useStore = create<AppState>((set, get) => ({
   // WeChat sidebar sync
   wechatRefreshKey: 0,
   incWechatRefreshKey: () => set((s) => ({ wechatRefreshKey: s.wechatRefreshKey + 1 })),
+
+  // AI Recommended Celebrities (cached)
+  recommendedCelebs: [],
+  setRecommendedCelebs: (celebs) => set({ recommendedCelebs: celebs }),
 }));
 
 // Apply initial theme

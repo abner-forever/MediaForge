@@ -383,3 +383,31 @@ def optimize_layout(content: str) -> str:
         return content
     prompt = ARTICLE_OPTIMIZE_LAYOUT_TEMPLATE.format(content=content[:2000])
     return _call_ai(prompt, content)
+
+
+TRENDING_CELEBRITIES_TEMPLATE = """你熟悉中国娱乐圈动态。请推荐当前最火的 10 位中国女明星，适合用来搜索美图、写真、街拍等。
+
+要求：
+- 推荐当前真正热门、有话题度、经常上热搜的女明星
+- 不要推荐已过气或很久没有公开活动的
+- 仅返回 JSON 数组格式，不要额外文字
+- 返回格式：["明星1","明星2","明星3",...]
+"""
+
+
+def recommend_celebrities() -> list[str]:
+    """AI 推荐当前热门女明星列表。"""
+    raw = _call_ai(TRENDING_CELEBRITIES_TEMPLATE, "")
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [str(c).strip() for c in data if str(c).strip()][:10]
+    except Exception:
+        pass
+    # fallback: 尝试从文本中解析引号内的内容
+    import re
+    matches = re.findall(r'"([^"]+)"', raw)
+    if matches:
+        return matches[:10]
+    # 硬编码兜底
+    return ["迪丽热巴", "杨幂", "赵丽颖", "刘亦菲", "杨紫", "白鹿", "虞书欣", "赵露思", "关晓彤", "周也"]

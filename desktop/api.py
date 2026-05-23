@@ -34,11 +34,14 @@ from services.ai import (
     generate_content,
     optimize_layout,
     polish_article,
+    recommend_celebrities,
 )
 from services.downloader import download_images
 from services.extensions import build_html, score_images_batch, select_cover
 from services.platforms import get_platform, list_platforms
+from services.toutiao_login import run_toutiao_login
 from services.weibo_login import run_weibo_login
+from services.xhs_login import run_xhs_login
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
 
@@ -167,6 +170,7 @@ def _friendly_error_message(err: Exception | str) -> str:
     low = text.lower()
     rules = [
         (["weibo_cookie", "cookie 无效", "cookie失效"], "微博登录已失效，请到设置页重新扫码登录。"),
+        (["xhs_cookie", "xhs 登录", "小红书"], "小红书登录已失效，请到设置页重新登录。"),
         (["ai_base_url", "base url", "base_url"], "当前 AI 服务需要配置 Base URL，请到设置页补全后重试。"),
         (["api_key", "api key", "apikey", "unauthorized", "401"], "当前 AI 服务 API Key 不可用，请检查密钥配置。"),
         (["公众号未登录", "wechat", "mp.weixin", "login", "扫码"], "公众号账号未登录，请先在设置页完成扫码登录。"),
@@ -260,6 +264,22 @@ async def get_settings():
     weibo_screen_name = auth.get("screen_name", "")
     weibo_avatar = auth.get("avatar", "")
 
+    # 头条鉴权优先读取独立存储（支持清空），再回退
+    from utils.toutiao_auth_store import read_toutiao_auth
+    toutiao_auth = read_toutiao_auth()
+    toutiao_cookie = toutiao_auth.get("cookie", "") or cfg.get("TOUTIAO_COOKIE", "")
+    toutiao_uid = toutiao_auth.get("uid", "") or cfg.get("TOUTIAO_USER_ID", "")
+    toutiao_screen_name = toutiao_auth.get("screen_name", "")
+    toutiao_avatar = toutiao_auth.get("avatar", "")
+
+    # 小红书鉴权优先读取独立存储（支持清空），再回退
+    from utils.xhs_auth_store import read_xhs_auth
+    xhs_auth = read_xhs_auth()
+    xhs_cookie = xhs_auth.get("cookie", "") or cfg.get("XHS_COOKIE", "")
+    xhs_uid = xhs_auth.get("uid", "") or cfg.get("XHS_UID", "")
+    xhs_screen_name = xhs_auth.get("screen_name", "")
+    xhs_avatar = xhs_auth.get("avatar", "")
+
     return {
         "platform": cfg.get("PLATFORM", "weibo"),
         "ai_provider": provider,
@@ -279,10 +299,22 @@ async def get_settings():
         "weibo_scene_extra_tags": cfg.get("WEIBO_SCENE_EXTRA_TAGS", ""),
         "weibo_super_topics": cfg.get("WEIBO_SUPER_TOPICS", ""),
         # ── 今日头条 ──
-        "toutiao_cookie_set": bool(cfg.get("TOUTIAO_COOKIE")),
+        "toutiao_cookie_set": bool(toutiao_cookie),
+        "toutiao_cookie": toutiao_cookie,
+        "toutiao_uid": toutiao_uid,
         "toutiao_user_id": cfg.get("TOUTIAO_USER_ID", ""),
+        "toutiao_screen_name": toutiao_screen_name,
+        "toutiao_avatar": toutiao_avatar,
         "toutiao_fetch_mode": cfg.get("TOUTIAO_FETCH_MODE", "feed"),
         "toutiao_search_tags": cfg.get("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"),
+        # ── 小红书 ──
+        "xhs_cookie_set": bool(xhs_cookie),
+        "xhs_cookie": xhs_cookie,
+        "xhs_uid": xhs_uid,
+        "xhs_screen_name": xhs_screen_name,
+        "xhs_avatar": xhs_avatar,
+        "xhs_fetch_mode": cfg.get("XHS_FETCH_MODE", "keyword"),
+        "xhs_search_tags": cfg.get("XHS_SEARCH_TAGS", "穿搭,美妆,明星"),
         "post_limit": int(cfg.get("POST_LIMIT", "3")),
         "weibo_pages": int(cfg.get("WEIBO_PAGES", "2")),
         "publish_interval": int(cfg.get("PUBLISH_INTERVAL_SECONDS", "10")),
@@ -341,6 +373,38 @@ async def save_settings(data: Dict[str, Any]):
             uid=weibo_auth.get("WEIBO_UID", ""),
             screen_name=weibo_auth.get("WEIBO_SCREEN_NAME", ""),
             avatar=weibo_auth.get("WEIBO_AVATAR", ""),
+        )
+
+    # 头条鉴权信息 → 写入独立存储（可清空）
+    _TOUTIAO_AUTH_KEYS = {"TOUTIAO_COOKIE", "TOUTIAO_UID", "TOUTIAO_SCREEN_NAME", "TOUTIAO_AVATAR"}
+    toutiao_auth = {}
+    for key in _TOUTIAO_AUTH_KEYS:
+        if key in updates:
+            toutiao_auth[key] = updates.pop(key)
+
+    if toutiao_auth:
+        from utils.toutiao_auth_store import write_toutiao_auth
+        write_toutiao_auth(
+            cookie=toutiao_auth.get("TOUTIAO_COOKIE", ""),
+            uid=toutiao_auth.get("TOUTIAO_UID", ""),
+            screen_name=toutiao_auth.get("TOUTIAO_SCREEN_NAME", ""),
+            avatar=toutiao_auth.get("TOUTIAO_AVATAR", ""),
+        )
+
+    # 小红书鉴权信息 → 写入独立存储（可清空）
+    _XHS_AUTH_KEYS = {"XHS_COOKIE", "XHS_UID", "XHS_SCREEN_NAME", "XHS_AVATAR"}
+    xhs_auth = {}
+    for key in _XHS_AUTH_KEYS:
+        if key in updates:
+            xhs_auth[key] = updates.pop(key)
+
+    if xhs_auth:
+        from utils.xhs_auth_store import write_xhs_auth
+        write_xhs_auth(
+            cookie=xhs_auth.get("XHS_COOKIE", ""),
+            uid=xhs_auth.get("XHS_UID", ""),
+            screen_name=xhs_auth.get("XHS_SCREEN_NAME", ""),
+            avatar=xhs_auth.get("XHS_AVATAR", ""),
         )
 
     # 其余配置项 → settings.json（替代 .env）
@@ -477,6 +541,224 @@ async def weibo_login_stream():
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.get("/api/settings/toutiao-login-stream")
+async def toutiao_login_stream():
+    """SSE 流：打开浏览器让用户登录今日头条，捕获 Cookie 后推送给前端。"""
+    import json as _json
+    from queue import Empty, Queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    msg_queue: Queue = Queue()
+    ThreadPoolExecutor(1).submit(run_toutiao_login, msg_queue)
+
+    def event_stream():
+        while True:
+            try:
+                msg = msg_queue.get(timeout=0.5)
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+
+            if msg[0] == "progress":
+                yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg[0] == "done":
+                _, cookie, uid, screen_name, avatar = msg if len(msg) >= 5 else (*msg, "", "", "")
+                if cookie:
+                    from utils.toutiao_auth_store import write_toutiao_auth
+                    write_toutiao_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                    from config import reload_settings
+                    reload_settings()
+                yield f"data: {_json.dumps({'type': 'done', 'cookie': cookie, 'uid': uid, 'screen_name': screen_name, 'avatar': avatar}, ensure_ascii=False)}\n\n"
+                break
+            elif msg[0] == "error":
+                yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/settings/xhs-login-stream")
+async def xhs_login_stream():
+    """SSE 流：打开浏览器让用户登录小红书，捕获 Cookie 后推送给前端。"""
+    import json as _json
+    from queue import Empty, Queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    msg_queue: Queue = Queue()
+    ThreadPoolExecutor(1).submit(run_xhs_login, msg_queue)
+
+    def event_stream():
+        while True:
+            try:
+                msg = msg_queue.get(timeout=0.5)
+            except Empty:
+                yield ": keepalive\n\n"
+                continue
+
+            if msg[0] == "progress":
+                yield f"data: {_json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg[0] == "done":
+                _, cookie, uid, screen_name, avatar = msg if len(msg) >= 5 else (*msg, "", "", "")
+                if cookie:
+                    from utils.xhs_auth_store import write_xhs_auth
+                    write_xhs_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                    from config import reload_settings
+                    reload_settings()
+                yield f"data: {_json.dumps({'type': 'done', 'cookie': cookie, 'uid': uid, 'screen_name': screen_name, 'avatar': avatar}, ensure_ascii=False)}\n\n"
+                break
+            elif msg[0] == "error":
+                yield f"data: {_json.dumps({'type': 'error', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/settings/toutiao-verify")
+async def toutiao_verify(body: dict = {}):
+    """验证今日头条 Cookie 是否有效，返回用户信息。"""
+    import asyncio, requests
+
+    cookie = body.get("cookie", "")
+    if not cookie:
+        from config import settings
+        cookie = settings.toutiao_cookie
+
+    if not cookie:
+        return {"valid": False, "message": "未设置今日头条 Cookie"}
+
+    def _verify():
+        try:
+            from utils.logger import get_logger
+            logger = get_logger(__name__)
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+                ),
+                "Cookie": cookie,
+                "Referer": "https://www.toutiao.com/",
+                "Accept": "application/json, text/plain, */*",
+                "X-Requested-With": "XMLHttpRequest",
+            }
+
+            screen_name = ""
+            avatar = ""
+            uid = ""
+
+            # 尝试 pgc/ma/profile/ 获取用户信息
+            try:
+                resp = requests.get(
+                    "https://www.toutiao.com/pgc/ma/profile/",
+                    headers=headers, timeout=10,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("message") == "success":
+                        user_data = data.get("data", {}).get("user", {})
+                        screen_name = user_data.get("name", "") or user_data.get("screen_name", "")
+                        avatar = user_data.get("avatar_url", "") or user_data.get("avatar", "")
+                        uid = user_data.get("user_id", "") or str(user_data.get("id", ""))
+            except Exception:
+                pass
+
+            # 尝试 mp.toutiao.com 创作者中心 API（更可靠）
+            if not screen_name:
+                try:
+                    mp_headers = {
+                        "User-Agent": headers["User-Agent"],
+                        "Cookie": cookie,
+                        "Accept": "application/json, text/plain, */*",
+                        "Referer": "https://mp.toutiao.com/profile_v4/index",
+                    }
+                    resp = requests.get(
+                        "https://mp.toutiao.com/mp/agw/creator_center/user_info?app_id=1231",
+                        headers=mp_headers, timeout=10,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("message") == "success":
+                            screen_name = data.get("name", "") or screen_name
+                            avatar = data.get("avatar_url", "") or avatar
+                            uid = str(data.get("user_id", "")) or str(data.get("media_id", "")) or uid
+                            logger.info("创作者中心 API 获取到用户信息: %s", screen_name)
+                except Exception:
+                    pass
+
+            # 兜底：从页面内容提取用户信息
+            if not screen_name:
+                try:
+                    resp = requests.get(
+                        "https://www.toutiao.com/",
+                        headers=dict(headers, Accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+                        timeout=10, allow_redirects=True,
+                    )
+                    if resp.status_code == 200:
+                        import re as _re
+                        # 尝试多种正则模式提取
+                        for pat in [
+                            r'"name"\s*:\s*"([^"]+)"',
+                            r'"nickname"\s*:\s*"([^"]+)"',
+                            r'"screen_name"\s*:\s*"([^"]+)"',
+                        ]:
+                            m = _re.search(pat, resp.text)
+                            if m:
+                                screen_name = m.group(1)
+                                break
+                        for pat in [
+                            r'"user_id"\s*:\s*"(\d+)"',
+                            r'"id"\s*:\s*(\d+)',
+                            r'"uid"\s*:\s*"(\d+)"',
+                        ]:
+                            m = _re.search(pat, resp.text)
+                            if m:
+                                uid = m.group(1)
+                                break
+                        for pat in [
+                            r'"avatar_url"\s*:\s*"([^"]+)"',
+                            r'"avatar"\s*:\s*"([^"]+)"',
+                        ]:
+                            m = _re.search(pat, resp.text)
+                            if m:
+                                avatar = m.group(1)
+                                break
+                except Exception:
+                    pass
+
+            if screen_name:
+                from utils.toutiao_auth_store import write_toutiao_auth
+                write_toutiao_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar}
+
+            # 基本连通性检查
+            try:
+                resp = requests.get(
+                    "https://www.toutiao.com/",
+                    headers=dict(headers, Accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+                    timeout=10, allow_redirects=False,
+                )
+                if resp.status_code == 200:
+                    return {"valid": True, "uid": uid, "screen_name": "", "avatar": "", "message": "Cookie 有效，但无法获取用户信息"}
+            except Exception:
+                pass
+
+            return {"valid": False, "message": "Cookie 无效或已过期", "uid": uid or "", "screen_name": "", "avatar": ""}
+        except Exception as exc:
+            return {"valid": False, "message": str(exc)}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _verify)
+
+
+@app.post("/api/settings/toutiao-clear")
+async def clear_toutiao():
+    """清空今日头条鉴权信息（Cookie、UID、用户名）。"""
+    from utils.toutiao_auth_store import clear_toutiao_auth
+    from config import reload_settings
+    clear_toutiao_auth()
+    reload_settings()
+    return {"success": True}
+
+
 @app.get("/api/pick-folder")
 async def pick_folder():
     """打开原生访达文件夹选择对话框，返回选中路径。"""
@@ -577,6 +859,173 @@ async def clear_weibo():
     from utils.weibo_auth_store import clear_weibo_auth
     from config import reload_settings
     clear_weibo_auth()
+    reload_settings()
+    return {"success": True}
+
+
+@app.post("/api/settings/xhs-verify")
+async def xhs_verify(body: dict = {}):
+    """验证小红书 Cookie 是否有效，返回用户信息。
+
+    小红书 API 需要 x-s/x-t 签名头（前端 JS 生成），无法直接用 requests 调用。
+    采用多层策略：
+      1. 检查 cookie 中是否存在 web_session 等关键会话标记
+      2. 尝试用户信息 API（可能在部分网络环境下生效）
+      3. 访问首页从 SSR HTML 中提取用户信息
+    """
+    import asyncio, requests
+
+    cookie = body.get("cookie", "")
+    if not cookie:
+        from config import settings
+        cookie = settings.xhs_cookie
+
+    if not cookie:
+        return {"valid": False, "message": "未设置小红书 Cookie"}
+
+    def _verify():
+        try:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+                ),
+                "Cookie": cookie,
+                "Referer": "https://www.xiaohongshu.com/",
+                "Accept": "application/json, text/plain, */*",
+            }
+
+            screen_name = ""
+            avatar = ""
+            uid = ""
+
+            # 0) 从 cookie 中提取 uid（如果有）
+            for part in cookie.split(";"):
+                kv = part.strip().split("=", 1)
+                if len(kv) == 2 and kv[0].strip() in ("uid", "user_id"):
+                    uid = kv[1].strip()
+
+            # 1) 尝试用户信息 API（可能因缺少 x-s/x-t 签名而失败）
+            try:
+                resp = requests.get(
+                    "https://www.xiaohongshu.com/api/sns/web/v1/user/self",
+                    headers=headers, timeout=10,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("success"):
+                        user_data = data.get("data", {})
+                        screen_name = user_data.get("nickname", "") or user_data.get("name", "")
+                        avatar = user_data.get("avatar", "") or user_data.get("image", "") or ""
+                        uid = user_data.get("user_id", "") or str(user_data.get("id", "")) or uid
+            except Exception:
+                pass
+
+            # 2) 尝试从首页 SSR 提取用户信息（不依赖 x-s/x-t）
+            #    注意：首页有大量随机帖子的 nickname，不能简单取第一个匹配。
+            #    只从 __INITIAL_STATE__ 等结构化脚本中提取当前登录用户。
+            html = ""
+            if not screen_name:
+                try:
+                    page_headers = {
+                        "User-Agent": headers["User-Agent"],
+                        "Cookie": cookie,
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                    resp = requests.get(
+                        "https://www.xiaohongshu.com/",
+                        headers=page_headers, timeout=10,
+                    )
+                    if resp.status_code == 200:
+                        import json as _json
+                        html = resp.text
+                        init_match = re.search(
+                            r'window\.__INITIAL_STATE__\s*=\s*({.*?});\s*(?:\n|<)',
+                            html, re.DOTALL,
+                        )
+                        if init_match:
+                            try:
+                                state = _json.loads(init_match.group(1))
+                                user_data = (
+                                    state.get("user")
+                                    or state.get("userInfo")
+                                    or state.get("currentUser")
+                                    or {}
+                                )
+                                if user_data and isinstance(user_data, dict):
+                                    sn = user_data.get("nickname") or user_data.get("name") or ""
+                                    if sn:
+                                        screen_name = sn
+                                        avatar = user_data.get("avatar") or user_data.get("image") or ""
+                                        uid = user_data.get("userId") or str(user_data.get("id", "")) or uid
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+            # 若缺头像，从首页 HTML 提取第一个 avatar URL（比 nickname 更精确）
+            if not avatar:
+                try:
+                    if not html:
+                        resp = requests.get(
+                            "https://www.xiaohongshu.com/",
+                            headers={**headers, "Accept": "text/html,*/*"}, timeout=10,
+                        )
+                        html = resp.text if resp.status_code == 200 else ""
+                    if html:
+                        av_match = re.search(r'"avatar"\s*:\s*"(https?://[^"]+)"', html)
+                        if av_match:
+                            avatar = av_match.group(1)
+                except Exception:
+                    pass
+
+            # 3) 判断关键会话 cookie 是否存在
+            has_web_session = "web_session" in cookie
+            has_a1 = "a1=" in cookie
+
+            if screen_name:
+                from utils.xhs_auth_store import write_xhs_auth
+                write_xhs_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+                return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar}
+
+            # 4) Cookie 有效但无法获取用户信息 → 从已有 auth store 读取
+            if has_web_session and has_a1:
+                from utils.xhs_auth_store import read_xhs_auth
+                auth = read_xhs_auth()
+                if auth.get("screen_name"):
+                    screen_name = auth["screen_name"]
+                    uid = auth.get("uid", "") or uid
+                    avatar = auth.get("avatar", "") or avatar
+                    return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar,
+                            "message": "Cookie 有效"}
+                return {"valid": True, "uid": uid or "", "screen_name": "", "avatar": "",
+                        "message": "Cookie 有效，但受反爬限制无法获取用户信息（不影响使用）"}
+            if has_web_session or has_a1:
+                from utils.xhs_auth_store import read_xhs_auth
+                auth = read_xhs_auth()
+                if auth.get("screen_name"):
+                    screen_name = auth["screen_name"]
+                    uid = auth.get("uid", "") or uid
+                    avatar = auth.get("avatar", "") or avatar
+                    return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar,
+                            "message": "Cookie 可能有效"}
+                return {"valid": True, "uid": uid or "", "screen_name": "", "avatar": "",
+                        "message": "Cookie 可能有效，但无法获取用户信息（不影响使用）"}
+
+            return {"valid": False, "message": "Cookie 无效或已过期"}
+        except Exception as exc:
+            return {"valid": False, "message": str(exc)}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _verify)
+
+
+@app.post("/api/settings/xhs-clear")
+async def clear_xhs():
+    """清空小红书鉴权信息（Cookie、UID、用户名）。"""
+    from utils.xhs_auth_store import clear_xhs_auth
+    from config import reload_settings
+    clear_xhs_auth()
     reload_settings()
     return {"success": True}
 
@@ -775,6 +1224,8 @@ async def health_check():
         "platform_auth": platform_svc.check_auth() if platform_svc else False,
         "weibo_cookie": bool(settings.weibo_cookie),
         "weibo_uid_or_celebrities": bool(settings.weibo_uid or settings.weibo_celebrities),
+        "xhs_cookie": bool(settings.xhs_cookie),
+        "xhs_uid_or_tags": bool(settings.xhs_uid or settings.xhs_search_tags),
         "ai_api_key": bool(api_key),
         "ai_base_url": bool(base_url),
     }
@@ -857,6 +1308,8 @@ async def discovery_search(req: SearchRequest):
         settings.weibo_celebrities = tuple(req.celebrities)
         settings.weibo_search_tags = tuple(req.search_tags)
         settings.weibo_super_topics = tuple(req.super_topics)
+        if req.platform == "xhs":
+            settings.xhs_search_tags = tuple(req.search_tags)
 
         posts = platform_svc.fetch_posts(
             mode=req.mode,
@@ -1075,6 +1528,20 @@ async def discovery_score(req: ScoreRequest):
     }
 
 
+@app.get("/api/discovery/trending-celebrities")
+async def get_trending_celebrities():
+    """AI 推荐当前热门女明星，用于一键搜索。"""
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        celebs = await loop.run_in_executor(None, recommend_celebrities)
+        return {"celebrities": celebs}
+    except Exception as err:
+        # 兜底返回固定列表
+        fallback = ["迪丽热巴", "杨幂", "赵丽颖", "刘亦菲", "杨紫", "白鹿", "虞书欣", "赵露思", "关晓彤", "周也"]
+        return {"celebrities": fallback}
+
+
 # ── Selection API ──────────────────────────────────────
 
 
@@ -1221,10 +1688,9 @@ async def publish_from_queue(index: int, req: PublishRequest):
         if Path(cover_abs).exists():
             abs_cover = cover_abs
 
-    # 纯图片帖：封面放在第一张即可，不需要专门上传封面
+    # 纯图片帖：封面放在第一张，同时保留封面引用以便后续从正文选择
     if item.get("type") != "article" and abs_cover:
         abs_images = [abs_cover] + [img for img in abs_images if img != abs_cover]
-        abs_cover = None
 
     # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
     import asyncio
@@ -1394,18 +1860,20 @@ def _resize_image(content: bytes, size: int = 320) -> bytes:
 _PLATFORM_REFERERS = {
     "weibo": "https://weibo.com/",
     "toutiao": "https://www.toutiao.com/",
+    "xhs": "https://www.xiaohongshu.com/",
 }
 
 # 平台 → 超时（秒）
-_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10}
+_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10, "xhs": 10}
 
 
 @app.get("/proxy")
-async def proxy_image(url: str, platform: str = Query("weibo"), thumbnail: int = Query(0)):
-    """代理远程图片，解决 CORS 问题（带内存缓存）。支持 thumbnail=1 返回缩略图。"""
+async def proxy_image(url: str, platform: str = Query("weibo"), thumbnail: int = Query(0), size: int = Query(0)):
+    """代理远程图片，解决 CORS 问题（带内存缓存）。支持 thumbnail=1（缩略图 320px）或指定 size（如 &size=1200）。"""
     from fastapi.responses import Response
 
-    cache_key = f"{url}?thumb={thumbnail}" if thumbnail else url
+    resize_to = size or (320 if thumbnail else 0)
+    cache_key = f"{url}?size={resize_to}" if resize_to else url
     cached, ct = _proxy_cache_get(cache_key)
     if cached:
         return Response(content=cached, media_type=ct)
@@ -1414,16 +1882,24 @@ async def proxy_image(url: str, platform: str = Query("weibo"), thumbnail: int =
 
     referer = _PLATFORM_REFERERS.get(platform, "https://www.bing.com/")
     timeout = _PROXY_TIMEOUTS.get(platform, 20)
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": referer,
+    }
+    # 小红书 CDN 图片需要带会话 Cookie + 正确 Referer 才能访问
+    if platform == "xhs" or any(d in url for d in ["xhscdn.com", "xiaohongshu.com"]):
+        xhs_cookie = settings.xhs_cookie
+        if xhs_cookie:
+            req_headers["Cookie"] = xhs_cookie
+        if platform != "xhs":
+            req_headers["Referer"] = "https://www.xiaohongshu.com/"
     try:
-        resp = req_lib.get(url, timeout=timeout, headers={
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            "Referer": referer,
-        })
+        resp = req_lib.get(url, timeout=timeout, headers=req_headers)
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "image/jpeg")
         content = resp.content
-        if thumbnail:
-            content = _resize_image(content, 320)
+        if resize_to:
+            content = _resize_image(content, resize_to)
         _proxy_cache_set(cache_key, content, content_type)
         return Response(content=content, media_type=content_type)
     except Exception as err:

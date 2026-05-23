@@ -163,7 +163,12 @@ export default function Materials() {
       await materialsApi.deleteFolder(path);
       addToast('文件夹已删除', 'success');
       setShowDeleteFolderConfirm(null);
-      await refreshCurrent();
+      if (currentPath === path || currentPath.startsWith(path + '/')) {
+        const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+        await navigateTo(parentPath);
+      } else {
+        await refreshCurrent();
+      }
       const tree = await materialsApi.tree();
       setFolderTree(tree.tree);
     } catch (err: any) {

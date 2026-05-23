@@ -82,14 +82,15 @@ def _extract_images(item: dict) -> List[str]:
     """从搜索结果项中提取图片 URL 列表。
 
     头条不同 API 返回的图片字段不同，依次尝试以下来源：
-      1. image_list  — 标准多图列表（部分接口返回数组）
-      2. all_image_list — 全部图片（部分图集接口）
-      3. img_url / large_img_url — 单张封面图
+      1. detail_image_list — 文章全文图片（最完整）
+      2. image_list        — 标准多图列表
+      3. all_image_list    — 全部图片（部分图集接口）
+      4. img_url / large_img_url — 单张封面图
     """
     urls: List[str] = []
 
-    # 1) image_list — 多图列表
-    image_list = item.get("image_list") or item.get("all_image_list") or []
+    # 1) detail_image_list / image_list — 多图列表
+    image_list = item.get("detail_image_list") or item.get("image_list") or item.get("all_image_list") or []
     if isinstance(image_list, list):
         for img_item in image_list:
             if isinstance(img_item, dict):
@@ -179,7 +180,7 @@ def _post_from_item(
     }
 
 
-# ── 关键词搜索 API ───────────────────────────────────
+# ── 关键词搜索 API（新版文章搜索）───────────────────
 
 
 def _search_posts(
@@ -188,59 +189,70 @@ def _search_posts(
     page: int = 1,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
-    """通过头条搜索 API 获取关键词的图文结果。
+    """通过头条搜索 API 获取关键词的文章结果。
 
-    优先使用 pd=image（纯图片模式），返回的数据包含更丰富的图片信息；
-    降级到 pd=atlas（图文资讯模式）。两者搭配覆盖更多高质量图片。
+    使用 www.toutiao.com/api/search/content/ 替代已停用的
+    so.toutiao.com（现 SPA 不再返回 JSON）。
+    优先提取**文章**（title + abstract + 多图 + 媒体来源），
+    其次补充微头条帖子（cell_type=50，短内容 + 图片）。
+    需要有效 Cookie 才能返回数据。
     """
-    url = "https://so.toutiao.com/search"
-    parsed: List[Dict] = []
+    url = "https://www.toutiao.com/api/search/content/"
+    params = {
+        "keyword": keyword,
+        "offset": str((page - 1) * 20),
+        "count": "20",
+        "format": "json",
+    }
+    payload = _request_json(url, params=params)
+    if not payload:
+        return []
 
-    # 按优先级尝试不同的搜索模式
-    for pd_mode in ("image", "atlas"):
-        params = {
-            "keyword": keyword,
-            "pd": pd_mode,
-            "page_num": page - 1,  # 头条从 0 开始
-            "rawJSON": "1",
-        }
-        payload = _request_json(url, params=params)
-        if not payload:
+    items = payload.get("data") or []
+    if not isinstance(items, list):
+        return []
+
+    parsed: List[Dict] = []
+    seen_ids: set = set()
+
+    for item in items:
+        if not isinstance(item, dict):
             continue
 
-        raw_data = payload.get("rawData", {})
-        if not isinstance(raw_data, dict):
-            raw_data = {}
-        items: List = raw_data.get("data", [])
-        if not isinstance(items, list):
-            items = []
+        ct = item.get("cell_type")
+        is_article = ct is None and bool(item.get("title"))
+        is_micropost = ct == 50
 
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            # 跳过已解析的重复项
-            item_id = str(item.get("id") or item.get("group_id") or item.get("item_id") or "")
-            if any(p.get("id") == item_id for p in parsed):
-                continue
-            pt = _post_from_item(
-                item,
-                celebrity="关键词搜索",
-                source=f"toutiao_keyword",
-                scene=keyword,
-            )
-            if pt:
-                parsed.append(pt)
+        if not is_article and not is_micropost:
+            continue
 
-        logger.info(
-            "头条搜图[%s]「%s」第%s页: %s 条原始 → %s 条含图",
-            pd_mode, keyword, page, len(items), len(parsed),
+        item_id = str(item.get("id") or item.get("group_id") or item.get("item_id") or "")
+        if item_id in seen_ids:
+            continue
+        seen_ids.add(item_id)
+
+        # 微头条用 content 字段当正文，文章自带 title + abstract
+        if is_micropost:
+            normalized = dict(item)
+            normalized["text"] = (item.get("content") or item.get("rich_content") or "").strip()
+        else:
+            normalized = item  # 文章字段原生兼容 _post_from_item
+
+        pt = _post_from_item(
+            normalized,
+            celebrity="关键词搜索",
+            source="toutiao_keyword",
+            scene=keyword,
         )
-        if progress_callback:
-            progress_callback(f"✓ 搜索({pd_mode})「{keyword}」第{page}页 → 累计 {len(parsed)} 条")
+        if pt:
+            parsed.append(pt)
 
-        # image 模式结果够多就不再请求 atlas
-        if len(parsed) >= 15:
-            break
+    logger.info(
+        "头条搜索文章「%s」第%s页: %s 条原始 → %s 条含图",
+        keyword, page, len(items), len(parsed),
+    )
+    if progress_callback:
+        progress_callback(f"✓ 搜索文章「{keyword}」第{page}页 → {len(parsed)} 条")
 
     return parsed
 
@@ -485,7 +497,7 @@ class ToutiaoService:
             elif resolved == "user":
                 posts = _user_posts(max_pages, progress_callback)
             elif resolved == "keyword":
-                posts = _keyword_posts(max_pages, specific_page=specific_page, progress_callback=progress_callback)
+                posts = _keyword_posts(max_pages, specific_page=specific_page, search_tags=search_tags, progress_callback=progress_callback)
             else:
                 logger.warning("未知今日头条模式 %s", resolved)
                 return []
@@ -501,10 +513,11 @@ def _keyword_posts(
     max_pages: int,
     *,
     specific_page: int = 0,
+    search_tags: Optional[List[str]] = None,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """用配置的搜索标签逐一搜索。"""
-    tags = settings.toutiao_search_tags or ("时尚", "明星", "穿搭")
+    tags = search_tags or settings.toutiao_search_tags or ("时尚", "明星", "穿搭")
     buckets: List[List[Dict]] = []
     pages = [specific_page] if specific_page > 0 else range(1, max(1, max_pages) + 1)
 

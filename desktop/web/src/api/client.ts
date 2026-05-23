@@ -15,6 +15,7 @@ function toUserError(message: string): string {
   const text = String(message || '');
   const low = text.toLowerCase();
   if (low.includes('weibo_cookie') || text.includes('Cookie 无效')) return '微博登录已失效，请到设置页重新扫码登录。';
+  if (low.includes('xhs_cookie') || low.includes('小红书')) return '小红书登录已失效，请到设置页重新登录。';
   if (low.includes('base url') || low.includes('base_url')) return '当前 AI 服务需要配置 Base URL，请到设置页补全后重试。';
   if (low.includes('api_key') || low.includes('api key') || low.includes('401')) return '当前 AI 服务 API Key 不可用，请检查密钥配置。';
   if (text.includes('公众号未登录') || low.includes('mp.weixin') || low.includes('login')) return '公众号账号未登录，请先到设置页完成扫码登录。';
@@ -35,6 +36,8 @@ export interface HealthStatus {
   platform_auth: boolean;
   weibo_cookie: boolean;
   weibo_uid_or_celebrities: boolean;
+  xhs_cookie: boolean;
+  xhs_uid_or_tags: boolean;
   ai_api_key: boolean;
   ai_base_url: boolean;
 }
@@ -166,9 +169,20 @@ export interface SettingsData {
   weibo_scene_extra_tags: string;
   weibo_super_topics: string;
   toutiao_cookie_set: boolean;
+  toutiao_cookie: string;
+  toutiao_uid: string;
+  toutiao_screen_name: string;
+  toutiao_avatar: string;
   toutiao_user_id: string;
   toutiao_fetch_mode: string;
   toutiao_search_tags: string;
+  xhs_cookie_set: boolean;
+  xhs_cookie: string;
+  xhs_uid: string;
+  xhs_screen_name: string;
+  xhs_avatar: string;
+  xhs_fetch_mode: string;
+  xhs_search_tags: string;
   post_limit: number;
   weibo_pages: number;
   publish_interval: number;
@@ -227,6 +241,40 @@ export interface WeiboLoginEvent {
 }
 
 export interface WeiboVerifyResult {
+  valid: boolean;
+  uid?: string;
+  screen_name?: string;
+  avatar?: string;
+  message?: string;
+}
+
+export interface ToutiaoLoginEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+  cookie?: string;
+  uid?: string;
+  screen_name?: string;
+  avatar?: string;
+}
+
+export interface ToutiaoVerifyResult {
+  valid: boolean;
+  uid?: string;
+  screen_name?: string;
+  avatar?: string;
+  message?: string;
+}
+
+export interface XHSLoginEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+  cookie?: string;
+  uid?: string;
+  screen_name?: string;
+  avatar?: string;
+}
+
+export interface XHSVerifyResult {
   valid: boolean;
   uid?: string;
   screen_name?: string;
@@ -384,6 +432,50 @@ export const settingsApi = {
       }
     });
   },
+  verifyToutiao: (cookie?: string) => post<ToutiaoVerifyResult>('/api/settings/toutiao-verify', { cookie }),
+  clearToutiao: () => post<{ success: boolean }>('/api/settings/toutiao-clear'),
+  toutiaoLogin: (onEvent: (evt: ToutiaoLoginEvent) => void): Promise<void> => {
+    return fetch('/api/settings/toutiao-login-stream').then(async (res) => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)));
+          } catch { /* ignore */ }
+        }
+      }
+    });
+  },
+  verifyXHS: (cookie?: string) => post<XHSVerifyResult>('/api/settings/xhs-verify', { cookie }),
+  clearXHS: () => post<{ success: boolean }>('/api/settings/xhs-clear'),
+  xhsLogin: (onEvent: (evt: XHSLoginEvent) => void): Promise<void> => {
+    return fetch('/api/settings/xhs-login-stream').then(async (res) => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)));
+          } catch { /* ignore */ }
+        }
+      }
+    });
+  },
 };
 
 /* ── Discovery API ────────────────────────────── */
@@ -408,6 +500,7 @@ export const discoveryApi = {
     ),
   checkWatermark: (paths: string[]) =>
     post<{ watermarked: string[] }>('/api/discovery/check-watermark', paths),
+  trendingCelebrities: () => get<{ celebrities: string[] }>('/api/discovery/trending-celebrities'),
 };
 
 /* ── Discovery SSE Download ───────────────────── */

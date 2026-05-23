@@ -68,7 +68,12 @@ export default function PostList({
                   {p.text && <div className="text-xs text-text-muted mb-3 line-clamp-2 leading-relaxed">{p.text.slice(0, 100)}</div>}
                   <div className="flex flex-wrap gap-2">
                     {showImgs.map((img: string, ii: number) => (
-                      <img key={ii} src={thumbSrc(img)} alt="" className="w-[80px] h-[80px] object-cover rounded-xl border border-border cursor-pointer transition-all hover:border-accent hover:shadow-md hover:-translate-y-0.5" onClick={() => onOpenLightbox(origIdx, ii)} onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+                      <div key={ii} className="w-[80px] h-[80px] rounded-xl border border-border overflow-hidden bg-bg-secondary relative">
+                        <img src={thumbSrc(img)} alt="" className="w-full h-full object-cover cursor-pointer transition-all hover:border-accent hover:shadow-md hover:-translate-y-0.5" onClick={() => onOpenLightbox(origIdx, ii)} onError={e => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const placeholder = parent.querySelector('.img-placeholder') as HTMLElement; if (placeholder) placeholder.style.display = 'flex'; } }} loading="lazy" />
+                        <div className="img-placeholder absolute inset-0 hidden items-center justify-center bg-bg-secondary">
+                          <img src="/static/logo.png" alt="" className="w-6 h-6 opacity-30" />
+                        </div>
+                      </div>
                     ))}
                     {hiddenCount > 0 && !isExpanded && (
                       <button

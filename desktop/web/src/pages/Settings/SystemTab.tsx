@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { SettingsData } from '../../api/client';
 import LLMSection from './LLMSection';
-import WeiboSection from './WeiboSection';
-import ToutiaoSection from './ToutiaoSection';
+import MediaSourceSection from './MediaSourceSection';
 import WechatSection from './WechatSection';
 import WatermarkSection from './WatermarkSection';
 import MaterialsSection from './MaterialsSection';
@@ -11,8 +10,7 @@ export default function SystemTab({ data, save, onReload }: { data: SettingsData
   const [subTab, setSubTab] = useState('llm');
   const SUB_TABS = [
     { id: 'llm', label: '大模型配置' },
-    { id: 'weibo', label: '微博配置' },
-    { id: 'toutiao', label: '今日头条配置' },
+    { id: 'media-source', label: '媒体来源' },
     { id: 'wechat', label: '微信配置' },
     { id: 'watermark', label: '水印过滤' },
     { id: 'materials', label: '素材保存位置' },
@@ -36,8 +34,7 @@ export default function SystemTab({ data, save, onReload }: { data: SettingsData
       </div>
       <div className="flex-1 min-w-0 animate-in">
         {subTab === 'llm' && <LLMSection data={data} save={save} />}
-        {subTab === 'weibo' && <WeiboSection data={data} save={save} onReload={onReload} />}
-        {subTab === 'toutiao' && <ToutiaoSection data={data} save={save} />}
+        {subTab === 'media-source' && <MediaSourceSection data={data} save={save} onReload={onReload} />}
         {subTab === 'wechat' && <WechatSection data={data} onReload={onReload} />}
         {subTab === 'watermark' && <WatermarkSection data={data} save={save} />}
         {subTab === 'materials' && <MaterialsSection data={data} save={save} />}

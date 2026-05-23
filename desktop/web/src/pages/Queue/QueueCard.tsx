@@ -57,6 +57,30 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   }, [item.publish_logs, publishingAction]);
 
   async function updateField(field: string, value: string) { await queueApi.update(index, { [field]: value } as any); }
+
+  // 标题/正文自动保存（防抖 800ms）
+  const autoSave = useCallback((field: string, value: string) => {
+    if (value !== item[field as keyof QueueItem]) {
+      updateField(field, value);
+    }
+  }, [item]);
+
+  const titleTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (title === item.title) return;
+    clearTimeout(titleTimerRef.current);
+    titleTimerRef.current = setTimeout(() => autoSave('title', title), 800);
+    return () => clearTimeout(titleTimerRef.current);
+  }, [title, item.title, autoSave]);
+
+  const descTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (desc === item.desc) return;
+    clearTimeout(descTimerRef.current);
+    descTimerRef.current = setTimeout(() => autoSave('desc', desc), 800);
+    return () => clearTimeout(descTimerRef.current);
+  }, [desc, item.desc, autoSave]);
+
   async function deleteItem() {
     try {
       await queueApi.remove(index);
@@ -93,9 +117,10 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
         await new Promise(r => setTimeout(r, 500));
       }
     }
+    let done = false;
     while (true) {
       if (signal?.aborted) return;
-      try { const d = await publishLogsApi.get(offset); if (d.logs.length) { setLogs(p => [...p, ...d.logs]); offset = d.total; } if (!d.active && offset > 0) break; } catch {}
+      try { const d = await publishLogsApi.get(offset); if (d.logs.length) { setLogs(p => [...p, ...d.logs]); offset = d.total; } if (!d.active) { if (done) break; done = true; } } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
     setPublishingAction(null);
@@ -121,7 +146,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
       // 从刷新后的队列项获取完整发布日志（覆盖 pollLogs 可能未取完的部分）
       if (index >= 0 && index < refreshed.queue.length) {
         const updatedItem = refreshed.queue[index];
-        if (updatedItem?.publish_logs && updatedItem.publish_logs.length > logs.length) {
+        if (updatedItem?.publish_logs) {
           setLogs(updatedItem.publish_logs);
         }
       }
@@ -297,8 +322,14 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               <div className="flex items-center gap-2 mb-2">
                 {publishingAction && <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />}
                 <span className="text-xs font-medium text-text-muted">{publishingAction ? '发布中...' : '发布日志'}</span>
+                {!publishingAction && logs.length > 0 && (
+                  <button className="ml-auto text-xs text-text-muted hover:text-accent transition-colors shrink-0"
+                    onClick={() => { navigator.clipboard.writeText(logs.join('\n')); addToast('日志已复制', 'info'); }}>
+                    复制日志
+                  </button>
+                )}
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 select-text">
                 {logs.map((msg, i) => <div key={i} className="text-xs text-text-secondary font-mono leading-relaxed">{msg}</div>)}
                 <div ref={logEndRef} />
               </div>

@@ -1,22 +1,19 @@
 import { useState } from 'react';
-import type { SettingsData, WeiboLoginEvent } from '../../api/client';
+import type { SettingsData, XHSLoginEvent, XHSVerifyResult } from '../../api/client';
 import Select from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 import { settingsApi } from '../../api/client';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-export default function WeiboSection({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload?: () => Promise<void> }) {
+export default function XiaoHongShuSection({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload?: () => Promise<void> }) {
   const { loading: saving, withLoading: withSave } = useLoading();
-  const [cookie, setCookie] = useState(data.weibo_cookie || '');
-  const [uid, setUid] = useState(data.weibo_uid);
-  const [screenName, setScreenName] = useState(data.weibo_screen_name || '');
-  const [avatar, setAvatar] = useState(data.weibo_avatar || '');
-  const [fetchMode, setFetchMode] = useState(data.weibo_fetch_mode);
-  const [celebs, setCelebs] = useState(data.weibo_celebrities);
-  const [tags, setTags] = useState(data.weibo_search_tags);
-  const [sceneTags, setSceneTags] = useState(data.weibo_scene_extra_tags);
-  const [superTopics, setSuperTopics] = useState(data.weibo_super_topics);
+  const [cookie, setCookie] = useState(data.xhs_cookie || '');
+  const [uid, setUid] = useState(data.xhs_uid || '');
+  const [screenName, setScreenName] = useState(data.xhs_screen_name || '');
+  const [avatar, setAvatar] = useState(data.xhs_avatar || '');
+  const [fetchMode, setFetchMode] = useState(data.xhs_fetch_mode);
+  const [searchTags, setSearchTags] = useState(data.xhs_search_tags);
   const [loginState, setLoginState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [loginMessage, setLoginMessage] = useState('');
   const [cookieRevealed, setCookieRevealed] = useState(false);
@@ -26,7 +23,7 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
   const { addToast } = useStore();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const rawCookie = cookie || data.weibo_cookie || '';
+  const rawCookie = cookie || data.xhs_cookie || '';
 
   function maskCookie(val: string): string {
     if (!rawCookie) return '<未设置>';
@@ -47,19 +44,24 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
   async function handleVerify() {
     if (!rawCookie) {
       setVerifyState('invalid');
-      setVerifyMessage('请先填写或登录获取微博 Cookie');
+      setVerifyMessage('请先填写或登录获取小红书 Cookie');
       return;
     }
     setVerifyState('verifying');
     setVerifyMessage('');
     try {
-      const result = await settingsApi.verifyWeibo(cookie || data.weibo_cookie || undefined);
+      const result: XHSVerifyResult = await settingsApi.verifyXHS(cookie || data.xhs_cookie || undefined);
       if (result.valid) {
         setVerifyState('valid');
-        setVerifyMessage(`账号：${result.screen_name || ''}（${result.uid || ''}）`);
-        if (result.screen_name) setScreenName(result.screen_name);
-        if (result.uid) setUid(result.uid);
-        if (result.avatar) setAvatar(result.avatar);
+        if (result.screen_name) {
+          setVerifyMessage(`账号：${result.screen_name}（${result.uid || ''}）`);
+          // 仅当 verify 返回了登录时未获取到的信息时才覆盖
+          if (!screenName) setScreenName(result.screen_name);
+        } else {
+          setVerifyMessage(result.message || 'Cookie 有效');
+        }
+        if (result.uid && !uid) setUid(result.uid);
+        if (result.avatar && !avatar) setAvatar(result.avatar);
       } else {
         setVerifyState('invalid');
         setVerifyMessage(result.message || 'Cookie 无效');
@@ -70,11 +72,11 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
     }
   }
 
-  async function handleWeiboLogin() {
+  async function handleXhsLogin() {
     setLoginState('loading');
     setLoginMessage('正在启动浏览器...');
     try {
-      await settingsApi.weiboLogin((evt: WeiboLoginEvent) => {
+      await settingsApi.xhsLogin((evt: XHSLoginEvent) => {
         if (evt.type === 'progress') {
           setLoginMessage(evt.message || '');
         } else if (evt.type === 'done') {
@@ -84,11 +86,11 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
           if (evt.avatar) setAvatar(evt.avatar);
           setLoginState('idle');
           setLoginMessage('登录成功，Cookie 已自动填入');
-          addToast('微博登录成功，请点击保存', 'success');
+          addToast('小红书登录成功，请点击保存', 'success');
         } else if (evt.type === 'error') {
           setLoginState('error');
           setLoginMessage(evt.message || '登录失败');
-          addToast(evt.message || '微博登录失败', 'error');
+          addToast(evt.message || '小红书登录失败', 'error');
         }
       });
     } catch (err: any) {
@@ -101,7 +103,7 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
-        <div className="section-header">微博配置</div>
+        <div className="section-header">小红书配置</div>
         <div className="flex items-center gap-2">
           {loginState === 'loading' && (
             <span className="text-xs text-text-muted flex items-center gap-1.5">
@@ -116,8 +118,8 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
             <span className="text-xs text-danger">{loginMessage}</span>
           )}
           {!rawCookie && (
-            <button className="btn btn-sm" onClick={handleWeiboLogin} disabled={loginState === 'loading'}>
-              {loginState === 'loading' ? '登录中...' : '微博快速登录'}
+            <button className="btn btn-sm" onClick={handleXhsLogin} disabled={loginState === 'loading'}>
+              {loginState === 'loading' ? '登录中...' : '小红书快速登录'}
             </button>
           )}
         </div>
@@ -145,7 +147,7 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
       <div className="grid grid-cols-2 gap-4">
         <label className="col-span-2">
           <div className="flex items-center justify-between mb-1">
-            <span>微博 Cookie</span>
+            <span>小红书 Cookie</span>
             <div className="flex items-center gap-1">
               <button type="button" className="text-xs text-text-muted hover:text-text-secondary px-1.5 py-0.5 rounded-lg hover:bg-bg-secondary transition-colors" onClick={() => setCookieRevealed(!cookieRevealed)}>
                 {cookieRevealed ? '隐藏' : '显示'}
@@ -155,14 +157,11 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
               </button>
             </div>
           </div>
-          <textarea value={cookieRevealed ? rawCookie : maskCookie('')} onChange={e => { setCookie(e.target.value); setCookieRevealed(true); }} placeholder={data.weibo_cookie_set ? '已设置（留空保持不变）' : ''} rows={2} className="font-mono text-xs" readOnly={!cookieRevealed && !cookie} />
+          <textarea value={cookieRevealed ? rawCookie : maskCookie('')} onChange={e => { setCookie(e.target.value); setCookieRevealed(true); }} placeholder={data.xhs_cookie_set ? '已设置（留空保持不变）' : ''} rows={2} className="font-mono text-xs" readOnly={!cookieRevealed && !cookie} />
         </label>
-        <label>微博 UID<input type="text" value={uid} onChange={e => setUid(e.target.value)} placeholder="留空自动推断" /></label>
-        <label>抓取模式<Select value={fetchMode} onChange={setFetchMode} options={[{ label: '本人时间线', value: 'own' }, { label: '明星列表', value: 'celebrities' }, { label: '混合模式', value: 'mixed' }, { label: '超话抓取', value: 'super_topic' }, { label: '关键词搜索', value: 'keyword' }]} /></label>
-        <label>明星列表<input type="text" value={celebs} onChange={e => setCelebs(e.target.value)} placeholder="迪丽热巴,杨幂（逗号分隔）" /></label>
-        <label>搜索标签<input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="写真,街拍（逗号分隔）" /></label>
-        <label>超话列表<input type="text" value={superTopics} onChange={e => setSuperTopics(e.target.value)} placeholder="迪丽热巴超话,杨幂超话（逗号分隔）" /></label>
-        <label>场景标签<input type="text" value={sceneTags} onChange={e => setSceneTags(e.target.value)} placeholder="例如：写真,街拍" /></label>
+        <label>小红书 UID<input type="text" value={uid} onChange={e => setUid(e.target.value)} placeholder="留空自动推断" /></label>
+        <label>抓取模式<Select value={fetchMode} onChange={setFetchMode} options={[{ label: '关键词搜索', value: 'keyword' }]} /></label>
+        <label className="col-span-2">搜索关键词<input type="text" value={searchTags} onChange={e => setSearchTags(e.target.value)} placeholder="穿搭,美妆,明星（逗号分隔）" /></label>
       </div>
 
       {(verifyMessage || (!rawCookie && verifyState === 'idle')) && (
@@ -191,15 +190,15 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
                  verifyState === 'invalid' ? 'Cookie 无效或已过期' :
                  verifyMessage ? '配置提示' : 'Cookie 未配置'}
               </p>
-              <p className="text-xs mt-1 opacity-80 leading-relaxed">{verifyMessage || '请先通过微博快速登录获取 Cookie，或手动填写'}</p>
+              <p className="text-xs mt-1 opacity-80 leading-relaxed">{verifyMessage || '请先通过小红书快速登录获取 Cookie，或手动填写'}</p>
             </div>
           </div>
         </div>
       )}
 
       <div className="flex items-center gap-2">
-        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { WEIBO_COOKIE: rawCookie, WEIBO_UID: uid, WEIBO_SCREEN_NAME: screenName, WEIBO_AVATAR: avatar, WEIBO_FETCH_MODE: fetchMode, WEIBO_CELEBRITIES: celebs, WEIBO_SEARCH_TAGS: tags, WEIBO_SCENE_EXTRA_TAGS: sceneTags, WEIBO_SUPER_TOPICS: superTopics }; await save(u); })} disabled={saving || loginState === 'loading'}>
-          {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存微博配置'}
+        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { XHS_COOKIE: rawCookie, XHS_UID: uid, XHS_SCREEN_NAME: screenName, XHS_AVATAR: avatar, XHS_FETCH_MODE: fetchMode, XHS_SEARCH_TAGS: searchTags }; await save(u); })} disabled={saving || loginState === 'loading'}>
+          {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存小红书配置'}
         </button>
         <button className="btn btn-sm" onClick={handleVerify} disabled={verifyState === 'verifying'}>
           {verifyState === 'verifying' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 验证中</> : '测试连接'}
@@ -211,21 +210,21 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
 
       <ConfirmDialog
         open={showClearConfirm}
-        title="清空微博鉴权信息"
-        message="确定清空微博鉴权信息（Cookie、UID）吗？"
+        title="清空小红书鉴权信息"
+        message="确定清空小红书鉴权信息（Cookie、UID）吗？"
         confirmText="清空"
         danger
         onConfirm={async () => {
           setShowClearConfirm(false);
           try {
-            await settingsApi.clearWeibo();
+            await settingsApi.clearXHS();
             setCookie('');
             setUid('');
             setScreenName('');
             setAvatar('');
             setVerifyState('idle');
             setVerifyMessage('');
-            addToast('微博鉴权信息已清空', 'success');
+            addToast('小红书鉴权信息已清空', 'success');
             onReload?.();
           } catch (err: any) {
             addToast(err.message, 'error');

@@ -66,7 +66,8 @@ try:
 
     _psn = _PSN(0, 0)
     carbon.GetCurrentProcess(ctypes.byref(_psn))
-    carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
+    _process_name_str = NSString.stringWithString_("图文工坊")
+    carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_process_name_str)))
 
     # 4. 设置激活策略为 Regular（前台应用），此操作将应用注册到 Dock
     #    必须在进程名和 Bundle 信息设置之后调用，确保 Dock 读取到正确名称
@@ -119,7 +120,8 @@ def _start_app() -> None:
             _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
         _psn = _PSN(0, 0)
         carbon.GetCurrentProcess(ctypes.byref(_psn))
-        carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(NSString.stringWithString_("图文工坊"))))
+        _ps_name = NSString.stringWithString_("图文工坊")
+        carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_ps_name)))
 
         # 设置 Dock 图标
         _set_dock_icon()
@@ -276,14 +278,25 @@ def _start_app() -> None:
         except Exception:
             pass
 
-    # ── macOS: 自定义 About 面板，使用应用自有图标和名称 ──
+    # ── macOS: 自定义 About 面板，使用应用自有图标、名称和版本号 ──
     _about_handler = None
     try:
         from AppKit import NSObject, NSApplication, NSImage
+        import re
+
+        _app_version = "0.0.0"
+        _pyproject_path = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        if _pyproject_path.exists():
+            _match = re.search(r'^version\s*=\s*"([^"]+)"', _pyproject_path.read_text("utf-8"), re.M)
+            if _match:
+                _app_version = _match.group(1)
 
         class _AboutHandler(NSObject):
             def handleAbout_(self, sender):
-                opts = {"ApplicationName": "图文工坊"}
+                opts = {
+                    "ApplicationName": "图文工坊",
+                    "ApplicationVersion": _app_version,
+                }
                 for _p in _get_icon_candidates():
                     if _p.exists():
                         _img = NSImage.alloc().initWithContentsOfFile_(str(_p))

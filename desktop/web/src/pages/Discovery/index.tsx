@@ -6,7 +6,7 @@ import NumberInput from '../../components/NumberInput';
 import SearchLoadingOverlay from '../../components/SearchLoadingOverlay';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useLoading } from '../../hooks/useLoading';
-import { fmtTime, imgSrc, thumbSrc } from './utils';
+import { fmtTime, imgSrc, thumbSrc, lightboxSrc } from './utils';
 import SearchParams from './SearchParams';
 import PostList from './PostList';
 import GalleryTab from './GalleryTab';
@@ -18,6 +18,11 @@ export default function Discovery() {
     setDiscoveryPosts, togglePostSelect, clearSelectedPosts,
     setImageScores, toggleImageSelect, selectAllImages, clearSelectedImages,
     openLightbox, addToast, setProgress,
+    recommendedCelebs, setRecommendedCelebs,
+    discoveryCelebs: celebs, setDiscoveryCelebs: setCelebs,
+    discoveryTags: tags, setDiscoveryTags: setTags,
+    discoverySuperTopics: superTopics, setDiscoverySuperTopics: setSuperTopics,
+    discoveryToutiaoKeywords: toutiaoKeywords, setDiscoveryToutiaoKeywords: setToutiaoKeywords,
   } = store;
 
   const [platform, setPlatform] = useState('weibo');
@@ -25,10 +30,6 @@ export default function Discovery() {
   const [mode, setMode] = useState('celebrities');
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [celebs, setCelebs] = useState('');
-  const [tags, setTags] = useState('');
-  const [superTopics, setSuperTopics] = useState('');
-  const [toutiaoKeywords, setToutiaoKeywords] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
   const [filterWatermark, setFilterWatermark] = useState(false);
@@ -37,6 +38,7 @@ export default function Discovery() {
   const [removeConfirmIndex, setRemoveConfirmIndex] = useState<number | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'gallery'>('posts');
+  const [recommending, setRecommending] = useState(false);
   const searchAbortRef = useRef<AbortController | null>(null);
 
   const { loading: scoring, withLoading: withScoring } = useLoading();
@@ -53,11 +55,12 @@ export default function Discovery() {
       setPlatforms(p.platforms);
       const def = p.default || 'weibo';
       if (p.platforms[def]) { setPlatform(def); setMode(p.platforms[def].default_fetch_mode); }
-      if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
-      if (s.weibo_search_tags) setTags(s.weibo_search_tags);
-      if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
+      if (!celebs && s.weibo_celebrities) setCelebs(s.weibo_celebrities);
+      if (!tags && s.weibo_search_tags) setTags(s.weibo_search_tags);
+      if (!superTopics && s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
+      if (!toutiaoKeywords && s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
+      if (!tags && s.xhs_search_tags) setTags(s.xhs_search_tags);
       if (s.post_limit) setLimit(s.post_limit);
-      if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
     }).catch(() => {});
   }, []);
 
@@ -66,6 +69,14 @@ export default function Discovery() {
     const meta = platforms[p];
     if (meta) setMode(meta.default_fetch_mode);
     setCelebs(''); setTags(''); setSuperTopics(''); setToutiaoKeywords('');
+    // 从 settings 加载当前平台默认搜索标签
+    if (p === 'xhs') {
+      settingsApi.get().then(s => { if (s.xhs_search_tags) setTags(s.xhs_search_tags); });
+    } else if (p === 'weibo') {
+      settingsApi.get().then(s => { if (s.weibo_search_tags) setTags(s.weibo_search_tags); });
+    } else if (p === 'toutiao') {
+      settingsApi.get().then(s => { if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags); });
+    }
   }
 
   const filteredIndices = useMemo(() =>
@@ -109,14 +120,15 @@ export default function Discovery() {
     return groups;
   }, [allLocalImages]);
 
-  async function doSearch() {
+  async function doSearch(overrideCelebs?: string) {
     setSearching(true); setSearchMessage('正在搜索…');
     setCurrentPage(1);
     const ctrl = new AbortController(); searchAbortRef.current = ctrl;
+    const celebsToUse = overrideCelebs ?? celebs;
     try {
       await searchStream({
         platform, mode,
-        celebrities: celebs.split(',').map(s => s.trim()).filter(Boolean),
+        celebrities: celebsToUse.split(',').map(s => s.trim()).filter(Boolean),
         search_tags: platform === 'toutiao' ? toutiaoKeywords.split(',').map(s => s.trim()).filter(Boolean) : tags.split(',').map(s => s.trim()).filter(Boolean),
         super_topics: superTopics.split(',').map(s => s.trim()).filter(Boolean),
         max_pages: 1, post_limit: limit, page: 1,
@@ -227,9 +239,21 @@ export default function Discovery() {
     }
   }
 
-  function openPostLightbox(pi: number, ii: number) {
+  function openPostLightboxPreview(pi: number, ii: number) {
     const p = discoveryPosts[pi]; if (!p) return;
-    openLightbox((p.local_images || p.images).map(imgSrc), ii);
+    openLightbox((p.local_images || p.images).map(lightboxSrc), ii);
+  }
+
+  async function handleAiRecommend() {
+    setRecommending(true);
+    try {
+      const res = await discoveryApi.trendingCelebrities();
+      setRecommendedCelebs(res.celebrities);
+      addToast(recommendedCelebs.length ? '已刷新推荐' : 'AI 已推荐热门女星，点击名字即可搜索', 'success');
+    } catch (err: any) {
+      addToast(err.message || '推荐失败', 'error');
+    }
+    setRecommending(false);
   }
 
   return (
@@ -252,6 +276,9 @@ export default function Discovery() {
         setToutiaoKeywords={setToutiaoKeywords} setFilterWatermark={setFilterWatermark}
         selectedPosts={selectedPosts} downloading={downloading} scoring={scoring}
         hasLocalAny={hasLocalAny} filteredIndices={filteredIndices}
+        recommending={recommending} recommendedCelebs={recommendedCelebs}
+        onAiRecommend={handleAiRecommend}
+        onSearchCeleb={(name) => { setCelebs(name); doSearch(name); }}
       />
 
       {discoveryPosts.length > 0 && (
@@ -287,7 +314,7 @@ export default function Discovery() {
               onDownload={doDownload}
               onRemovePost={removePost}
               setRemoveConfirmIndex={setRemoveConfirmIndex}
-              onOpenLightbox={openPostLightbox}
+              onOpenLightbox={openPostLightboxPreview}
               downloading={downloading}
               loadMore={loadMore}
               searching={searching}

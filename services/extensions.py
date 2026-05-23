@@ -184,13 +184,14 @@ def select_cover(images: List[str]) -> str:
     """封面选择：优先取评分最高的图片，否则取第一张。"""
     if not images:
         return ""
-    # 如果在 Streamlit 环境且有评分数据，选最高的
+    # 桌面 API 环境：使用 app_state.image_scores
     try:
-        import streamlit as st
-        scores = st.session_state.get("image_scores", {})
+        from desktop.app_state import app_state
+        scores = app_state.get_image_scores()
         if scores:
             best = max(images, key=lambda p: scores.get(p, {}).get("score", 0))
-            return best
+            if best and Path(best).exists():
+                return best
     except Exception:
         pass
     return images[0]
