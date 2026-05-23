@@ -127,8 +127,8 @@ if [ "$OS_TYPE" = "macos" ] && [ -d "dist/MediaForge.app" ]; then
   # ── 5. macOS: 创建 DMG ────────────────────────────
   log "${YELLOW}[6/5]${NC} 创建 DMG 安装包..."
   bash "$PROJECT_ROOT/desktop/build_dmg.sh"
-  DMG_FILE="MediaForge-macOS-${ARCH}.dmg"
-  if [ -f "$DMG_FILE" ]; then
+  DMG_FILE=$(ls -t MediaForge-macOS-*.dmg 2>/dev/null | head -1)
+  if [ -n "$DMG_FILE" ] && [ -f "$DMG_FILE" ]; then
     ok "DMG 已生成: $DMG_FILE"
     echo "   安装: open $DMG_FILE"
   fi

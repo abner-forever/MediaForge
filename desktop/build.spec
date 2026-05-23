@@ -243,7 +243,7 @@ if system == 'Darwin':
         console=False,
         disable_windowed_traceback=False,
         argv_emulation=False,
-        target_arch='arm64' if platform.machine() == 'arm64' else 'universal2',
+        target_arch='universal2',
         codesign_identity=None,
         entitlements_file=None,
     )

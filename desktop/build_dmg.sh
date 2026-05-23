@@ -1,172 +1,390 @@
+```bash
 #!/bin/bash
 # ============================================================
-# macOS DMG 安装包构建脚本
-# 使用标准挂载+布局流程
+# MediaForge macOS DMG Builder
+# 高级版 DMG 安装包构建脚本
+# Retina + Finder Layout + macOS 原生风格
 # ============================================================
+
 set -euo pipefail
 
-ARCH="${1:-$(uname -m)}"
+ARCH="${1:-}"
 VERSION="${2:-}"
+
 APP_SRC="dist/MediaForge.app"
+
 APP_NAME="图文工坊"
 APP_DST="${APP_NAME}.app"
-if [ -n "$VERSION" ]; then
-    DMG_NAME="MediaForge-macOS-${ARCH}-${VERSION}.dmg"
-else
-    DMG_NAME="MediaForge-macOS-${ARCH}.dmg"
-fi
+
 VOLNAME="图文工坊"
+
 DMG_TEMP="$(pwd)/dmg_temp.dmg"
+
 BG_DIR=".background"
+BG_FILE="$(pwd)/dmg_bg.png"
+
+# ============================================================
+# 检查 APP
+# ============================================================
 
 if [ ! -d "$APP_SRC" ]; then
-    echo "❌ 未找到 $APP_SRC，请先运行 pyinstaller"
+    echo "❌ 未找到 $APP_SRC"
+    echo "请先执行 pyinstaller"
     exit 1
 fi
 
-echo "📦 创建 DMG 安装包 (${ARCH})..."
+# ============================================================
+# 自动检测架构
+# ============================================================
 
-# 清理残留
-rm -f "$DMG_TEMP" "$DMG_NAME"
+DMG_ARCH=""
 
-# 退出清理（卸载 + 删临时文件）
+APP_BINARY="$APP_SRC/Contents/MacOS/MediaForge"
+
+if [ -f "$APP_BINARY" ]; then
+    LIPO_INFO=$(lipo -info "$APP_BINARY" 2>/dev/null || true)
+
+    if echo "$LIPO_INFO" | grep -q "are:"; then
+        ARCH_LIST=$(echo "$LIPO_INFO" | grep -oE '(x86_64|arm64)' || true)
+        ARCH_COUNT=$(echo "$ARCH_LIST" | wc -w | tr -d ' ')
+
+        if [ "$ARCH_COUNT" -ge 2 ]; then
+            DMG_ARCH="universal"
+        else
+            DMG_ARCH=$(echo "$ARCH_LIST" | head -1)
+        fi
+
+    elif echo "$LIPO_INFO" | grep -q "architecture:"; then
+        DMG_ARCH=$(echo "$LIPO_INFO" | grep -oE '(x86_64|arm64)' | head -1)
+    fi
+fi
+
+: "${DMG_ARCH:=${ARCH:-$(uname -m)}}"
+
+# ============================================================
+# DMG 文件名
+# ============================================================
+
+if [ -n "$VERSION" ]; then
+    DMG_NAME="MediaForge-macOS-${DMG_ARCH}-${VERSION}.dmg"
+else
+    DMG_NAME="MediaForge-macOS-${DMG_ARCH}.dmg"
+fi
+
+echo ""
+echo "📦 开始构建 DMG (${DMG_ARCH})"
+echo ""
+
+# ============================================================
+# 清理
+# ============================================================
+
+rm -f "$DMG_TEMP"
+rm -f "$DMG_NAME"
+rm -f "$BG_FILE"
+
 cleanup() {
     hdiutil detach "/Volumes/$VOLNAME" -quiet -force 2>/dev/null || true
     rm -f "$DMG_TEMP"
 }
+
 trap cleanup EXIT
 
-# ══════════════════════════════════════════════════════
-# 1. 生成背景图
-# ══════════════════════════════════════════════════════
+# ============================================================
+# 1. 生成 Retina 背景图
+# ============================================================
+
 echo "  1/5 生成背景图..."
-BG_FILE="$(pwd)/dmg_bg.png"
+
 python3 << PYEOF
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import os
 
-W, H = 540, 380
-bg = Image.new("RGBA", (W, H), (250, 250, 248, 255))
+# Retina 分辨率
+W, H = 1360, 840
+
+bg = Image.new("RGBA", (W, H), (248, 248, 250, 255))
 draw = ImageDraw.Draw(bg)
 
-font = None
-for fp in ["/System/Library/Fonts/PingFang.ttc",
-           "/System/Library/Fonts/STHeiti Light.ttc"]:
+# ======================================================
+# 顶部渐变
+# ======================================================
+
+for y in range(H):
+    alpha = int(24 * (1 - y / H))
+    draw.line(
+        [(0, y), (W, y)],
+        fill=(255, 255, 255, alpha)
+    )
+
+# ======================================================
+# 字体
+# ======================================================
+
+font_path = None
+
+for fp in [
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/SFNS.ttf",
+]:
     if os.path.exists(fp):
-        try:
-            font = ImageFont.truetype(fp, 26)
-            break
-        except:
-            pass
-if font is None:
-    font = ImageFont.load_default()
+        font_path = fp
+        break
 
-def get_font(size):
-    try:
-        return ImageFont.truetype(font.path, size)
-    except:
-        return ImageFont.load_default()
+def font(size):
+    if font_path:
+        return ImageFont.truetype(font_path, size)
+    return ImageFont.load_default()
 
+# ======================================================
 # 标题
-draw.text((W//2, 28), "图文工坊", fill=(50, 50, 50, 255), font=get_font(22), anchor="mt")
-draw.line([(W//2-50, 54), (W//2+50, 54)], fill=(220, 220, 220, 255), width=1)
+# ======================================================
 
-# 箭头
-arrow_y = 175
-arrow_color = (70, 130, 200, 255)
-draw.rounded_rectangle([(100, arrow_y-35), (175, arrow_y+35)], radius=14,
-                       fill=(240, 240, 245, 255), outline=(180, 180, 200, 255), width=2)
-draw.text((137, arrow_y), "图文工坊", fill=(80, 80, 80, 255), font=get_font(11), anchor="mm")
-draw.line([(188, arrow_y), (345, arrow_y)], fill=arrow_color, width=3)
-draw.polygon([(348, arrow_y), (335, arrow_y-8), (335, arrow_y+8)], fill=arrow_color)
-draw.rounded_rectangle([(360, arrow_y-35), (455, arrow_y+35)], radius=14,
-                       fill=(240, 248, 240, 255), outline=(180, 210, 180, 255), width=2)
-draw.text((407, arrow_y), "Applications", fill=(80, 80, 80, 255), font=get_font(11), anchor="mm")
+draw.text(
+    (W // 2, 120),
+    "图文工坊",
+    fill=(35, 35, 35),
+    font=font(68),
+    anchor="mm"
+)
 
-# 提示
-draw.text((W//2, 265), "将 图文工坊 拖拽到 Applications 文件夹", fill=(120, 120, 120, 255),
-          font=get_font(13), anchor="mt")
-draw.text((W//2, 295), "拖拽安装后，请从「启动台」或「应用程序」中打开", fill=(180, 180, 180, 255),
-          font=get_font(12), anchor="mt")
+draw.text(
+    (W // 2, 190),
+    "AI Image Studio",
+    fill=(120, 120, 120),
+    font=font(30),
+    anchor="mm"
+)
+
+# ======================================================
+# 中间箭头
+# ======================================================
+
+arrow_y = 430
+
+line_color = (80, 140, 255)
+
+# 阴影层
+shadow = Image.new("RGBA", (W, H), (0,0,0,0))
+sd = ImageDraw.Draw(shadow)
+
+sd.line(
+    [(500, arrow_y), (860, arrow_y)],
+    fill=(0,0,0,70),
+    width=16
+)
+
+shadow = shadow.filter(ImageFilter.GaussianBlur(10))
+
+bg.alpha_composite(shadow)
+
+# 主箭头
+draw.line(
+    [(500, arrow_y), (860, arrow_y)],
+    fill=line_color,
+    width=12
+)
+
+draw.polygon(
+    [
+        (860, arrow_y),
+        (810, arrow_y - 30),
+        (810, arrow_y + 30)
+    ],
+    fill=line_color
+)
+
+# ======================================================
+# 底部说明
+# ======================================================
+
+draw.text(
+    (W // 2, 650),
+    "将 图文工坊 拖拽到 Applications 文件夹完成安装",
+    fill=(70, 70, 70),
+    font=font(36),
+    anchor="mm"
+)
+
+draw.text(
+    (W // 2, 720),
+    "安装后可从 Launchpad 或 应用程序 中启动",
+    fill=(150, 150, 150),
+    font=font(24),
+    anchor="mm"
+)
 
 bg.save("$BG_FILE", "PNG")
-print("  ✓ background.png 已生成")
+
+print("✓ 高级背景图已生成")
 PYEOF
 
-# ══════════════════════════════════════════════════════
-# 2. 创建空白读写 DMG
-# ══════════════════════════════════════════════════════
-echo "  2/5 创建空白 DMG..."
-hdiutil create -size 1500m -volname "$VOLNAME" \
-    -fs HFS+ "$DMG_TEMP" >/dev/null
+# ============================================================
+# 2. 创建空白 DMG
+# ============================================================
 
-# ══════════════════════════════════════════════════════
-# 3. 挂载并填充内容
-# ══════════════════════════════════════════════════════
-echo "  3/5 挂载并填充内容..."
+echo "  2/5 创建 DMG..."
+
+hdiutil create \
+    -size 1500m \
+    -volname "$VOLNAME" \
+    -fs HFS+ \
+    "$DMG_TEMP" >/dev/null
+
+# ============================================================
+# 3. 挂载 DMG
+# ============================================================
+
+echo "  3/5 挂载 DMG..."
+
 MOUNT="/Volumes/$VOLNAME"
-hdiutil attach "$DMG_TEMP" -noverify -noautoopen >/dev/null
 
-# 复制内容到 DMG
+hdiutil attach \
+    "$DMG_TEMP" \
+    -noverify \
+    -noautoopen >/dev/null
+
+# ============================================================
+# 拷贝 APP
+# ============================================================
+
+echo "      → 拷贝应用..."
+
 cp -R "$APP_SRC" "$MOUNT/$APP_DST"
+
+# Applications 快捷方式
 ln -s /Applications "$MOUNT/Applications"
 
-# 复制背景图到 .background 目录
+# ============================================================
+# 背景图
+# ============================================================
+
+echo "      → 配置背景..."
+
 mkdir -p "$MOUNT/$BG_DIR"
+
 cp "$BG_FILE" "$MOUNT/$BG_DIR/background.png"
 
-# ══════════════════════════════════════════════════════
-# 4. AppleScript 设置 Finder 布局
-# ══════════════════════════════════════════════════════
+# 隐藏背景目录
+SetFile -a V "$MOUNT/$BG_DIR" || true
+
+# ============================================================
+# 4. Finder 布局
+# ============================================================
+
 echo "  4/5 设置 Finder 布局..."
 
-# 检测 GUI 可用
 if osascript -e 'return true' &>/dev/null; then
-    echo "  → 执行布局设置..."
-    AS_OUT=$(osascript 2>&1 <<-ASEND || true
-        tell application "Finder"
-            tell disk "$VOLNAME"
-                open
-                tell container window
-                    set current view to icon view
-                    set toolbar visible to false
-                    set statusbar visible to false
-                    set bounds to {200, 100, 740, 480}
-                end tell
-                tell icon view options of container window
-                    set icon size to 72
-                    set arrangement to not arranged
-                end tell
-                set background picture of icon view options of container window to file ".background:background.png"
-                set position of item "$APP_DST" to {137, 200}
-                set position of item "Applications" to {407, 200}
-                close
-            end tell
+
+osascript <<EOF
+
+tell application "Finder"
+
+    tell disk "$VOLNAME"
+
+        open
+
+        tell container window
+
+            set current view to icon view
+
+            set toolbar visible to false
+            set statusbar visible to false
+            set pathbar visible to false
+
+            set bounds to {120, 120, 920, 660}
+
         end tell
-ASEND
-)
-    if [ -n "$AS_OUT" ]; then
-        echo "  ⚠ 提示: $AS_OUT"
-    else
-        echo "  ✓ 布局已设置"
-    fi
+
+        tell icon view options of container window
+
+            set arrangement to not arranged
+
+            set icon size to 96
+
+            set text size to 14
+
+            set label position to bottom
+
+            set background picture to file ".background:background.png"
+
+        end tell
+
+        # APP icon
+        set position of item "$APP_DST" to {180, 260}
+
+        # Applications icon
+        set position of item "Applications" to {500, 260}
+
+        update without registering applications
+
+        delay 1
+
+        close
+
+        open
+
+        update without registering applications
+
+        delay 1
+
+    end tell
+
+end tell
+
+EOF
+
+    echo "      ✓ Finder 布局完成"
+
 else
-    echo "  ⚠ 无 GUI 环境，跳过布局设置"
+
+    echo "      ⚠ 当前环境无 GUI，跳过 Finder 布局"
+
 fi
 
-# ══════════════════════════════════════════════════════
-# 5. 卸载并转换为只读 DMG
-# ══════════════════════════════════════════════════════
-echo "  5/5 完成 DMG..."
-sleep 0.5
+# ============================================================
+# 同步写盘
+# ============================================================
+
+echo "      → 同步磁盘..."
+
+sync
+
+sleep 2
+
+# ============================================================
+# 5. 生成最终 DMG
+# ============================================================
+
+echo "  5/5 压缩 DMG..."
+
 hdiutil detach "$MOUNT" -quiet >/dev/null
-sleep 0.3
 
-hdiutil convert "$DMG_TEMP" -format UDZO -o "$DMG_NAME" >/dev/null
+sleep 1
 
-# 清理临时文件
-rm -f "$DMG_TEMP" "$BG_FILE"
+hdiutil convert \
+    "$DMG_TEMP" \
+    -format UDZO \
+    -imagekey zlib-level=9 \
+    -o "$DMG_NAME" >/dev/null
 
-echo "✅ 已生成: $DMG_NAME"
-echo "   大小: $(du -h "$DMG_NAME" | cut -f1)"
-echo "   安装: open $DMG_NAME"
+# ============================================================
+# 清理
+# ============================================================
+
+rm -f "$DMG_TEMP"
+rm -f "$BG_FILE"
+
+echo ""
+echo "✅ DMG 构建完成"
+echo ""
+echo "文件:"
+echo "  $DMG_NAME"
+echo ""
+echo "大小:"
+echo "  $(du -h "$DMG_NAME" | cut -f1)"
+echo ""
+echo "运行:"
+echo "  open \"$DMG_NAME\""
+echo ""
+```

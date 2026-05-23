@@ -26,16 +26,38 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: 安装 python-semantic-release
-        run: pip install python-semantic-release
       - name: 获取下一个版本号
         id: get_version
         run: |
-          NEXT_VERSION=$(semantic-release print-version 2>/dev/null || true)
+          NEXT_VERSION=$(python3 -c "
+          import re, subprocess
+          from pathlib import Path
+          pyproject = Path('pyproject.toml').read_text('utf-8')
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', pyproject, re.M)
+          major, minor, patch = map(int, m.group(1).split('.'))
+          r = subprocess.run(['git', 'tag', '--sort=-version:refname'], capture_output=True, text=True)
+          tags = [t.strip() for t in r.stdout.split(chr(10)) if t.strip().startswith('v')]
+          latest_tag = tags[0] if tags else None
+          if latest_tag:
+              r = subprocess.run(['git', 'log', '--format=%B', latest_tag + '..HEAD'], capture_output=True, text=True)
+              log = r.stdout
+          else:
+              log = ''
+          has_breaking = bool(re.search(r'BREAKING[ -]CHANGE', log, re.I) or re.search(r'^\w+!:', log, re.M))
+          has_feat = bool(re.search(r'^feat', log, re.M))
+          has_fix = bool(re.search(r'^fix', log, re.M))
+          if has_breaking:
+              major += 1; minor = 0; patch = 0
+          elif has_feat:
+              minor += 1; patch = 0
+          elif has_fix:
+              patch += 1
+          print(str(major) + '.' + str(minor) + '.' + str(patch))
+          ")
           if [ -z "$NEXT_VERSION" ]; then
-            NEXT_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+              NEXT_VERSION=$(grep '^version\s*=\s*"' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           fi
-          echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
           echo "检测到版本号: ${NEXT_VERSION}"
 
   test:
