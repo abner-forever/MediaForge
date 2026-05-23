@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "desktop:start": "vite build && cd ../ && python3 main.py"
+    "desktop:start": "vite build && cd ../ && python3 main.py",
+    "test": "python3 -m pytest ../../tests/desktop/test_main.py -v"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

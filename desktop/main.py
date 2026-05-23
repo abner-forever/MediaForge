@@ -30,6 +30,8 @@ def _get_icon_candidates() -> list[Path]:
 
 def _set_dock_icon() -> bool:
     """遍历候选路径设置 NSApplication 图标，成功返回 True。"""
+    if sys.platform != "darwin":
+        return False
     from AppKit import NSImage, NSApplication
     NSApplication.sharedApplication()
     for p in _get_icon_candidates():
@@ -107,33 +109,34 @@ def main() -> None:
 
 def _start_app() -> None:
     # macOS Dock 标识设置（非 frozen 模式的兜底，frozen 模式由 runtime_hook 处理）
-    try:
-        from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo, NSString
-        import ctypes, ctypes.util
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo, NSString
+            import ctypes, ctypes.util
 
-        NSApplication.sharedApplication()
-        NSProcessInfo.processInfo().setProcessName_("图文工坊")
+            NSApplication.sharedApplication()
+            NSProcessInfo.processInfo().setProcessName_("图文工坊")
 
-        # Carbon CPSSetProcessName 兜底
-        carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
-        class _PSN(ctypes.Structure):
-            _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
-        _psn = _PSN(0, 0)
-        carbon.GetCurrentProcess(ctypes.byref(_psn))
-        _ps_name = NSString.stringWithString_("图文工坊")
-        carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_ps_name)))
+            # Carbon CPSSetProcessName 兜底
+            carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
+            class _PSN(ctypes.Structure):
+                _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
+            _psn = _PSN(0, 0)
+            carbon.GetCurrentProcess(ctypes.byref(_psn))
+            _ps_name = NSString.stringWithString_("图文工坊")
+            carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_ps_name)))
 
-        # 设置 Dock 图标
-        _set_dock_icon()
+            # 设置 Dock 图标
+            _set_dock_icon()
 
-        # 更新 bundle info 显示名称
-        bundle = NSBundle.mainBundle()
-        info = bundle.infoDictionary()
-        if info is not None:
-            info["CFBundleName"] = "图文工坊"
-            info["CFBundleDisplayName"] = "图文工坊"
-    except Exception:
-        pass
+            # 更新 bundle info 显示名称
+            bundle = NSBundle.mainBundle()
+            info = bundle.infoDictionary()
+            if info is not None:
+                info["CFBundleName"] = "图文工坊"
+                info["CFBundleDisplayName"] = "图文工坊"
+        except Exception:
+            pass
 
     ensure_dirs()
 
