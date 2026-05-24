@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Checkbox from '../../components/Checkbox';
 import Loading from '../../components/Loading';
+import LazyImage from './LazyImage';
 import { fmtTime } from './utils';
 
 const MAX_PREVIEW = 6;
@@ -60,19 +61,16 @@ export default function PostList({
                     <span className="tag text-[10px]">{p.scene}</span>
                     <span className="text-xs text-text-muted">{remoteImgs.length} 张图{imgs.length ? ` · 已下载 ${imgs.length}` : ''}</span>
                     {p.created_at && <span className="text-xs text-text-muted">{fmtTime(p.created_at)}</span>}
-                    <div className="ml-auto flex gap-1">
-                      <button className="btn btn-xs btn-ghost" onClick={() => onDownload(String(origIdx))} disabled={downloading}>下载</button>
-                      <button className="btn btn-xs btn-ghost text-text-muted hover:text-danger" onClick={() => setRemoveConfirmIndex(origIdx)}>删除</button>
+                    <div className="ml-auto flex gap-1.5">
+                      <button className="btn btn-sm btn-ghost" onClick={() => onDownload(String(origIdx))} disabled={downloading}>下载</button>
+                      <button className="btn btn-sm btn-ghost text-text-muted hover:text-danger" onClick={() => setRemoveConfirmIndex(origIdx)}>删除</button>
                     </div>
                   </div>
                   {p.text && <div className="text-xs text-text-muted mb-3 line-clamp-2 leading-relaxed">{p.text.slice(0, 100)}</div>}
                   <div className="flex flex-wrap gap-2">
                     {showImgs.map((img: string, ii: number) => (
-                      <div key={ii} className="w-[80px] h-[80px] rounded-xl border border-border overflow-hidden bg-bg-secondary relative">
-                        <img src={thumbSrc(img)} alt="" className="w-full h-full object-cover cursor-pointer transition-all hover:border-accent hover:shadow-md hover:-translate-y-0.5" onClick={() => onOpenLightbox(origIdx, ii)} onError={e => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const placeholder = parent.querySelector('.img-placeholder') as HTMLElement; if (placeholder) placeholder.style.display = 'flex'; } }} loading="lazy" />
-                        <div className="img-placeholder absolute inset-0 hidden items-center justify-center bg-bg-secondary">
-                          <img src="/static/logo.png" alt="" className="w-6 h-6 opacity-30" />
-                        </div>
+                      <div key={ii} className="w-[80px] h-[80px] rounded-xl border border-border overflow-hidden bg-bg-secondary">
+                        <LazyImage src={thumbSrc(img)} className="w-full h-full cursor-pointer" onClick={() => onOpenLightbox(origIdx, ii)} />
                       </div>
                     ))}
                     {hiddenCount > 0 && !isExpanded && (

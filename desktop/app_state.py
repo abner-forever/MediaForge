@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,7 @@ class AppState:
         self.publish_logs: List[str] = []
         self.publish_active: bool = False
         self._publish_logs_map: Dict[str, List[str]] = {}
+        self._publish_lock = threading.Lock()
         self._operations: List[Dict[str, Any]] = self._load_operations()
         self.articles: List[Dict[str, Any]] = self._load_articles()
 
@@ -285,28 +287,31 @@ class AppState:
     # ── 发布日志 ──────────────────────────────────────
     def clear_publish_logs(self, session_id: str = "") -> None:
         """清空发布日志（兼容旧版无 session 调用）。"""
-        if session_id:
-            self._publish_logs_map[session_id] = []
-        else:
-            self.publish_logs.clear()
+        with self._publish_lock:
+            if session_id:
+                self._publish_logs_map[session_id] = []
+            else:
+                self.publish_logs.clear()
         self.publish_active = True
 
     def add_publish_log(self, msg: str, session_id: str = "") -> None:
         """添加发布日志，按 session_id 隔离多个并发发布。"""
-        if session_id:
-            if session_id not in self._publish_logs_map:
-                self._publish_logs_map[session_id] = []
-            self._publish_logs_map[session_id].append(msg)
-        else:
-            self.publish_logs.append(msg)
+        with self._publish_lock:
+            if session_id:
+                if session_id not in self._publish_logs_map:
+                    self._publish_logs_map[session_id] = []
+                self._publish_logs_map[session_id].append(msg)
+            else:
+                self.publish_logs.append(msg)
 
     def finish_publish(self) -> None:
         self.publish_active = False
 
     def get_publish_logs(self, session_id: str = "") -> List[str]:
-        if session_id:
-            return list(self._publish_logs_map.get(session_id, []))
-        return list(self.publish_logs)
+        with self._publish_lock:
+            if session_id:
+                return list(self._publish_logs_map.get(session_id, []))
+            return list(self.publish_logs)
 
     # ── 发现结果 ──────────────────────────────────────
     def set_discovery_results(self, posts: List[Dict[str, Any]]) -> None:

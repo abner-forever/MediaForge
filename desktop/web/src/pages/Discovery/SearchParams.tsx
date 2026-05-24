@@ -82,31 +82,33 @@ export default function SearchParams({
         </label>
       </div>
 
-      {/* AI 推荐热门女星 */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <button className="btn btn-ghost text-sm" onClick={onAiRecommend} disabled={recommending}>
-            {recommending ? (
-              <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin inline-block" /> 推荐中…</>
-            ) : (
-              `✨ ${recommendedCelebs.length ? '刷新推荐' : 'AI 推荐当前热门女星'}`
-            )}
-          </button>
-        </div>
-        {recommendedCelebs.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {recommendedCelebs.map((name) => (
-              <button
-                key={name}
-                className="px-3 py-1 text-sm rounded-full border border-border bg-bg-secondary hover:bg-accent hover:text-white hover:border-accent transition-colors cursor-pointer"
-                onClick={() => onSearchCeleb(name)}
-              >
-                {name}
-              </button>
-            ))}
+      {/* AI 推荐热门女星 — 仅适用于按明星/超话/关键词搜索的模式 */}
+      {(mode === 'celebrities' || mode === 'mixed' || mode === 'super_topic' || mode === 'keyword') && (
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <button className="btn btn-ghost text-sm" onClick={onAiRecommend} disabled={recommending}>
+              {recommending ? (
+                <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin inline-block" /> 推荐中…</>
+              ) : (
+                `✨ ${recommendedCelebs.length ? '刷新推荐' : 'AI 推荐当前热门女星'}`
+              )}
+            </button>
           </div>
-        )}
-      </div>
+          {recommendedCelebs.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {recommendedCelebs.map((name) => (
+                <button
+                  key={name}
+                  className="px-3 py-1 text-sm rounded-full border border-border bg-bg-secondary hover:bg-accent hover:text-white hover:border-accent transition-colors cursor-pointer"
+                  onClick={() => onSearchCeleb(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         <button className="btn btn-primary" onClick={onSearch} disabled={searching}>

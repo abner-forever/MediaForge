@@ -27,6 +27,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logsLenRef = useRef(logs.length);
+  const pollReceivedRef = useRef(false);
   const [thumbStart, setThumbStart] = useState(0);
 
   useEffect(() => {
@@ -49,12 +50,15 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     logsLenRef.current = logs.length;
   }, [logs]);
 
-  // 当队列项从服务端刷新后含有完整发布日志时，同步到本地（覆盖 pollLogs 未取完的部分）
+  // 当队列项从服务端刷新后含有完整发布日志时，同步到本地
+  // 注意：发布中的轮询结束后 pollReceivedRef=true，不再用缓存的 publish_logs 覆盖
   useEffect(() => {
-    if (!publishingAction && item.publish_logs && item.publish_logs.length > logs.length) {
+    if (pollReceivedRef.current) return;
+    const isTerminal = ['failed', 'saved_to_wechat', 'published'].includes(item.status || '');
+    if ((!publishingAction || isTerminal) && item.publish_logs && item.publish_logs.length > logs.length) {
       setLogs(item.publish_logs);
     }
-  }, [item.publish_logs, publishingAction]);
+  }, [item.publish_logs, publishingAction, item.status]);
 
   async function updateField(field: string, value: string) { await queueApi.update(index, { [field]: value } as any); }
 
@@ -123,6 +127,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
       try {
         const d = await publishLogsApi.get(offset, sid);
         if (d.logs.length) {
+          pollReceivedRef.current = true;
           setLogs(p => [...p, ...d.logs]);
           offset = d.total;
         }
@@ -135,7 +140,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
-    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); publishRef.current = true;
+    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); publishRef.current = true; pollReceivedRef.current = false;
     const pubPromise = queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
@@ -152,33 +157,33 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
       const refreshed = await queueApi.get();
       setQueue(refreshed.queue);
       // 用 id 定位队列项，避免 index 偏移导致取错对象
+      // 注意：不覆盖轮询获取的实时日志 — 队列项上缓存的 publish_logs 可能来自之前的失败运行
       if (myItemId) {
         const updatedItem = refreshed.queue.find(q => q.id === myItemId);
-        if (updatedItem?.publish_logs) {
+        if (updatedItem?.publish_logs && !pollReceivedRef.current) {
           setLogs(updatedItem.publish_logs);
         }
       } else if (index >= 0 && index < refreshed.queue.length) {
         // 无 id 的老数据回退到索引定位
         const updatedItem = refreshed.queue[index];
-        if (updatedItem?.publish_logs) {
+        if (updatedItem?.publish_logs && !pollReceivedRef.current) {
           setLogs(updatedItem.publish_logs);
         }
       }
     } catch {}
-    // 如果服务端刷新未更新状态（如后端异常导致 queue item 未更新），本地乐观更新
+    // 如果服务端刷新未更新状态（如后端异常导致 queue item 未更新），本地乐观更新为 failed
     if (!success) {
-      const newStatus: QueueItem['status'] = opts.save_draft ? 'saved_to_wechat' : 'published';
       const q = useStore.getState().queue;
       if (myItemId) {
         const idx = q.findIndex(qi => qi.id === myItemId);
-        if (idx >= 0 && q[idx].status !== newStatus) {
+        if (idx >= 0 && !['failed', 'saved_to_wechat', 'published'].includes(q[idx].status || '')) {
           const newQueue = [...q];
-          newQueue[idx] = { ...newQueue[idx], status: newStatus };
+          newQueue[idx] = { ...newQueue[idx], status: 'failed' as QueueItem['status'] };
           setQueue(newQueue);
         }
-      } else if (index >= 0 && index < q.length && q[index].status !== newStatus) {
+      } else if (index >= 0 && index < q.length && !['failed', 'saved_to_wechat', 'published'].includes(q[index].status || '')) {
         const newQueue = [...q];
-        newQueue[index] = { ...newQueue[index], status: newStatus };
+        newQueue[index] = { ...newQueue[index], status: 'failed' as QueueItem['status'] };
         setQueue(newQueue);
       }
     }

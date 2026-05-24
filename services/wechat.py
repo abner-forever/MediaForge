@@ -1,10 +1,12 @@
 import random
 import re
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from config import DATA_DIR, WECHAT_STATE_PATH
@@ -20,7 +22,7 @@ def _emit(msg: str, on_log: Optional[Callable[[str], None]] = None) -> None:
         try:
             on_log(msg)
         except Exception:
-            pass
+            logger.exception("发布日志回调失败: %s", msg)
 
 
 def _human_sleep(base: float = 1.0, jitter: float = 0.8) -> None:
@@ -126,10 +128,69 @@ def _fill_first_quick(scope, selectors: list[str], value: str) -> bool:
     return False
 
 
+def _match_editor_frame(f) -> bool:
+    """判断 frame 的 URL 是否为微信编辑器。"""
+    try:
+        url = f.url or ""
+        return "appmsg_edit" in url or "cgi-bin/appmsg" in url
+    except Exception:
+        return False
+
+
 def _resolve_editor_frame(page):
+    """查找编辑器 iframe，优先 URL 匹配，兜底内容检测。"""
+    # 优先级 1：URL 匹配
     for f in page.frames:
-        if "appmsg_edit" in f.url or "cgi-bin/appmsg" in f.url:
+        if _match_editor_frame(f):
             return f
+    # 优先级 2：直接找内容编辑器（处理 URL 变化或未匹配场景）
+    for f in page.frames:
+        try:
+            if f.locator("#js_content, [contenteditable]").first.count() > 0:
+                return f
+        except Exception:
+            continue
+    return page.main_frame
+
+
+def _wait_for_editor_frame(page, on_log, timeout=15):
+    """等待编辑器 iframe 出现并加载完成。
+
+    图片上传等操作会使 iframe 刷新，此时需要等待新 frame 出现
+    或已有 frame 完成导航。结合 event-driven（新 frame attach）
+    和轮询（in-place 导航）两种策略。
+    """
+    try:
+        frame = _resolve_editor_frame(page)
+        if frame != page.main_frame:
+            return frame
+
+        _emit("编辑器 iframe 未就绪，等待重试...", on_log)
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            wait_ms = min(3000, int(remaining * 1000))
+            if wait_ms < 200:
+                break
+
+            # 策略 A：等待新 frame attach（event-driven，不浪费 CPU）
+            try:
+                new_frame = page.wait_for_frame(_match_editor_frame, timeout=wait_ms)
+                _emit("编辑器 iframe 已就绪", on_log)
+                return new_frame
+            except Exception:
+                pass
+
+            # 策略 B：检查已有 frame（处理 in-place 导航）
+            frame = _resolve_editor_frame(page)
+            if frame != page.main_frame:
+                _emit("编辑器 iframe 已就绪", on_log)
+                return frame
+
+        _emit("编辑器 iframe 等待超时，将在主页面中继续操作", on_log)
+    except Exception as e:
+        logger.warning("等待编辑器 iframe 时出现异常: %s", e)
     return page.main_frame
 
 
@@ -472,6 +533,40 @@ def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = N
     return False
 
 
+def _resize_image_if_needed(image_path: str, max_pixels: int = 6_000_000) -> str:
+    """检查图片尺寸是否超过微信限制（宽高乘积 ≤ 600 万），超过则缩放并返回临时文件路径。
+
+    Args:
+        image_path: 原图绝对路径
+        max_pixels: 允许的最大像素乘积
+
+    Returns:
+        缩放后的图片路径（与原图相同时返回原路径，否则返回临时文件路径）
+    """
+    try:
+        img = Image.open(image_path)
+        w, h = img.size
+        if w * h <= max_pixels:
+            return image_path
+
+        # 计算缩放比例，保持宽高比
+        ratio = (max_pixels / (w * h)) ** 0.5
+        new_w, new_h = int(w * ratio), int(h * ratio)
+
+        # 用 LANCZOS 重采样保证质量
+        resized = img.resize((new_w, new_h), Image.LANCZOS)
+        suffix = Path(image_path).suffix or ".jpg"
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        # 保存时把 EXIF 方向信息也带过去
+        resized.save(tmp.name, quality=95)
+        tmp.close()
+        logger.info("图片已缩放: %s (%dx%d → %dx%d, %.1fM px → %.1fM px)",
+                     Path(image_path).name, w, h, new_w, new_h,
+                     (w * h) / 1e6, (new_w * new_h) / 1e6)
+        return tmp.name
+    except Exception as e:
+        logger.warning("图片尺寸检查失败，使用原图: %s", e)
+        return image_path
 
 
 def publish_article(
@@ -590,11 +685,22 @@ def publish_article(
             if has_cover_uploaded and cover not in all_images:
                 all_images.insert(0, cover)
 
-            for i, img in enumerate(all_images):
-                if Path(img).exists():
-                    upload.set_input_files(img)
-                    _emit(f"已上传图片 {i+1}/{len(all_images)}: {Path(img).name}", on_log)
-                    _human_sleep(2.0, 1.0)
+            uploaded_tmp_files: List[str] = []
+            try:
+                for i, img in enumerate(all_images):
+                    if Path(img).exists():
+                        upload_path = _resize_image_if_needed(img)
+                        if upload_path != img:
+                            uploaded_tmp_files.append(upload_path)
+                        upload.set_input_files(upload_path)
+                        _emit(f"已上传图片 {i+1}/{len(all_images)}: {Path(img).name}", on_log)
+                        _human_sleep(2.0, 1.0)
+            finally:
+                for tmp in uploaded_tmp_files:
+                    try:
+                        Path(tmp).unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
             # 等待图片上传完成并渲染（多图需更长时间）
             _emit("等待图片上传完成...", on_log)
@@ -642,55 +748,35 @@ def publish_article(
             # 保存草稿或发布
             if save_draft:
                 # 上传图片和设置封面后，编辑器 iframe 可能正在重新加载
-                # 先等待片刻让 iframe 有机会完成加载，避免 _resolve_editor_frame 返回主 frame
-                _human_sleep(2.0, 0.5)
-                editor_frame = _resolve_editor_frame(page)
+                def _ensure_save_scopes():
+                    scopes = [editor_frame]
+                    if editor_frame != page.main_frame:
+                        scopes.append(page.main_frame)
+                    for f in page.frames:
+                        if f not in scopes:
+                            scopes.append(f)
+                    return scopes
 
-                # 如果解析结果为主 frame，说明编辑器 iframe 尚未就绪，带重试等待
-                if editor_frame == page.main_frame:
-                    _emit("编辑器 iframe 未就绪，等待重试...", on_log)
-                    _iframe_ok = False
-                    for _ in range(8):
-                        _human_sleep(1.0, 0.3)
-                        editor_frame = _resolve_editor_frame(page)
-                        if editor_frame != page.main_frame:
-                            _emit("编辑器 iframe 已就绪", on_log)
-                            _iframe_ok = True
-                            break
-                    if not _iframe_ok:
-                        _emit("编辑器 iframe 重试超时，将在主页面中继续操作", on_log)
+                save_selectors = [
+                    "button:has-text('保存为草稿')",
+                    "a:has-text('保存为草稿')",
+                    "button:has-text('保存草稿')",
+                    "a:has-text('保存草稿')",
+                    "button:has-text('保存')",
+                ]
 
-                _emit("正在保存草稿（第一遍：含封面）...", on_log)
-                # 在多个 frame 中兜底查找保存草稿按钮（编辑器 iframe 可能刚完成导航）
-                _save_btn_found = False
-                _save_btn_scopes = [editor_frame]
-                if editor_frame != page.main_frame:
-                    _save_btn_scopes.append(page.main_frame)
-                for f in page.frames:
-                    if f not in _save_btn_scopes:
-                        _save_btn_scopes.append(f)
-                for scope in _save_btn_scopes:
-                    try:
-                        if scope.is_detached():
+                def _click_save_button() -> bool:
+                    scopes = _ensure_save_scopes()
+                    for scope in scopes:
+                        try:
+                            if scope.is_detached():
+                                continue
+                        except Exception:
                             continue
-                    except Exception:
-                        continue
-                    if _click_first_available(
-                        scope,
-                        [
-                            "button:has-text('保存为草稿')",
-                            "a:has-text('保存为草稿')",
-                            "button:has-text('保存草稿')",
-                            "a:has-text('保存草稿')",
-                            "button:has-text('保存')",
-                        ],
-                        wait_ms=5000,
-                    ):
-                        _save_btn_found = True
-                        break
-                if not _save_btn_found:
-                    raise RuntimeError("未找到保存草稿按钮")
-                # 等待保存确认（微信编辑器异步保存，需等待成功提示出现）
+                        if _click_first_available(scope, save_selectors, wait_ms=5000):
+                            return True
+                    return False
+
                 def _wait_save_done(page) -> bool:
                     for s in range(15):
                         for hint in ["保存成功", "已保存", "草稿已保存"]:
@@ -702,93 +788,29 @@ def publish_article(
                         _human_sleep(1.0, 0.3)
                     return False
 
-                save_ok = _wait_save_done(page)
-                if not save_ok:
-                    _emit("未检测到第一次保存成功的提示，但可能已保存", on_log)
+                # 重试循环：最多 3 次
+                save_ok = False
+                for retry in range(3):
+                    if retry > 0:
+                        _emit(f"正在重试保存草稿（第{retry+1}次）...", on_log)
+                        _human_sleep(1.0, 0.5)
+                    editor_frame = _wait_for_editor_frame(page, on_log)
 
-                # 有正文内容的文章才执行两步保存（删除正文首张封面图），纯图片帖子保留所有图片
-                if has_cover_uploaded and cover_ok and content and content.strip():
-                    _emit("正在删除正文中的封面图（两步保存）...", on_log)
-                    _human_sleep(1.0, 0.5)
-
-                    # 重新获取 editor_frame（第一次保存后 iframe 可能已刷新）
-                    editor_frame = _resolve_editor_frame(page)
-
-                    # 在编辑器 frame 中删除正文第一个 img（封面）
-                    removed = False
-                    for f in [editor_frame, page.main_frame] + page.frames:
-                        if f.is_detached():
+                    _emit("正在保存草稿...", on_log)
+                    if not _click_save_button():
+                        if retry < 2:
                             continue
-                        try:
-                            ok = f.evaluate("""() => {
-                                const ed = document.querySelector('#js_content') || document.querySelector('[contenteditable="true"]');
-                                if (!ed) return false;
-                                const imgs = ed.querySelectorAll('img');
-                                if (imgs.length === 0) return false;
-                                const first = imgs[0];
-                                // 删除图片所在的整个段落，避免留空行
-                                let target = first;
-                                const parent = first.parentElement;
-                                if (parent && parent.tagName === 'P' && parent.closest('#js_content, [contenteditable]')) {
-                                    target = parent;
-                                }
-                                target.remove();
-                                ed.dispatchEvent(new Event('input', { bubbles: true }));
-                                // 确认图片已删除
-                                return ed.querySelectorAll('img').length === imgs.length - 1;
-                            }""")
-                            if ok:
-                                _emit("正文首张封面图片已删除", on_log)
-                                removed = True
-                                break
-                        except Exception as e:
-                            logger.debug("删除封面图失败 (frame %s): %s", f.url[:60], e)
-                            continue
+                        raise RuntimeError("未找到保存草稿按钮")
+                    save_ok = _wait_save_done(page)
+                    if save_ok:
+                        break
 
-                    if not removed:
-                        _emit("未能在正文中找到封面图片，但封面已在第一步设置完成", on_log)
-
-                    _human_sleep(0.5, 0.3)
-
-                    _emit("正在保存草稿（第二遍：已删除封面）...", on_log)
-                    _save2_found = False
-                    _save2_scopes = [editor_frame]
-                    if editor_frame != page.main_frame:
-                        _save2_scopes.append(page.main_frame)
-                    for f in page.frames:
-                        if f not in _save2_scopes:
-                            _save2_scopes.append(f)
-                    for scope in _save2_scopes:
-                        try:
-                            if scope.is_detached():
-                                continue
-                        except Exception:
-                            continue
-                        if _click_first_available(
-                            scope,
-                            [
-                                "button:has-text('保存为草稿')",
-                                "a:has-text('保存为草稿')",
-                                "button:has-text('保存草稿')",
-                                "a:has-text('保存草稿')",
-                                "button:has-text('保存')",
-                            ],
-                            wait_ms=5000,
-                        ):
-                            _save2_found = True
-                            break
-                    if not _save2_found:
-                        _emit("未找到第二遍保存草稿按钮，但封面已上传设置完成", on_log)
-                    else:
-                        save_ok2 = _wait_save_done(page)
-                        if save_ok2:
-                            _emit("第二遍草稿保存成功（封面已从正文移除）", on_log)
-                        else:
-                            _emit("第二遍保存未检测到确认提示", on_log)
-
-                _emit("草稿保存成功", on_log)
-                msg = "已保存为草稿" + ("（未设置封面）" if not cover_ok else "")
-                _save_result = {"success": True, "message": msg, "title": title}
+                if save_ok:
+                    _emit("草稿保存成功", on_log)
+                    msg = "已保存为草稿" + ("（未设置封面）" if not cover_ok else "")
+                    _save_result = {"success": True, "message": msg, "title": title}
+                else:
+                    _emit("草稿保存失败：重试 3 次后仍未检测到保存成功提示", on_log)
                 try:
                     context.storage_state(path=str(state_path_global))
                     if account_id:
@@ -828,12 +850,15 @@ def publish_article(
 
         if _save_result:
             return _save_result
+        if save_draft:
+            # save_draft=True 但 _save_result 没被设置 → 保存失败
+            msg = "保存草稿失败：未能确认草稿已保存"
+            _emit(msg, on_log)
+            return {"success": False, "message": msg, "title": title}
         _emit("发布成功", on_log)
         msg = "发布成功" + ("（未设置封面）" if not cover_ok else "")
         return {"success": True, "message": msg, "title": title}
     except Exception as err:
-        if _save_result:
-            return _save_result
         err_msg = str(err)
         if "Executable doesn't exist" in err_msg:
             err_msg = "未找到 Playwright 浏览器引擎，请在终端运行: playwright install chromium"

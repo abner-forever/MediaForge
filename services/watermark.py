@@ -7,6 +7,8 @@ from typing import Tuple
 
 from PIL import Image, ImageFilter, ImageStat
 
+Image.MAX_IMAGE_PIXELS = None  # 禁用 decompression bomb 限制，部分图片分辨率较高
+
 from config import settings
 from utils.logger import get_logger
 

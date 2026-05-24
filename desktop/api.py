@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests as http_requests
+from PIL import Image as PILImage
+
+PILImage.MAX_IMAGE_PIXELS = None  # 禁用 decompression bomb 限制，部分图片分辨率较高
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
@@ -1700,6 +1703,9 @@ async def publish_from_queue(index: int, req: PublishRequest):
 
     publish_session_id = item.get("id", "")
     app_state.clear_publish_logs(session_id=publish_session_id)
+    # 清除队列项上持久化的旧日志，防止前端刷新时显示上一轮的缓存数据
+    if publish_session_id:
+        app_state.update_queue_item_by_id(publish_session_id, {"publish_logs": []})
 
     def _on_log(msg: str) -> None:
         app_state.add_publish_log(msg, session_id=publish_session_id)
@@ -1736,7 +1742,13 @@ async def publish_from_queue(index: int, req: PublishRequest):
         msg = _friendly_error_message(err)
         _on_log(msg)
         app_state.finish_publish()
-        app_state.update_queue_item(index, {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs(session_id=publish_session_id)})
+        # 用 id 定位队列项（兼容队列变动导致的索引偏移）
+        item_id = item.get("id")
+        fail_updates = {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
+        if item_id:
+            app_state.update_queue_item_by_id(item_id, fail_updates)
+        else:
+            app_state.update_queue_item(index, fail_updates)
         _raise_friendly(500, err)
     app_state.finish_publish()
     updates = {"publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}

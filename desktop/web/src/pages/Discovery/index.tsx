@@ -120,17 +120,20 @@ export default function Discovery() {
     return groups;
   }, [allLocalImages]);
 
-  async function doSearch(overrideCelebs?: string) {
+  async function doSearch(overrideCelebs?: string, overrides?: { tags?: string; superTopics?: string; toutiaoKeywords?: string }) {
     setSearching(true); setSearchMessage('正在搜索…');
     setCurrentPage(1);
     const ctrl = new AbortController(); searchAbortRef.current = ctrl;
     const celebsToUse = overrideCelebs ?? celebs;
+    const tagsToUse = overrides?.tags ?? tags;
+    const superTopicsToUse = overrides?.superTopics ?? superTopics;
+    const toutiaoKeywordsToUse = overrides?.toutiaoKeywords ?? toutiaoKeywords;
     try {
       await searchStream({
         platform, mode,
         celebrities: celebsToUse.split(',').map(s => s.trim()).filter(Boolean),
-        search_tags: platform === 'toutiao' ? toutiaoKeywords.split(',').map(s => s.trim()).filter(Boolean) : tags.split(',').map(s => s.trim()).filter(Boolean),
-        super_topics: superTopics.split(',').map(s => s.trim()).filter(Boolean),
+        search_tags: platform === 'toutiao' ? toutiaoKeywordsToUse.split(',').map(s => s.trim()).filter(Boolean) : tagsToUse.split(',').map(s => s.trim()).filter(Boolean),
+        super_topics: superTopicsToUse.split(',').map(s => s.trim()).filter(Boolean),
         max_pages: 1, post_limit: limit, page: 1,
       }, (evt) => {
         if (evt.type === 'progress') setSearchMessage(evt.message!);
@@ -278,27 +281,42 @@ export default function Discovery() {
         hasLocalAny={hasLocalAny} filteredIndices={filteredIndices}
         recommending={recommending} recommendedCelebs={recommendedCelebs}
         onAiRecommend={handleAiRecommend}
-        onSearchCeleb={(name) => { setCelebs(name); doSearch(name); }}
+        onSearchCeleb={(name) => {
+          if (platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed')) {
+            setCelebs(name); doSearch(name);
+          } else if (mode === 'super_topic') {
+            const topic = `${name}超话`;
+            setSuperTopics(topic); doSearch(undefined, { superTopics: topic });
+          } else if (mode === 'keyword') {
+            if (platform === 'toutiao') {
+              setToutiaoKeywords(name); doSearch(undefined, { toutiaoKeywords: name });
+            } else {
+              setTags(name); doSearch(undefined, { tags: name });
+            }
+          }
+        }}
       />
 
       {discoveryPosts.length > 0 && (
         <div className="card stagger">
           {/* Tab bar */}
-          <div className="flex items-center gap-4 mb-4 border-b border-border pb-3">
+          <div className="flex items-center gap-0 mb-4 border-b border-border">
             <button
-              className={`section-header shrink-0 cursor-pointer transition-colors ${activeTab !== 'posts' ? 'text-text-muted hover:text-text' : ''}`}
+              className={`px-4 py-2.5 text-sm font-medium cursor-pointer transition-all relative ${activeTab === 'posts' ? 'text-accent' : 'text-text-muted hover:text-text'}`}
               onClick={() => setActiveTab('posts')}
             >
               搜索结果
-              <span className="text-xs ml-1 font-normal">({filteredIndices.length} 篇)</span>
+              <span className="text-xs ml-1.5 font-normal opacity-70">({filteredIndices.length} 篇)</span>
+              {activeTab === 'posts' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />}
             </button>
             {allLocalImages.length > 0 && (
               <button
-                className={`section-header shrink-0 cursor-pointer transition-colors ${activeTab !== 'gallery' ? 'text-text-muted hover:text-text' : ''}`}
+                className={`px-4 py-2.5 text-sm font-medium cursor-pointer transition-all relative ${activeTab === 'gallery' ? 'text-accent' : 'text-text-muted hover:text-text'}`}
                 onClick={() => setActiveTab('gallery')}
               >
                 图片画廊
-                <span className="text-xs ml-1 font-normal">({allLocalImages.length} 张)</span>
+                <span className="text-xs ml-1.5 font-normal opacity-70">({allLocalImages.length} 张)</span>
+                {activeTab === 'gallery' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />}
               </button>
             )}
           </div>
