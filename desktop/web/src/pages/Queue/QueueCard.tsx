@@ -12,7 +12,8 @@ import LazyImage from '../Discovery/LazyImage';
 
 const MAX_VISIBLE_THUMBS = 9;
 
-const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueItem; index: number }) {
+const QueueCard = React.memo(function QueueCard({ item }: { item: QueueItem }) {
+  const itemId = item.id!;
   const { openLightbox, addToast, setQueue } = useStore();
   const [title, setTitle] = useState(item.title);
   const [desc, setDesc] = useState(item.desc);
@@ -61,7 +62,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     }
   }, [item.publish_logs, publishingAction, item.status]);
 
-  async function updateField(field: string, value: string) { await queueApi.update(index, { [field]: value } as any); }
+  async function updateField(field: string, value: string) { await queueApi.update(itemId, { [field]: value } as any); }
 
   // 标题/正文自动保存（防抖 800ms）
   const autoSave = useCallback((field: string, value: string) => {
@@ -88,7 +89,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
   async function deleteItem() {
     try {
-      await queueApi.remove(index);
+      await queueApi.remove(itemId);
       setQueue((await queueApi.get()).queue);
       addToast('已删除', 'info');
     } catch (err: any) {
@@ -100,7 +101,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
     await withGenerating(async () => {
       addToast('AI 正在润色...', 'info');
       try {
-        const r = await queueApi.generate(index);
+        const r = await queueApi.generate(itemId);
         setTitle(r.title);
         if (r.success) setDesc('');
         setQueue((await queueApi.get()).queue);
@@ -139,52 +140,66 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
 
   const publishRef = useRef(false);
 
+  /** 发布任务已后台启动，持续轮询直到队列状态变为终态。返回 true=成功。 */
+  async function pollUntilDone(signal: AbortSignal): Promise<boolean> {
+    for (let i = 0; i < 150; i++) { // ~5 分钟上限
+      if (signal.aborted) return false;
+      try {
+        const refreshed = await queueApi.get();
+        setQueue(refreshed.queue);
+        const updated = refreshed.queue.find(q => q.id === itemId);
+        if (updated) {
+          // 只在队列项有最终完整日志时更新（发布中 publish_logs 为空，靠 pollLogs 增量拉取）
+          if (updated.publish_logs && updated.publish_logs.length > 0) {
+            const queueLogs = updated.publish_logs;
+            setLogs(prev => queueLogs.length > prev.length ? queueLogs : prev);
+          }
+          if (updated.status === 'saved_to_wechat' || updated.status === 'published') return true;
+          if (updated.status === 'failed') return false;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    return false;
+  }
+
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
     addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); publishRef.current = true; pollReceivedRef.current = false;
-    const pubPromise = queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
+    const pubPromise = queueApi.publish(itemId, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
     pollLogs({ signal: ac.signal });
     let success = false;
-    try { const r = await pubPromise; success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } catch (err: any) { addToast(err.message, 'error'); }
+    let started = false;
+    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } } catch (err: any) { /* 后端已启动后台任务，HTTP 可能先断，忽略 */ }
     publishRef.current = false;
-    // 等待轮询再跑一小段确保拉取最后几条日志（pollLogs 会随 ac.abort() 自动停止）
-    await new Promise(r => setTimeout(r, 800));
+
+    if (started) {
+      // 后台执行，靠轮询等终态
+      success = await pollUntilDone(ac.signal);
+      addToast(success ? `${action}成功` : '发布失败', success ? 'success' : 'error');
+    } else {
+      await new Promise(r => setTimeout(r, 800));
+    }
     ac.abort();
-    // 无论 API 是否报错，都尝试从服务端刷新队列（后端可能已更新状态）
-    const myItemId = item.id;
+    // 刷新队列确保本地状态与服务端一致
     try {
       const refreshed = await queueApi.get();
       setQueue(refreshed.queue);
-      // 用 id 定位队列项，避免 index 偏移导致取错对象
-      // 注意：不覆盖轮询获取的实时日志 — 队列项上缓存的 publish_logs 可能来自之前的失败运行
-      if (myItemId) {
-        const updatedItem = refreshed.queue.find(q => q.id === myItemId);
-        if (updatedItem?.publish_logs && !pollReceivedRef.current) {
-          setLogs(updatedItem.publish_logs);
-        }
-      } else if (index >= 0 && index < refreshed.queue.length) {
-        // 无 id 的老数据回退到索引定位
-        const updatedItem = refreshed.queue[index];
+      if (!started) {
+        const updatedItem = refreshed.queue.find(q => q.id === itemId);
         if (updatedItem?.publish_logs && !pollReceivedRef.current) {
           setLogs(updatedItem.publish_logs);
         }
       }
     } catch {}
-    // 如果服务端刷新未更新状态（如后端异常导致 queue item 未更新），本地乐观更新为 failed
     if (!success) {
       const q = useStore.getState().queue;
-      if (myItemId) {
-        const idx = q.findIndex(qi => qi.id === myItemId);
-        if (idx >= 0 && !['failed', 'saved_to_wechat', 'published'].includes(q[idx].status || '')) {
-          const newQueue = [...q];
-          newQueue[idx] = { ...newQueue[idx], status: 'failed' as QueueItem['status'] };
-          setQueue(newQueue);
-        }
-      } else if (index >= 0 && index < q.length && !['failed', 'saved_to_wechat', 'published'].includes(q[index].status || '')) {
+      const idx = q.findIndex(qi => qi.id === itemId);
+      if (idx >= 0 && !['failed', 'saved_to_wechat', 'published'].includes(q[idx].status || '')) {
         const newQueue = [...q];
-        newQueue[index] = { ...newQueue[index], status: 'failed' as QueueItem['status'] };
+        newQueue[idx] = { ...newQueue[idx], status: 'failed' as QueueItem['status'] };
         setQueue(newQueue);
       }
     }
@@ -206,7 +221,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
   };
 
   if (item.type === 'article') {
-    return <ArticleCard item={item} index={index} />;
+    return <ArticleCard item={item} />;
   }
 
   return (
@@ -326,7 +341,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
                 <button className="btn btn-ghost text-danger" onClick={() => setShowDeleteConfirm(true)} disabled={!!publishingAction}>删除</button>
               </>
             ) : (
-              <EffectEntry itemId={item.id || String(index)} title={title} />
+              <EffectEntry itemId={itemId} title={title} />
             )}
           </div>
 

@@ -56,28 +56,26 @@ export default function Queue() {
         </div>
       ) : (
         (() => {
-          const sortedIndices = filteredQueue
-            .map((item) => ({ item, i: queue.indexOf(item) }))
-            .sort((a, b) => {
-              const tA = a.item.time || '';
-              const tB = b.item.time || '';
-              return tB.localeCompare(tA);
-            });
+          const sorted = [...filteredQueue].sort((a, b) => {
+            const tA = a.time || '';
+            const tB = b.time || '';
+            return tB.localeCompare(tA);
+          });
           return (
             <div className="relative">
-              {sortedIndices.length > 1 && (
+              {sorted.length > 1 && (
                 <div className="absolute left-[10px] top-0 bottom-0 w-0.5 bg-border -translate-x-1/2" />
               )}
-              {sortedIndices.map(({ i }, idx) => (
-                <div key={i} className="flex gap-4">
+              {sorted.map((item, idx) => (
+                <div key={item.id} className="flex gap-4">
                   <div className="w-5 flex justify-center shrink-0">
                     <div className={`relative z-10 w-2.5 h-2.5 rounded-full shrink-0 ${
                       idx === 0 ? 'bg-accent ring-[3px] ring-accent/15' : 'bg-border'
                     }`} />
                   </div>
-                  <div className={`flex-1 min-w-0 ${idx < sortedIndices.length - 1 ? 'pb-7' : ''}`}>
-                    <div className="text-[11px] text-text-muted/60 leading-none mb-2 mt-1.5">{formatTime(queue[i].time)}</div>
-                    <QueueCard item={queue[i]} index={i} />
+                  <div className={`flex-1 min-w-0 ${idx < sorted.length - 1 ? 'pb-7' : ''}`}>
+                    <div className="text-[11px] text-text-muted/60 leading-none mb-2 mt-1.5">{formatTime(item.time)}</div>
+                    <QueueCard item={item} />
                   </div>
                 </div>
               ))}

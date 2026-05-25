@@ -92,6 +92,20 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
     }
   }
 
+  async function handleCheckStatus(accountId: string) {
+    try {
+      const { logged_in } = await wechatAccountApi.status(accountId);
+      if (logged_in) {
+        addToast('登录状态有效', 'success');
+      } else {
+        addToast('登录已失效，请重新登录', 'info');
+        await refreshAccounts();
+      }
+    } catch (err: any) {
+      addToast(err.message || '检测失败', 'error');
+    }
+  }
+
   async function handleSetDefault(accountId: string) {
     try {
       await wechatAccountApi.setDefault(accountId);
@@ -144,6 +158,7 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
                         </svg>
                       </button>
                     )}
+                    <button className="btn btn-sm btn-ghost" onClick={() => handleCheckStatus(acc.account_id)} title="检测登录状态是否有效">检测</button>
                     {acc.logged_in ? (
                       <>
                         <button className="btn btn-sm" onClick={() => handleLogin(acc.account_id)} title="重新登录">重登</button>

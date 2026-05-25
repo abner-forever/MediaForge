@@ -12,7 +12,7 @@ export default function StudioActions({ navigate }: { navigate: (path: string) =
     <section>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #4f8cff, #a855f7)' }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>创作工作室</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em' }}>创作工作室</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
         {actionList.map((a) => (
@@ -22,7 +22,7 @@ export default function StudioActions({ navigate }: { navigate: (path: string) =
             style={{
               position: 'relative',
               overflow: 'hidden',
-              background: `${a.theme.bg}, #ffffff`,
+              background: `${a.theme.bg}, var(--bg-card)`,
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               border: `1px solid ${a.theme.border}`,
@@ -64,8 +64,8 @@ export default function StudioActions({ navigate }: { navigate: (path: string) =
               >
                 {a.icon}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>{a.title}</div>
-              <div style={{ fontSize: 13, color: '#64748b' }}>{a.desc}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{a.title}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{a.desc}</div>
             </div>
           </div>
         ))}

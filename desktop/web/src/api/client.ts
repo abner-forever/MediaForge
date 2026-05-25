@@ -638,11 +638,11 @@ export const publishLogsApi = {
 export const queueApi = {
   get: () => get<{ queue: QueueItem[] }>('/api/queue'),
   add: (item: Partial<QueueItem>) => post<{ success: boolean; queue: QueueItem[] }>('/api/queue', item),
-  update: (index: number, data: Partial<QueueItem>) => put(`/api/queue/${index}`, data),
-  remove: (index: number) => del(`/api/queue/${index}`),
-  generate: (index: number) => post<{ success: boolean; title: string; desc: string; message?: string }>(`/api/queue/${index}/generate`),
-  publish: (index: number, opts: { dry_run?: boolean; save_draft?: boolean; account_id?: string }) =>
-    post<{ success: boolean; message: string }>(`/api/queue/${index}/publish`, opts),
+  update: (id: string, data: Partial<QueueItem>) => put(`/api/queue/${id}`, data),
+  remove: (id: string) => del(`/api/queue/${id}`),
+  generate: (id: string) => post<{ success: boolean; title: string; desc: string; message?: string }>(`/api/queue/${id}/generate`),
+  publish: (id: string, opts: { dry_run?: boolean; save_draft?: boolean; account_id?: string }) =>
+    post<{ success: boolean; started?: boolean; message: string }>(`/api/queue/${id}/publish`, opts),
   enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
 };
 
@@ -741,7 +741,7 @@ export const articleApi = {
   optimizeLayout: (id: string) =>
     post<ArticleContentResponse>(`/api/articles/${id}/optimize-layout`),
   publish: (id: string, opts: { save_draft?: boolean; dry_run?: boolean; account_id?: string }) =>
-    post<{ success: boolean; message: string }>(`/api/articles/${id}/publish`, opts),
+    post<{ success: boolean; started?: boolean; message: string }>(`/api/articles/${id}/publish`, opts),
   addToQueue: (id: string) =>
     post<{ success: boolean; queue: QueueItem[] }>(`/api/articles/${id}/queue`),
   inspiration: (keyword: string) =>

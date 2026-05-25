@@ -8,7 +8,8 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
 
-const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: QueueItem; index: number }) {
+const ArticleCard = React.memo(function ArticleCard({ item }: { item: QueueItem }) {
+  const itemId = item.id!;
   const navigate = useNavigate();
   const { addToast, setQueue } = useStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -29,7 +30,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: Que
 
   async function deleteItem() {
     try {
-      await queueApi.remove(index);
+      await queueApi.remove(itemId);
       setQueue((await queueApi.get()).queue);
       addToast('已删除', 'info');
     } catch (err: any) {
@@ -37,24 +38,51 @@ const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: Que
     }
   }
 
+  async function pollQueueDone(signal: AbortSignal): Promise<boolean> {
+    for (let i = 0; i < 150; i++) {
+      if (signal.aborted) return false;
+      try {
+        const refreshed = await queueApi.get();
+        setQueue(refreshed.queue);
+        const updated = refreshed.queue.find(q => q.id === itemId);
+        if (updated) {
+          if (updated.status === 'saved_to_wechat' || updated.status === 'published') return true;
+          if (updated.status === 'failed') return false;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    return false;
+  }
+
   async function publish(opts: { save_draft?: boolean }) {
-    addToast(`正在${opts.save_draft ? '保存草稿' : '发布'}...`, 'info');
+    const action = opts.save_draft ? '保存草稿' : '发布';
+    addToast(`正在${action}...`, 'info');
     try {
-      const r = await queueApi.publish(index, { ...opts, account_id: selectedAccountId || undefined });
-      addToast(r.success ? `${opts.save_draft ? '保存' : '发布'}成功` : `失败：${r.message}`, r.success ? 'success' : 'error');
+      const r = await queueApi.publish(itemId, { ...opts, account_id: selectedAccountId || undefined });
+      if (r.started) {
+        // 后台执行，轮询等终态
+        const ok = await pollQueueDone(new AbortController().signal);
+        addToast(ok ? `${action}成功` : '发布失败', ok ? 'success' : 'error');
+        setQueue((await queueApi.get()).queue);
+        return;
+      }
       if (r.success) {
-        // 立即更新本地队列状态，不依赖服务端刷新
+        addToast(`${action}成功`, 'success');
         const newStatus: QueueItem['status'] = opts.save_draft ? 'saved_to_wechat' : 'published';
         const q = useStore.getState().queue;
-        if (index >= 0 && index < q.length) {
+        const idx = q.findIndex(qi => qi.id === itemId);
+        if (idx >= 0) {
           const newQueue = [...q];
-          newQueue[index] = { ...newQueue[index], status: newStatus };
+          newQueue[idx] = { ...newQueue[idx], status: newStatus };
           setQueue(newQueue);
         }
+      } else {
+        addToast(`失败：${r.message}`, 'error');
       }
       setQueue((await queueApi.get()).queue);
     } catch (err: any) {
-      addToast(err.message, 'error');
+      addToast(err.message || '发布失败', 'error');
     }
   }
 
@@ -143,7 +171,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, index }: { item: Que
                 <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={() => setShowDeleteConfirm(true)}>删除</button>
               </>
             ) : (
-              <EffectEntry itemId={item.id || String(index)} title={item.title} />
+              <EffectEntry itemId={itemId} title={item.title} />
             )}
           </div>
 

@@ -20,7 +20,7 @@ export default function StatCards({ stats, navigate }: { stats: DashboardStats |
             style={{
               position: 'relative',
               overflow: 'hidden',
-              background: `${theme.bg}, #ffffff`,
+              background: `${theme.bg}, var(--bg-card)`,
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               border: `1px solid ${theme.border}`,
@@ -71,14 +71,14 @@ export default function StatCards({ stats, navigate }: { stats: DashboardStats |
                 lineHeight: 1,
                 marginBottom: 6,
                 fontFeatureSettings: '"tnum"',
-                background: `linear-gradient(135deg, #1e293b, ${theme.accent})`,
+                background: `linear-gradient(135deg, var(--text), ${theme.accent})`,
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}>
                 {item.value}
               </div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
                 {item.label}
               </div>
             </div>

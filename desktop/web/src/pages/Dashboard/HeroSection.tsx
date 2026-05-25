@@ -20,7 +20,7 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
         'linear-gradient(135deg, rgba(6,182,212,0.06) 0%, transparent 40%)',
         'linear-gradient(225deg, rgba(79,140,255,0.08) 0%, transparent 40%)',
         'linear-gradient(180deg, rgba(168,85,247,0.05) 0%, transparent 50%)',
-        '#ffffff',
+        'var(--bg-card)',
       ].join(', '),
       boxShadow: '0 4px 20px rgba(79,140,255,0.08), 0 1px 3px rgba(0,0,0,0.04)',
     }}>
@@ -67,7 +67,7 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
       }} />
       <div style={{
         position: 'relative',
-        background: 'rgba(255,255,255,0.75)',
+        background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         padding: '32px 40px',
@@ -80,20 +80,20 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
               lineHeight: 1.2,
               letterSpacing: '-0.6px',
               margin: 0,
-              background: 'linear-gradient(135deg, #1e293b 0%, #4f8cff 60%, #a855f7 100%)',
+              background: 'linear-gradient(135deg, var(--text) 0%, #4f8cff 60%, #a855f7 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
             }}>
               {getGreeting()}，创作者
             </h1>
-            <p style={{ fontSize: 16, fontWeight: 400, lineHeight: 1.5, color: '#64748b', margin: '8px 0 0', maxWidth: 520 }}>
+            <p style={{ fontSize: 16, fontWeight: 400, lineHeight: 1.5, color: 'var(--text-muted)', margin: '8px 0 0', maxWidth: 520 }}>
               AI 驱动的图文创作工作流 — 发现、评分、发布，一站式完成
             </p>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 24px', paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 24px', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             {statusItems.map((item) => (
-              <span key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+              <span key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
                 <StatusDot ok={item.ok} />
                 {item.label}
               </span>

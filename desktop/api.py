@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -1599,8 +1600,8 @@ async def add_to_queue(req: QueueAddRequest):
     return {"success": True, "queue": app_state.get_queue()}
 
 
-@app.put("/api/queue/{index}")
-async def update_queue_item(index: int, req: QueueUpdateRequest):
+@app.put("/api/queue/{item_id}")
+async def update_queue_item(item_id: str, req: QueueUpdateRequest):
     updates = {}
     if req.title is not None:
         updates["title"] = strip_emoji(req.title)
@@ -1614,24 +1615,23 @@ async def update_queue_item(index: int, req: QueueUpdateRequest):
         updates["account_id"] = req.account_id
     if req.status is not None:
         updates["status"] = req.status
-    if app_state.update_queue_item(index, updates):
+    if app_state.update_queue_item_by_id(item_id, updates):
         return {"success": True, "queue": app_state.get_queue()}
     raise HTTPException(404, "队列项不存在")
 
 
-@app.delete("/api/queue/{index}")
-async def remove_from_queue(index: int):
-    if app_state.remove_from_queue(index):
+@app.delete("/api/queue/{item_id}")
+async def remove_from_queue(item_id: str):
+    if app_state.remove_from_queue_by_id(item_id):
         return {"success": True, "queue": app_state.get_queue()}
     raise HTTPException(404, "队列项不存在")
 
 
-@app.post("/api/queue/{index}/generate")
-async def generate_queue_content(index: int):
-    queue = app_state.get_queue()
-    if index >= len(queue):
+@app.post("/api/queue/{item_id}/generate")
+async def generate_queue_content(item_id: str):
+    item = app_state.get_queue_item_by_id(item_id)
+    if not item:
         raise HTTPException(404, "队列项不存在")
-    item = queue[index]
     celebrity = item.get("celebrity", "")
     original_title = item.get("title", "")
     original_desc = item.get("desc", "")
@@ -1651,13 +1651,13 @@ async def generate_queue_content(index: int):
         else:
             # 既没有有效标题也没有正文，直接使用默认标题，不调用 AI
             new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
-            app_state.update_queue_item(index, {"title": new_title})
+            app_state.update_queue_item_by_id(item_id, {"title": new_title})
             app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
             return {"success": True, "title": new_title, "desc": "", "message": ""}
 
     if not context:
         new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
-        app_state.update_queue_item(index, {"title": new_title})
+        app_state.update_queue_item_by_id(item_id, {"title": new_title})
         app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
         return {"success": True, "title": new_title, "desc": "", "message": ""}
 
@@ -1678,17 +1678,73 @@ async def generate_queue_content(index: int):
         ai_title = ai_title[len(celebrity):].lstrip(" |：,，")
 
     new_title = f"{celebrity} | {ai_title}" if celebrity else ai_title
-    app_state.update_queue_item(index, {"title": new_title})
+    app_state.update_queue_item_by_id(item_id, {"title": new_title})
     app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题")
     return {"success": True, "title": new_title, "desc": "", "message": ""}
 
 
-@app.post("/api/queue/{index}/publish")
-async def publish_from_queue(index: int, req: PublishRequest):
-    queue = app_state.get_queue()
-    if index >= len(queue):
+def _run_queue_publish_background(
+    item_id: str,
+    title: str,
+    desc: str,
+    abs_images: List[str],
+    abs_cover: Optional[str],
+    dry_run: bool,
+    save_draft: bool,
+    account_id: Optional[str],
+    publish_session_id: str,
+    raw_images: List[str],
+    item_account_id: str,
+    item_type: Optional[str],
+):
+    """后台线程执行发布操作，不阻塞 HTTP。"""
+    from services.wechat import publish_article
+
+    def _on_log(msg: str) -> None:
+        app_state.add_publish_log(msg, session_id=publish_session_id)
+
+    try:
+        result = publish_article(
+            title=title,
+            content=desc,
+            images=abs_images,
+            cover=abs_cover,
+            dry_run=dry_run,
+            save_draft=save_draft,
+            account_id=account_id,
+            on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
+            on_confirm_needed=lambda t: True,
+            on_log=_on_log,
+        )
+    except Exception as err:
+        msg = _friendly_error_message(err)
+        _on_log(msg)
+        app_state.finish_publish()
+        fail_updates = {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
+        app_state.update_queue_item_by_id(item_id, fail_updates)
+        return
+
+    app_state.finish_publish()
+    updates = {"publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
+    if result.get("success"):
+        action = "保存草稿" if save_draft else "发布"
+        app_state.add_operation(action, f"「{title}」")
+        updates["status"] = "saved_to_wechat" if save_draft else "published"
+        updates["account_id"] = account_id or item_account_id
+        updates["error"] = ""
+        for img in raw_images:
+            app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
+    else:
+        updates["status"] = "failed"
+        updates["error"] = _friendly_error_message(result.get("message", "发布失败"))
+    app_state.update_queue_item_by_id(item_id, updates)
+
+
+@app.post("/api/queue/{item_id}/publish")
+async def publish_from_queue(item_id: str, req: PublishRequest):
+    item = app_state.get_queue_item_by_id(item_id)
+    if not item:
         raise HTTPException(404, "队列项不存在")
-    item = queue[index]
     title = strip_emoji(item.get("title", ""))
     desc = item.get("desc", "")
     images = item.get("images", [])
@@ -1698,17 +1754,10 @@ async def publish_from_queue(index: int, req: PublishRequest):
     if not title:
         _raise_friendly(400, "标题为空")
 
-    content = desc
-    from services.wechat import publish_article
-
     publish_session_id = item.get("id", "")
     app_state.clear_publish_logs(session_id=publish_session_id)
-    # 清除队列项上持久化的旧日志，防止前端刷新时显示上一轮的缓存数据
     if publish_session_id:
         app_state.update_queue_item_by_id(publish_session_id, {"publish_logs": []})
-
-    def _on_log(msg: str) -> None:
-        app_state.add_publish_log(msg, session_id=publish_session_id)
 
     # Playwright 需要绝对路径，相对路径转为绝对
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
@@ -1718,62 +1767,23 @@ async def publish_from_queue(index: int, req: PublishRequest):
         if Path(cover_abs).exists():
             abs_cover = cover_abs
 
-    # 纯图片帖：封面放在第一张，同时保留封面引用以便后续从正文选择
+    # 纯图片帖：封面放在第一张
     if item.get("type") != "article" and abs_cover:
         abs_images = [abs_cover] + [img for img in abs_images if img != abs_cover]
 
-    # Playwright Sync API 不能在 asyncio 事件循环中调用，放到独立线程
-    import asyncio
-    try:
-        result = await asyncio.to_thread(
-            publish_article,
-            title=title,
-            content=content,
-            images=abs_images,
-            cover=abs_cover,
-            dry_run=req.dry_run,
-            save_draft=req.save_draft,
-            account_id=req.account_id,
-            on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
-            on_confirm_needed=lambda t: True,
-            on_log=_on_log,
-        )
-    except Exception as err:
-        msg = _friendly_error_message(err)
-        _on_log(msg)
-        app_state.finish_publish()
-        # 用 id 定位队列项（兼容队列变动导致的索引偏移）
-        item_id = item.get("id")
-        fail_updates = {"status": "failed", "error": msg, "publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
-        if item_id:
-            app_state.update_queue_item_by_id(item_id, fail_updates)
-        else:
-            app_state.update_queue_item(index, fail_updates)
-        _raise_friendly(500, err)
-    app_state.finish_publish()
-    updates = {"publish_logs": app_state.get_publish_logs(session_id=publish_session_id)}
-    if result.get("success"):
-        action = "保存草稿" if req.save_draft else "发布"
-        app_state.add_operation(action, f"「{title}」")
-        updates["status"] = "saved_to_wechat" if req.save_draft else "published"
-        updates["account_id"] = req.account_id or item.get("account_id", "")
-        updates["error"] = ""
-        # 增加图片使用计数
-        for img in item.get("images", []):
-            app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
-    else:
-        updates["status"] = "failed"
-        updates["error"] = _friendly_error_message(result.get("message", "发布失败"))
-    # 用 id 定位（兼容队列中途变动导致的索引偏移）
-    # 无 id 的老数据回退到索引定位，找不到说明已被删除则跳过
-    item_id = item.get("id")
-    if item_id:
-        app_state.update_queue_item_by_id(item_id, updates)
-    else:
-        app_state.update_queue_item(index, updates)
-    if not result.get("success") and result.get("message"):
-        result["message"] = _friendly_error_message(result["message"])
-    return result
+    # 后台线程执行发布，HTTP 立即返回
+    threading.Thread(
+        target=_run_queue_publish_background,
+        args=(
+            item_id, title, desc, abs_images, abs_cover,
+            req.dry_run, req.save_draft, req.account_id,
+            publish_session_id, list(images),
+            item.get("account_id", ""), item.get("type"),
+        ),
+        daemon=True,
+    ).start()
+
+    return {"success": True, "started": True, "message": "发布任务已启动"}
 
 
 @app.get("/api/publish-logs")
@@ -2788,6 +2798,56 @@ async def add_article_to_queue(article_id: str):
     return {"success": True, "queue": app_state.get_queue()}
 
 
+def _run_article_publish_background(
+    article_id: str,
+    title: str,
+    content_html: str,
+    abs_images: List[str],
+    abs_cover: Optional[str],
+    dry_run: bool,
+    save_draft: bool,
+    account_id: Optional[str],
+    raw_images: List[str],
+):
+    """后台线程执行文章发布，不阻塞 HTTP。"""
+    from services.wechat import publish_article as wechat_publish
+
+    def _on_log(msg: str) -> None:
+        app_state.add_publish_log(msg)
+
+    try:
+        result = wechat_publish(
+            title=title,
+            content=content_html,
+            images=abs_images,
+            cover=abs_cover,
+            dry_run=dry_run,
+            save_draft=save_draft,
+            account_id=account_id,
+            on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
+            on_confirm_needed=lambda t: True,
+            on_log=_on_log,
+        )
+    except Exception as err:
+        app_state.finish_publish()
+        msg = _friendly_error_message(err)
+        _on_log(msg)
+        app_state.update_article(article_id, {"status": "failed"})
+        return
+
+    app_state.finish_publish()
+    if result.get("success"):
+        status = "published" if not save_draft else "saved_to_wechat"
+        app_state.update_article(article_id, {"status": status})
+        action = "保存草稿" if save_draft else "发布"
+        app_state.add_operation(action, f"文章「{title}」")
+        for img in raw_images:
+            app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
+    else:
+        result["message"] = _friendly_error_message(result.get("message", "发布失败"))
+        app_state.update_article(article_id, {"status": "failed"})
+
+
 @app.post("/api/articles/{article_id}/publish")
 async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
     """直接发布文章到公众号。"""
@@ -2804,7 +2864,6 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
         _raise_friendly(400, "标题为空")
 
     from services.extensions import build_html
-    from services.wechat import publish_article as wechat_publish
 
     content_html = build_html(content, images)
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
@@ -2814,44 +2873,19 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
         if Path(cover_abs).exists():
             abs_cover = cover_abs
 
+    # 后台线程执行发布，HTTP 立即返回
     app_state.clear_publish_logs()
+    threading.Thread(
+        target=_run_article_publish_background,
+        args=(
+            article_id, title, content_html, abs_images, abs_cover,
+            req.dry_run, req.save_draft, req.account_id,
+            list(images),
+        ),
+        daemon=True,
+    ).start()
 
-    def _on_log(msg: str) -> None:
-        app_state.add_publish_log(msg)
-
-    import asyncio
-    try:
-        result = await asyncio.to_thread(
-            wechat_publish,
-            title=title,
-            content=content_html,
-            images=abs_images,
-            cover=abs_cover,
-            dry_run=req.dry_run,
-            save_draft=req.save_draft,
-            account_id=req.account_id,
-            on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
-            on_confirm_needed=lambda t: True,
-            on_log=_on_log,
-        )
-    except Exception as err:
-        app_state.finish_publish()
-        msg = _friendly_error_message(err)
-        _on_log(msg)
-        app_state.update_article(article_id, {"status": "failed"})
-        _raise_friendly(500, err)
-    app_state.finish_publish()
-    if result.get("success"):
-        status = "published" if not req.save_draft else "saved_to_wechat"
-        app_state.update_article(article_id, {"status": status})
-        action = "保存草稿" if req.save_draft else "发布"
-        app_state.add_operation(action, f"文章「{title}」")
-        for img in article.get("images", []):
-            app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
-    else:
-        result["message"] = _friendly_error_message(result.get("message", "发布失败"))
-        app_state.update_article(article_id, {"status": "failed"})
-    return result
+    return {"success": True, "started": True, "message": "发布任务已启动"}
 
 
 # ── 合规检查 API ──────────────────────────────

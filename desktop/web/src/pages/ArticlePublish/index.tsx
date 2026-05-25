@@ -196,7 +196,26 @@ export default function ArticlePublish() {
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
       await articleApi.update(editingId, { title, content, cover, source, tags });
       const res = await articleApi.publish(editingId, { save_draft: saveDraft, account_id: selectedAccountId || undefined });
-      addToast(res.message || (saveDraft ? '已保存为草稿' : '发布成功'), 'success');
+      if (res.started) {
+        addToast('发布任务已启动，正在等待后台处理...', 'info');
+        // 轮询最多 5 分钟等待后台完成
+        const action = saveDraft ? '保存草稿' : '发布';
+        for (let i = 0; i < 150; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            const art = await articleApi.get(editingId);
+            const st = art.article.status;
+            if (st === 'saved_to_wechat' || st === 'published') {
+              addToast(`${action}成功`, 'success'); break;
+            }
+            if (st === 'failed') {
+              addToast(art.article.error || '发布失败', 'error'); break;
+            }
+          } catch {}
+        }
+      } else {
+        addToast(res.message || (saveDraft ? '已保存为草稿' : '发布成功'), 'success');
+      }
       loadArticles(articleFilter);
     } catch (e: any) { addToast(e.message || '发布失败', 'error');
     } finally { setPublishLoading(false); }

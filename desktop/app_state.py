@@ -36,7 +36,12 @@ class AppState:
     @staticmethod
     def _load_queue() -> List[Dict[str, Any]]:
         raw = read_json(QUEUE_CACHE_PATH, default=[])
-        return raw if isinstance(raw, list) else []
+        if not isinstance(raw, list):
+            return []
+        for item in raw:
+            if "id" not in item:
+                item["id"] = str(uuid.uuid4())
+        return raw
 
     def _save_queue(self) -> None:
         write_json(QUEUE_CACHE_PATH, self.publish_queue)
@@ -70,6 +75,14 @@ class AppState:
             return True
         return False
 
+    def remove_from_queue_by_id(self, item_id: str) -> bool:
+        for i, item in enumerate(self.publish_queue):
+            if item.get("id") == item_id:
+                self.publish_queue.pop(i)
+                self._save_queue()
+                return True
+        return False
+
     def get_queue(self) -> List[Dict[str, Any]]:
         return list(self.publish_queue)
 
@@ -87,6 +100,12 @@ class AppState:
                 self._save_queue()
                 return True
         return False
+
+    def get_queue_item_by_id(self, item_id: str) -> Optional[Dict[str, Any]]:
+        for item in self.publish_queue:
+            if item.get("id") == item_id:
+                return item
+        return None
 
     # ── 文章管理 ──────────────────────────────────────
     @staticmethod
