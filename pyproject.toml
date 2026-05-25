@@ -61,5 +61,9 @@ exclude_lines = [
     "if getattr(sys, .frozen., False):",
 ]
 
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+exclude_commit_patterns = ["chore\\(release\\)", "Merge pull request", "Merge branch"]
+
 [tool.semantic_release.publish]
 dist_glob_patterns = []

@@ -249,7 +249,7 @@ jobs:
 
       - name: Semantic Release — 自动版本号 + 发布
         id: semantic
-        run: semantic-release version --skip-build --no-changelog
+        run: semantic-release version --skip-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
