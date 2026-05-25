@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.10.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.10.0) (2026-05-25)
+
+### ✨ Features
+- 迁移 npm 到 pnpm，调整构建产物结构，vConsole 改为 CDN 加载
+
+### 🐛 Bug Fixes
+- 锁定 CI 中 pnpm 版本为 v9，兼容 Node.js 20
+- 同步 pnpm-lock.yaml，移除已删除的 vconsole 依赖
+- 增强浏览器启动错误处理，提示用户安装缺失的 Playwright 浏览器
+
 ## [v1.9.1](https://github.com/aburnlee/MediaForge/releases/tag/v1.9.1) (2026-05-25)
 
 ### 🐛 Bug Fixes
