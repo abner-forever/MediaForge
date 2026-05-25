@@ -53,8 +53,38 @@ from utils.file import read_json
 app = FastAPI(title="图文工坊")
 
 # 静态文件（Vite 构建输出 + logo 等资源）
-STATIC_DIR = Path(__file__).parent / "static"
+# 在冻结（PyInstaller）环境中，静态文件可能被放到 sys._MEIPASS 或 dist/<app>/_internal/desktop/static
+def _resolve_static_dir() -> Path:
+    # 优先寻找运行时的 _MEIPASS（onefile）或解包目录（one-folder）
+    meipass = getattr(sys, '_MEIPASS', None)
+    candidates = []
+    if meipass:
+        meipass = Path(meipass)
+        candidates.extend([
+            meipass / 'desktop' / 'static',
+            meipass / 'static',
+            meipass / '_internal' / 'desktop' / 'static',
+            meipass / '_internal' / 'static',
+        ])
 
+    # 项目源代码目录（开发模式）
+    candidates.append(Path(__file__).parent / 'static')
+
+    # dist one-folder 可能将 datas 放到 dist/<app>/_internal/desktop/static
+    project_root = Path(__file__).resolve().parent.parent
+    candidates.append(project_root / 'dist' / project_root.name / '_internal' / 'desktop' / 'static')
+
+    for c in candidates:
+        try:
+            if c.exists():
+                return c
+        except Exception:
+            continue
+    # 最后兜底为模块相对路径
+    return Path(__file__).parent / 'static'
+
+
+STATIC_DIR = _resolve_static_dir()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # React 构建产物中的 JS/CSS chunk

@@ -104,7 +104,7 @@ fi
 # ── 4. PyInstaller 打包 ──────────────────────────────
 log "${YELLOW}[5/5]${NC} PyInstaller 打包..."
 cd "$PROJECT_ROOT"
-pyinstaller desktop/build.spec --clean --noconfirm > /tmp/pyinstaller.log 2>&1 &
+python3 -m PyInstaller desktop/build.spec --clean --noconfirm > "$PROJECT_ROOT/build/pyinstaller.log" 2>&1 &
 PID=$!
 spin='-\|/'
 i=0
@@ -116,7 +116,7 @@ wait $PID
 pyinstaller_exit=$?
 if [ $pyinstaller_exit -ne 0 ]; then
   echo ""
-  fail "PyInstaller 打包失败，查看日志: tail -50 /tmp/pyinstaller.log"
+  fail "PyInstaller 打包失败，查看日志: tail -50 $PROJECT_ROOT/build/pyinstaller.log"
 fi
 echo ""
 ok "PyInstaller 打包完成"

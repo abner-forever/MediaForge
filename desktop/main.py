@@ -84,12 +84,44 @@ except Exception:
 from config import ensure_dirs
 
 
-_LOADING_HTML_PATH = Path(__file__).parent / "loading.html"
+def _resolve_loading_html_path() -> Path:
+    """返回一个存在的 loading.html 路径，兼容开发与 PyInstaller 打包后的多种位置。"""
+    candidates = []
+
+    # 默认：与本模块同目录
+    candidates.append(Path(__file__).parent / "loading.html")
+
+    # PyInstaller single-folder / onefile 解包目录（常见 sys._MEIPASS）
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        meipass = Path(meipass)
+        candidates.extend([
+            meipass / 'desktop' / 'loading.html',
+            meipass / 'loading.html',
+            meipass / '_internal' / 'loading.html',
+            meipass / '_internal' / 'desktop' / 'loading.html',
+        ])
+
+    # 打包为 one-folder 时，PyInstaller 可能将 datas 放在 dist/<app>/_internal/desktop
+    project_root = Path(__file__).resolve().parent.parent
+    candidates.append(project_root / 'desktop' / 'loading.html')
+
+    for c in candidates:
+        try:
+            if c.exists():
+                return c
+        except Exception:
+            continue
+
+    # 回退到模块目录（会在不存在时抛出更明确的 FileNotFoundError）
+    return Path(__file__).parent / 'loading.html'
+
 
 def _make_loading_html(host: str, port: int) -> str:
     """生成启动加载页面 HTML，自动轮询后端服务直至就绪后跳转。"""
     target_url = f"http://{host}:{port}"
-    html = _LOADING_HTML_PATH.read_text(encoding="utf-8")
+    path = _resolve_loading_html_path()
+    html = path.read_text(encoding="utf-8")
     return html.replace("__TARGET_URL__", target_url)
 
 

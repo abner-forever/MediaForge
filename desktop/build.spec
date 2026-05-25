@@ -86,11 +86,24 @@ _all_datas = [
     (str(SPEC_DIR / 'static' / 'index.html'), 'desktop/static'),
     (str(SPEC_DIR / 'static' / 'logo.png'), 'desktop/static'),
     (str(SPEC_DIR / 'static' / 'logo-icon.png'), 'desktop/static'),
+    # 前端打包产物中的 js 和 vendor 目录（Vite 输出）
+    (str(SPEC_DIR / 'static' / 'js'), 'desktop/static/js'),
+    (str(SPEC_DIR / 'static' / 'vendor'), 'desktop/static/vendor'),
     # Windows 调试脚本
     (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
     # 启动加载页
     (str(SPEC_DIR / 'loading.html'), 'desktop'),
 ]
+
+# 显式包含 pywebview 包目录（某些发行版需要将 package files 一并收集）
+try:
+    import webview as _webview_mod
+    _webview_path = Path(_webview_mod.__file__).resolve().parent
+    if _webview_path.exists():
+        _all_datas.append((str(_webview_path), 'webview'))
+        print(f"[build.spec] [OK] Bundling pywebview: {_webview_path}")
+except Exception as _e:
+    print(f"[build.spec] [WARN] pywebview package not found or cannot be bundled: {_e}")
 
 # 自动检测 Playwright 浏览器缓存
 _playwright_cache = None
