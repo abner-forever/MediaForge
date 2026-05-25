@@ -1,6 +1,6 @@
 [project]
 name = "MediaForge"
-version = "1.9.1"
+version = "1.10.0"
 description = "自动化微信公众号内容发布工具"
 requires-python = ">=3.10"
 
