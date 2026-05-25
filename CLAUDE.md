@@ -22,13 +22,13 @@ python3 main.py --limit 3 --pages 2             # 正式运行
 
 ### 桌面 GUI（生产）
 ```bash
-cd desktop/web && npm install && npm run build   # 构建前端 -> desktop/static/
+cd desktop/web && pnpm install && pnpm run build   # 构建前端 -> desktop/static/
 cd desktop && python3 main.py                    # 启动 FastAPI + PyWebView，端口 8765
 ```
 
 ### 前端开发（热更新）
 ```bash
-cd desktop/web && npm run dev    # Vite dev server，端口 5173，/api 代理到 8765
+cd desktop/web && pnpm run dev    # Vite dev server，端口 5173，/api 代理到 8765
 ```
 
 ### 代码检查
@@ -39,7 +39,7 @@ cd desktop/web && npx tsc --noEmit     # 前端类型检查
 
 ### 桌面应用打包（PyInstaller）
 ```bash
-cd desktop/web && npm ci && npm run build   # 先构建前端
+cd desktop/web && pnpm install --frozen-lockfile && pnpm run build   # 先构建前端
 cd ../..
 pip install pyinstaller pillow              # 安装打包工具
 pyinstaller desktop/build.spec --clean      # 打包
@@ -62,7 +62,7 @@ bash desktop/build_dmg.sh arm64  # 强制 Apple Silicon 架构
 ### Windows 安装包制作（本地，需 Windows 环境 + Inno Setup）
 ```bash
 pip install -r requirements.txt pyinstaller pillow
-cd desktop/web && npm ci && npm run build && cd ../..
+cd desktop/web && pnpm install --frozen-lockfile && pnpm run build && cd ../..
 pyinstaller desktop/build.spec --clean
 iscc /dMyAppVersion="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")" desktop/setup.iss
 # → dist/MediaForge-Windows-Setup.exe

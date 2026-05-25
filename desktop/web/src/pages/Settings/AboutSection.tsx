@@ -2,6 +2,16 @@ import { useRef, useState, useCallback } from 'react';
 
 let vConsoleInstance: any = null;
 
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`脚本加载失败: ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
 export default function AboutSection() {
   const [clickCount, setClickCount] = useState(0);
   const [devMode, setDevMode] = useState(false);
@@ -17,7 +27,8 @@ export default function AboutSection() {
 
       loadingRef.current = true;
       try {
-        const VConsole = (await import('vconsole')).default;
+        await loadScript('https://unpkg.com/vconsole@3/dist/vconsole.min.js');
+        const VConsole = (window as any).VConsole;
         vConsoleInstance = new VConsole();
         setDevMode(true);
       } catch (err) {

@@ -18,22 +18,27 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       output: {
+        entryFileNames: 'js/[name]-[hash].js',
+        chunkFileNames(chunkInfo) {
+          const name = chunkInfo.name;
+          if (name.startsWith('vendor-') || name.startsWith('cm-')) {
+            return 'vendor/[name]-[hash].js';
+          }
+          return 'js/[name]-[hash].js';
+        },
+        assetFileNames: 'assets/[name]-[hash][ext]',
         manualChunks(id) {
-          if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/scheduler/')) {
-            return 'vendor-react';
-          }
-          if (id.includes('/node_modules/react-router')) {
-            return 'vendor-router';
-          }
-          if (id.includes('/node_modules/zustand/')) {
-            return 'vendor-state';
-          }
-          if (id.includes('/node_modules/marked/')) {
-            return 'vendor-marked';
-          }
-          const cmMatch = id.match(/\/node_modules\/@codemirror\/([^/]+)/);
-          if (cmMatch) {
-            return `cm-${cmMatch[1]}`;
+          if (id.includes('/node_modules/')) {
+            if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/scheduler/')) {
+              return 'vendor-react';
+            }
+            if (id.includes('/node_modules/react-router')) return 'vendor-router';
+            if (id.includes('/node_modules/zustand/')) return 'vendor-state';
+            if (id.includes('/node_modules/marked/')) return 'vendor-marked';
+            const cmMatch = id.match(/\/node_modules\/@codemirror\/([^/]+)/);
+            if (cmMatch) return `cm-${cmMatch[1]}`;
+            if (id.includes('/node_modules/@tiptap/') || id.includes('/node_modules/prosemirror-')) return 'vendor-editor';
+            return 'vendor-misc';
           }
         },
       },
