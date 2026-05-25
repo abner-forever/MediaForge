@@ -1,5 +1,14 @@
 import { useRef, useState, useEffect } from 'react';
 
+const BrokenImage = () => (
+  <svg className="w-8 h-8 text-text-muted/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="m6 18 5-6 3 4 4-5" />
+    <path d="M22 10.5 17 6" />
+    <path d="m17 10.5 5-4.5" />
+  </svg>
+);
+
 interface LazyImageProps {
   src: string;
   alt?: string;
@@ -22,6 +31,7 @@ const shimmerSlideStyle = {
 export default function LazyImage({ src, alt = '', className, onClick, onError, placeholder, rootMargin = '200px' }: LazyImageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
   const [inView, setInView] = useState(false);
 
   useEffect(() => {
@@ -57,10 +67,16 @@ export default function LazyImage({ src, alt = '', className, onClick, onError, 
           className={`w-full h-full object-cover ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => setLoaded(true)}
           onError={(e) => {
+            setError(true);
             setLoaded(true);
             onError?.(e);
           }}
         />
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-bg-secondary pointer-events-none">
+          {placeholder || <BrokenImage />}
+        </div>
       )}
     </div>
   );

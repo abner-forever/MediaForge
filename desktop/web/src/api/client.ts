@@ -17,6 +17,7 @@ function toUserError(message: string): string {
   if (low.includes('weibo_cookie') || text.includes('Cookie 无效')) return '微博登录已失效，请到设置页重新扫码登录。';
   if (low.includes('xhs_cookie') || low.includes('小红书')) return '小红书登录已失效，请到设置页重新登录。';
   if (low.includes('base url') || low.includes('base_url')) return '当前 AI 服务需要配置 Base URL，请到设置页补全后重试。';
+  if (low.includes('未配置') && (low.includes('api_key') || low.includes('api key'))) return '当前未配置大模型 API Key，请先在设置页配置大模型服务。';
   if (low.includes('api_key') || low.includes('api key') || low.includes('401')) return '当前 AI 服务 API Key 不可用，请检查密钥配置。';
   if (text.includes('公众号未登录') || low.includes('mp.weixin') || low.includes('login')) return '公众号账号未登录，请先到设置页完成扫码登录。';
   if (low.includes('playwright') || low.includes('locator') || low.includes('iframe') || low.includes('timeout')) return '微信后台页面结构可能已更新或加载超时，请重试；若仍失败请保留日志排查。';
@@ -408,6 +409,7 @@ export const settingsApi = {
   save: (data: Record<string, string>) => post<{ success: boolean }>('/api/settings', data),
   getKey: (provider?: string) => get<{ key: string }>(`/api/settings/api-key${provider ? `?provider=${provider}` : ''}`),
   getTheme: () => get<{ theme: string; accent: string }>('/api/settings/theme'),
+  setWindowAppearance: (theme: string) => post<{ success: boolean }>('/api/theme/window-native', { theme }),
   testAiConnection: (params: { provider?: string; model?: string; base_url?: string; api_key?: string }) =>
     post<{ success: boolean; message: string }>('/api/settings/ai-test', params),
   verifyWeibo: (cookie?: string) => post<WeiboVerifyResult>('/api/settings/weibo-verify', { cookie }),

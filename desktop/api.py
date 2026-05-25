@@ -62,6 +62,14 @@ _assets_dir = STATIC_DIR / "assets"
 if _assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
+_js_dir = STATIC_DIR / "js"
+if _js_dir.exists():
+    app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
+
+_vendor_dir = STATIC_DIR / "vendor"
+if _vendor_dir.exists():
+    app.mount("/vendor", StaticFiles(directory=str(_vendor_dir)), name="vendor")
+
 
 # ── 图片路径辅助 ─────────────────────────────────────
 def _img_rel(path: str) -> str:
@@ -432,6 +440,15 @@ async def get_theme():
     from utils.settings_store import read_settings
     s = read_settings()
     return {"theme": s.get("APP_THEME", ""), "accent": s.get("APP_ACCENT", "")}
+
+
+@app.post("/api/theme/window-native")
+async def set_window_native_theme(data: Dict[str, str]):
+    """设置 macOS 原生窗口的 appearance（标题栏跟随 dark/light 模式）。"""
+    theme = data.get("theme", "auto")
+    from desktop.native_theme import set_appearance as _set_native
+    await asyncio.to_thread(_set_native, theme)
+    return {"success": True}
 
 
 @app.get("/api/settings/api-key")
@@ -1536,6 +1553,8 @@ async def discovery_score(req: ScoreRequest):
 @app.get("/api/discovery/trending-celebrities")
 async def get_trending_celebrities():
     """AI 推荐当前热门女明星，用于一键搜索。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     try:
         import asyncio
         loop = asyncio.get_event_loop()
@@ -2651,6 +2670,9 @@ async def delete_article(article_id: str):
 @app.post("/api/articles/{article_id}/generate")
 async def generate_article_content(article_id: str, req: ArticleGenerateRequest):
     """AI 根据话题/标题生成正文。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
+
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2678,6 +2700,8 @@ async def generate_article_content(article_id: str, req: ArticleGenerateRequest)
 @app.post("/api/articles/{article_id}/polish")
 async def polish_article_content(article_id: str):
     """AI 校对润色文章正文。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2694,6 +2718,8 @@ async def polish_article_content(article_id: str):
 @app.post("/api/articles/{article_id}/de-ai")
 async def de_ai_article_content(article_id: str):
     """去 AI 味儿。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2710,6 +2736,8 @@ async def de_ai_article_content(article_id: str):
 @app.post("/api/articles/{article_id}/generate-title")
 async def generate_article_title_endpoint(article_id: str):
     """AI 从正文生成标题。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2727,6 +2755,8 @@ async def generate_article_title_endpoint(article_id: str):
 @app.post("/api/articles/{article_id}/title-candidates")
 async def generate_article_title_candidates_endpoint(article_id: str):
     """AI 从正文生成多个标题候选。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2742,6 +2772,8 @@ async def generate_article_title_candidates_endpoint(article_id: str):
 @app.post("/api/articles/{article_id}/optimize-layout")
 async def optimize_article_layout(article_id: str):
     """AI 优化文章排版结构。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")
@@ -2758,6 +2790,8 @@ async def optimize_article_layout(article_id: str):
 @app.post("/api/articles/{article_id}/chat")
 async def chat_article_content(article_id: str, req: ArticleChatRequest):
     """AI 对话式修改/生成正文。"""
+    if not settings.ai_api_key:
+        raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
     if not article:
         raise HTTPException(404, "文章不存在")

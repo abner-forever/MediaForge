@@ -88,6 +88,8 @@ _all_datas = [
     (str(SPEC_DIR / 'static' / 'logo-icon.png'), 'desktop/static'),
     # Windows 调试脚本
     (str(SPEC_DIR / 'run_console.bat'), 'desktop'),
+    # 启动加载页
+    (str(SPEC_DIR / 'loading.html'), 'desktop'),
 ]
 
 # 自动检测 Playwright 浏览器缓存

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useState } from 'react';
 
 let vConsoleInstance: any = null;
 
@@ -13,46 +13,15 @@ function loadScript(src: string): Promise<void> {
 }
 
 export default function AboutSection() {
-  const [clickCount, setClickCount] = useState(0);
   const [devMode, setDevMode] = useState(false);
-  const loadingRef = useRef(false);
 
-  const handleVersionClick = useCallback(async () => {
-    const next = clickCount + 1;
-    setClickCount(next);
-
-    if (next >= 5) {
-      setClickCount(0);
-      if (vConsoleInstance) return; // already open
-
-      loadingRef.current = true;
-      try {
-        await loadScript('https://unpkg.com/vconsole@3/dist/vconsole.min.js');
-        const VConsole = (window as any).VConsole;
-        vConsoleInstance = new VConsole();
-        setDevMode(true);
-      } catch (err) {
-        console.error('vConsole 加载失败:', err);
-      }
-      loadingRef.current = false;
-      return;
-    }
-
-    setTimeout(() => setClickCount(c => Math.max(0, c - 1)), 2000);
-  }, [clickCount]);
-
-  const handleExitDevMode = useCallback(() => {
+  const handleExitDevMode = () => {
     if (vConsoleInstance) {
       vConsoleInstance.destroy();
       vConsoleInstance = null;
     }
     setDevMode(false);
-  }, []);
-
-  // Auto-cleanup on unmount
-  // (We intentionally do NOT use useEffect cleanup for the instance,
-  //  because vConsole persists across page navigation in SPA — cleanup
-  //  only happens when user explicitly clicks "退出" or refreshes the page.)
+  };
 
   return (
     <div className="space-y-5">
@@ -72,51 +41,46 @@ export default function AboutSection() {
         </div>
 
         <p className="text-sm text-text-secondary leading-relaxed">
-          MediaForge 是一个自动化微信公众号内容发布工具。核心流程：微博/头条图文发现 → 图片下载与水印过滤 → AI 智能评分/写作 → 文章草稿与发布队列 → 一键保存草稿或发布到微信公众号。
+          MediaForge 是专为微信公众号运营者设计的内容生产效率工具。自动完成热点发现、素材采集、AI 写作、排版优化和定时发布的完整工作流，让运营团队从繁琐的重复劳动中解放出来，专注于内容创意本身。
         </p>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3 text-xs">
+      {/* ── 新手引导 Card ── */}
+      <div className="card space-y-3">
+        <div className="section-header">新手快速入门</div>
+        <ol className="space-y-2.5 text-sm text-text-secondary">
           {[
-            { label: '前端技术', value: 'React + TypeScript + TailwindCSS' },
-            { label: '后端框架', value: 'FastAPI (Python)' },
-            { label: '桌面容器', value: 'PyWebView' },
-            { label: 'AI 模型', value: 'OpenAI / DeepSeek / GLM / Qwen' },
-          ].map(item => (
-            <div key={item.label} className="p-3 rounded-xl bg-bg-secondary">
-              <p className="text-text-muted mb-0.5">{item.label}</p>
-              <p className="text-text-secondary font-medium">{item.value}</p>
-            </div>
+            ['配置 AI 服务', '前往「系统设置 → 大模型配置」填写 API Key 和 Base URL，这是 AI 写作和智能评分的动力来源。'],
+            ['登录内容平台', '在「系统设置 → 媒体来源」中登录微博、今日头条等平台，开启图文发现能力。'],
+            ['发现与采集', '在「图片发现」页设置艺人关键词或话题标签，一键搜索并下载图片素材。'],
+            ['AI 创作内容', '选中素材加入发布队列，使用 AI 润色生成标题；或在「文章发布」中让 AI 根据话题自动创作全文。'],
+            ['发布到公众号', '在「系统设置 → 微信配置」中添加并登录公众号账号，回到队列一键保存草稿或直接发布。'],
+          ].map(([step, desc], i) => (
+            <li key={i} className="flex gap-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-accent-soft text-accent text-xs font-bold shrink-0 mt-0.5">
+                {i + 1}
+              </span>
+              <div>
+                <span className="font-medium text-text">{step}</span>
+                <p className="text-text-muted mt-0.5">{desc}</p>
+              </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
 
       {/* ── Version Card ── */}
       <div className="card">
         <div className="section-header mb-3">版本信息</div>
-        <button
-          onClick={handleVersionClick}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-bg-secondary hover:bg-accent-softer transition-colors cursor-pointer"
-          title={`连续点击 5 次进入开发者模式`}
-        >
+        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-bg-secondary">
           <span className="text-sm text-text-secondary">应用版本</span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text font-mono">v{__APP_VERSION__}</span>
-            {clickCount > 0 && (
-              <span className="text-[10px] text-accent font-medium bg-accent-soft px-2 py-0.5 rounded-full">
-                {5 - clickCount}
-              </span>
-            )}
-            {devMode && (
-              <span className="text-[10px] text-green-500 font-medium bg-green-500/10 px-2 py-0.5 rounded-full">
-                已解锁
-              </span>
-            )}
           </div>
-        </button>
-        <p className="text-[11px] text-text-muted mt-2 text-center">连续点击版本号 5 次可进入开发者模式</p>
+        </div>
       </div>
 
-      {/* ── Dev mode hint ── */}
+      {/* ── Dev mode hint (hidden unless triggered via console) ── */}
       {devMode && (
         <div className="card border-accent/30 bg-accent-softer">
           <div className="flex items-center justify-between">

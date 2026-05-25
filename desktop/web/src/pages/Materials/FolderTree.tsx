@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { TreeNode } from '../../api/client';
 
 export default function FolderTree({
@@ -12,6 +13,8 @@ export default function FolderTree({
   onDrop: (e: React.DragEvent, path: string) => void;
   onDragOver: (e: React.DragEvent) => void;
 }) {
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+
   return (
     <div className="space-y-0.5">
       <div
@@ -27,11 +30,16 @@ export default function FolderTree({
         onDragLeave={() => setDragOverFolder(null)}
         onDrop={(e) => onDrop(e, '')}
       >
-        <span className="w-3 shrink-0" />
+        <span
+          className={`tree-arrow ${!treeCollapsed ? 'expanded' : ''}`}
+          onClick={(e) => { e.stopPropagation(); setTreeCollapsed(v => !v); }}
+        >
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
+        </span>
         <svg className="w-4 h-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
         <span className="truncate text-sm font-medium">全部素材</span>
       </div>
-      {items.map(node => (
+      {!treeCollapsed && items.map(node => (
         <FolderTreeItem
           key={node.path}
           node={node}

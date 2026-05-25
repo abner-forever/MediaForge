@@ -163,6 +163,7 @@ export const useStore = create<AppState>((set, get) => ({
     applyThemeVars(t);
     set({ theme: t });
     settingsApi.save({ APP_THEME: t }).catch(() => {});
+    settingsApi.setWindowAppearance(t).catch(() => {});
   },
   accentId: getInitialAccent(),
   setAccentId: (id) => {
@@ -175,6 +176,7 @@ export const useStore = create<AppState>((set, get) => ({
       const { theme, accent } = await settingsApi.getTheme();
       if (theme) { applyThemeVars(theme); set({ theme }); }
       if (accent) { applyAccentVars(accent, theme || get().theme); set({ accentId: accent }); }
+      settingsApi.setWindowAppearance(theme || get().theme).catch(() => {});
     } catch { /* ignore */ }
   },
 
@@ -314,3 +316,9 @@ export const useStore = create<AppState>((set, get) => ({
 
 // Apply initial theme
 applyThemeVars(getInitialTheme());
+// Sync native window appearance (fire-and-forget, may not be available in browser dev mode)
+fetch('/api/theme/window-native', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ theme: getInitialTheme() }),
+}).catch(() => {});

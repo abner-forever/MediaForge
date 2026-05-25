@@ -365,7 +365,6 @@ export default function Materials() {
 
       <div className="flex gap-4 min-h-[600px]">
         <div className="w-[220px] shrink-0 card p-2 overflow-y-auto max-h-[75vh]">
-          <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 px-2">文件夹</div>
           <FolderTree
             items={folderTree}
             currentPath={currentPath}
