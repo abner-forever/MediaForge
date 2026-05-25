@@ -72,6 +72,9 @@ python3 main.py
 ### 前端开发
 
 ```bash
+# 安装python依赖
+pip install -r requirements.txt
+
 cd desktop/web
 npm run dev    # Vite 热更新，端口 5173，API 代理到 8765
 ```

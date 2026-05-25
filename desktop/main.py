@@ -233,8 +233,55 @@ def _start_app() -> None:
     loading_html = _make_loading_html(host, port)
 
     # 启动 PyWebView 窗口
-    import webview
-    from webview.menu import Menu, MenuAction, MenuSeparator
+    try:
+        import webview
+    except ModuleNotFoundError:
+        # 打包运行时常见问题：PyWebView 可能未随运行时加载或被剥离。
+        # 为保证“页面可访问”，在无法导入 PyWebView 时回退到在默认浏览器打开后端地址。
+        import webbrowser
+        import time
+
+        url = f"http://{host}:{port}/"
+        print("警告: PyWebView 未安装或不可用，使用系统默认浏览器打开网页：", url)
+        try:
+            webbrowser.open(url)
+        except Exception:
+            print("打开浏览器失败，请手动访问：", url)
+
+        print("后端服务已在子线程启动。按 Ctrl+C 可退出程序。")
+        try:
+            # 等待服务器线程结束，保持主进程存活
+            while server_thread.is_alive():
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        return
+
+    # 有些 pywebview 发行版或类型提示器无法解析子模块 'webview.menu'
+    # 为避免编辑器/静态分析报错并兼容不同实现，优先尝试导入子模块，
+    # 失败时从主模块取属性或提供轻量级的兜底类。
+    try:
+        from webview.menu import Menu, MenuAction, MenuSeparator
+    except Exception:
+        Menu = getattr(webview, "Menu", None)
+        MenuAction = getattr(webview, "MenuAction", getattr(webview, "MenuItem", None))
+        MenuSeparator = getattr(webview, "MenuSeparator", None)
+
+        if Menu is None:
+            class Menu:  # 轻量级兼容实现，仅满足 create_window 的 menu 参数结构
+                def __init__(self, title, items):
+                    self.title = title
+                    self.items = items
+
+        if MenuAction is None:
+            class MenuAction:
+                def __init__(self, title, callback):
+                    self.title = title
+                    self.callback = callback
+
+        if MenuSeparator is None:
+            class MenuSeparator:
+                pass
 
     webview.settings['SHOW_DEFAULT_MENUS'] = False
 

@@ -79,10 +79,27 @@ def run_weibo_login(msg_queue: Queue) -> None:
 
         with sync_playwright() as pw:
             # 非无头模式：用户需要看到 QR 码并扫码
-            browser = pw.chromium.launch(
-                headless=False,
-                args=["--window-size=680,820"],
-            )
+            try:
+                browser = pw.chromium.launch(
+                    headless=False,
+                    args=["--window-size=680,820"],
+                )
+            except PwError as e:
+                # 常见错误：Playwright 已安装但浏览器二进制缺失，提示用户运行安装命令
+                msg = str(e)
+                logger.exception("启动 Chromium 失败: %s", msg)
+                if "Executable doesn't exist" in msg or "not found" in msg or "was not downloaded" in msg:
+                    hint = (
+                        "Playwright 浏览器未安装。请运行：\n"
+                        "  python -m playwright install\n"
+                        "或在 CI/打包流程中确保浏览器已包含。"
+                    )
+                    msg_queue.put(("error", "启动浏览器失败：未找到可执行文件。"))
+                    msg_queue.put(("error", hint))
+                    return
+                else:
+                    # 非二进制缺失的其他 Playwright 错误，继续抛出以便上层捕获并记录
+                    raise
             context = browser.new_context(
                 viewport={"width": 620, "height": 740},
                 user_agent=(
