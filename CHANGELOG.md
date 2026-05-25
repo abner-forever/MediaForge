@@ -1,21 +1,22 @@
 # Changelog
 
+## [v1.9.1](https://github.com/aburnlee/MediaForge/releases/tag/v1.9.1) (2026-05-25)
+
+### 🐛 Bug Fixes
+- 增强 FastAPI 启动错误处理和依赖声明
+
 ## [v1.9.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.9.0) (2026-05-25)
 
 ### ✨ Features
 - 更新队列 API 以支持通过 ID 进行操作
 
 ### 🔧 Other
-- chore(release): 1.9.0
 - refactor: 移除 CI 测试步骤并更新图片组件
 
 ## [v1.8.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.8.0) (2026-05-24)
 
 ### ✨ Features
 - 增强发布日志管理和图片加载性能
-
-### 🔧 Other
-- chore(release): 1.8.0
 
 ## [v1.7.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.7.0) (2026-05-23)
 
@@ -25,32 +26,20 @@
 ### 🐛 Bug Fixes
 - 修复 CI 中 Release 版本号与安装包版本号不一致问题
 
-### 🔧 Other
-- chore(release): 1.7.0
-
 ## [v1.6.1](https://github.com/aburnlee/MediaForge/releases/tag/v1.6.1) (2026-05-23)
 
 ### 🐛 Bug Fixes
 - 修复 Windows 安装包运行崩溃和版本号不一致问题
-
-### 🔧 Other
-- chore(release): 1.6.1
 
 ## [v1.6.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.6.0) (2026-05-23)
 
 ### ✨ Features
 - 新增小红书平台支持和 AI 推荐热门女星功能
 
-### 🔧 Other
-- chore(release): 1.6.0
-
 ## [v1.5.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.5.0) (2026-05-21)
 
 ### ✨ Features
 - 增强构建流程，自动生成应用图标并更新版本管理
-
-### 🔧 Other
-- chore(release): 1.5.0
 
 ## [v1.4.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.4.0) (2026-05-21)
 
@@ -62,17 +51,11 @@
 ### 🐛 Bug Fixes
 - 修复 CI test job 因缺少 desktop/static 目录导致收集报错
 
-### 🔧 Other
-- chore(release): 1.4.0
-
 ## [v1.3.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.3.0) (2026-05-19)
 
 ### ✨ Features
 - 增强文章发布和微信账号管理功能
 - 增强文章发布和封面处理功能
-
-### 🔧 Other
-- chore(release): 1.3.0
 
 ## [v1.2.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.2.0) (2026-05-17)
 
@@ -80,16 +63,10 @@
 - 添加文章管理功能，优化文章发布流程
 - 添加 Loading 组件并在多个页面中使用，优化用户加载体验
 
-### 🔧 Other
-- chore(release): 1.2.0
-
 ## [v1.1.1](https://github.com/aburnlee/MediaForge/releases/tag/v1.1.1) (2026-05-14)
 
 ### 🐛 Bug Fixes
 - 移除 actions/checkout 中无效的 GITHUB_TOKEN/GH_TOKEN 输入
-
-### 🔧 Other
-- chore(release): 1.1.1
 
 ## [v1.1.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.1.0) (2026-05-14)
 
@@ -113,18 +90,13 @@
 - 更新 DMG 文件大小和日志输出信息
 
 ### 🔧 Other
-- chore(release): 1.1.0
 - test: 建立完整测试体系，覆盖 203 个用例并修复 downloader 空列表返回值 bug
 - ci: 统一 macOS 构建为 universal2 通用二进制，避免 macos-13 runner 排队问题
-- chore: 移除不再需要的 .env.example 文件
 
 ## [v1.0.1](https://github.com/aburnlee/MediaForge/releases/tag/v1.0.1) (2026-05-11)
 
 ### 🐛 Bug Fixes
 - update GitHub Actions workflow to include GH_TOKEN for improved authentication
-
-### 🔧 Other
-- chore(release): 1.0.1
 
 ## [v1.0.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.0.0) (2026-05-09)
 
@@ -142,7 +114,5 @@
 - 修复windows打包失败
 
 ### 🔧 Other
-- chore: update commit author configuration in pyproject.toml for semantic release
 - refactor: 更新 macOS 和 Windows 构建配置，优化 .app 和单目录可执行程序的生成逻辑，增强跨平台打包支持
-- Merge pull request #1 from abner-forever/dev
 - refactor: 更新项目结构和配置，调整 .gitignore 文件以排除不必要的静态文件，添加新的缓存路径和配置项，优化 API 逻辑以支持超话和关键词搜索，增强发布日志功能，移除旧的前端代码并整合新的组件。

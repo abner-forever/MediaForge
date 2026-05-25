@@ -9,7 +9,8 @@ import sys
 import threading
 from pathlib import Path
 
-import uvicorn
+
+# 注意：uvicorn 在 start_server 中按需导入，避免模块级加载拖慢启动
 
 # 确保项目根目录在 sys.path 中
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -83,9 +84,77 @@ except Exception:
 from config import ensure_dirs
 
 
+def _make_loading_html(host: str, port: int) -> str:
+    """生成启动加载页面 HTML，自动轮询后端服务直至就绪后跳转。"""
+    target_url = f"http://{host}:{port}"
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图文工坊 - 启动中</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5;
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; color: #333; user-select: none;
+  }}
+  .container {{ text-align: center; }}
+  .spinner {{
+    width: 40px; height: 40px;
+    border: 4px solid rgba(25,118,210,0.2);
+    border-top-color: #1976d2;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 20px;
+  }}
+  @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+  h2 {{ font-weight: 500; font-size: 18px; margin-bottom: 8px; color: #1a1a1a; }}
+  p {{ font-size: 14px; color: #888; margin-bottom: 4px; }}
+  .hint {{ font-size: 12px; color: #aaa; }}
+  .error {{ color: #d32f2f; margin-top: 16px; font-size: 13px; display: none; }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="spinner"></div>
+  <h2>图文工坊正在启动…</h2>
+  <p>首次启动需要加载组件，请耐心等待</p>
+  <p class="hint">若长时间无响应，请尝试重启应用</p>
+  <div class="error" id="error"></div>
+</div>
+<script>
+(function() {{
+  var retries = 0, maxRetries = 90, target = '{target_url}';
+  function check() {{
+    var img = new Image();
+    img.onload = function() {{ window.location.href = target + '/'; }};
+    img.onerror = function() {{ scheduleRetry(); }};
+    img.src = target + '/static/logo-icon.png?_=' + Date.now();
+  }}
+  function scheduleRetry() {{
+    if (++retries < maxRetries) {{ setTimeout(check, 2000); }}
+    else {{
+      var el = document.getElementById('error');
+      el.style.display = 'block';
+      el.textContent = '服务启动超时（' + (maxRetries * 2) + '秒），请检查日志或重启应用';
+    }}
+  }}
+  // 60 秒兜底：无论后端是否就绪，尝试跳转
+  setTimeout(function() {{ window.location.href = target + '/'; }}, 60000);
+  check();
+}})();
+</script>
+</body>
+</html>"""
+
+
 def start_server(host: str = "127.0.0.1", port: int = 8765) -> None:
     """在子线程中启动 FastAPI 服务。"""
     try:
+        import uvicorn
         from desktop.api import app
         uvicorn.run(app, host=host, port=port, log_level="warning")
     except Exception:
@@ -155,21 +224,13 @@ def _start_app() -> None:
 
     host = "127.0.0.1"
     port = 8765
-    url = f"http://{host}:{port}"
 
     # 启动 FastAPI 服务线程
     server_thread = threading.Thread(target=start_server, args=(host, port), daemon=True)
     server_thread.start()
 
-    # 等待服务就绪
-    import time
-    import requests
-    for _ in range(30):
-        try:
-            requests.get(url, timeout=1)
-            break
-        except Exception:
-            time.sleep(0.3)
+    # 生成启动加载页 HTML，自动轮询后端；不再阻塞等待，窗口立即展示
+    loading_html = _make_loading_html(host, port)
 
     # 启动 PyWebView 窗口
     import webview
@@ -216,7 +277,7 @@ def _start_app() -> None:
 
     window = webview.create_window(
         title="图文工坊",
-        url=url,
+        html=loading_html,
         width=1280,
         height=900,
         min_size=(960, 640),
