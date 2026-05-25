@@ -145,6 +145,7 @@ a = Analysis(
         'services.platforms.base',
         'services.platforms.weibo',
         'services.platforms.toutiao',
+        'services.platforms.xhs',        # 延迟导入，需显式声明
         'services.watermark',
         'services.wechat',
         'services.weibo',
@@ -172,9 +173,12 @@ a = Analysis(
         'uvicorn.loggers',
         'uvicorn.loops',
         'uvicorn.loops.auto',
+        'uvicorn.loops.asyncio',          # uvloop fallback（Windows 必须）
         'uvicorn.protocols',
         'uvicorn.protocols.http',
         'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.http.h11_impl', # httptools fallback（Windows 必须）
+        'h11',                             # h11_impl 依赖
         'uvicorn.protocols.websockets',
         'uvicorn.protocols.websockets.auto',
         'uvicorn.middleware',

@@ -85,9 +85,22 @@ from config import ensure_dirs
 
 def start_server(host: str = "127.0.0.1", port: int = 8765) -> None:
     """在子线程中启动 FastAPI 服务。"""
-    from desktop.api import app
-
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    try:
+        from desktop.api import app
+        uvicorn.run(app, host=host, port=port, log_level="warning")
+    except Exception:
+        import traceback
+        crash_log = PROJECT_ROOT / "data" / "logs" / "crash.log"
+        try:
+            crash_log.parent.mkdir(parents=True, exist_ok=True)
+            crash_log.write_text(
+                f"[{__import__('datetime').datetime.now()}]\n"
+                f"[server_thread] uvicorn 启动失败:\n"
+                f"{traceback.format_exc()}",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
 
 def main() -> None:
