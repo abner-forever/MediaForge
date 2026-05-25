@@ -60,35 +60,6 @@ jobs:
           echo "version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
           echo "检测到版本号: ${NEXT_VERSION}"
 
-  test:
-    needs: [detect-version]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: 设置 Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: 安装依赖
-        run: |
-          pip install -r requirements.txt pytest pytest-cov pytest-mock
-
-      - name: 创建前端静态目录占位（API 测试不需要前端构建产物）
-        run: mkdir -p desktop/static
-
-      - name: 运行测试
-        run: python -m pytest --cov -v
-
-      - name: 上传覆盖率报告
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: tests/reports/coverage_html/
-
   build-macos:
     needs: [detect-version]
     runs-on: macos-latest

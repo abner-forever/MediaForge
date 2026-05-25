@@ -8,6 +8,7 @@ import EffectEntry from '../../components/EffectEntry';
 import { useLoading } from '../../hooks/useLoading';
 import { imgSrc } from './utils';
 import ArticleCard from './ArticleCard';
+import LazyImage from '../Discovery/LazyImage';
 
 const MAX_VISIBLE_THUMBS = 9;
 
@@ -215,7 +216,7 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
           {cover && (
             <div className="relative mb-3 rounded-xl overflow-hidden cursor-pointer group"
               onClick={() => openLightbox(images.map(imgSrc), images.indexOf(cover))}>
-              <img src={imgSrc(cover)} alt="" className="w-full h-28 object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" decoding="async" onError={e => (e.currentTarget.style.display = 'none')} />
+              <LazyImage src={imgSrc(cover)} alt="" className="w-full h-28 transition-transform duration-300 group-hover:scale-105" />
               <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
               <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/40 text-white/70 text-[10px] font-medium backdrop-blur">封面</div>
@@ -233,10 +234,9 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               {visibleImages.map((img, ii) => {
                 const globalIdx = thumbStart + ii;
                 return (
-                  <img key={globalIdx} src={imgSrc(img)} alt="" loading="lazy" decoding="async"
-                    className={`shrink-0 w-9 h-9 object-cover rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
-                    onClick={() => openLightbox(images.map(imgSrc), globalIdx)}
-                    onError={e => (e.currentTarget.style.display = 'none')} />
+                  <LazyImage key={globalIdx} src={imgSrc(img)} alt=""
+                    className={`shrink-0 w-9 h-9 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
+                    onClick={() => openLightbox(images.map(imgSrc), globalIdx)} />
                 );
               })}
               {hiddenCount > 0 && (
@@ -255,6 +255,11 @@ const QueueCard = React.memo(function QueueCard({ item, index }: { item: QueueIt
               </button>
             )}
           </div>
+          {images.length > 0 && (
+            <div className="text-[10px] text-text-muted/40 text-center mt-1.5 select-none">
+              共 {images.length} 张
+            </div>
+          )}
         </div>
 
         <div className="flex-1 p-4 space-y-3">

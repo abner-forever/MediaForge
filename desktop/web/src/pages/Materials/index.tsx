@@ -13,6 +13,7 @@ import FolderTree from './FolderTree';
 import FolderCard from './FolderCard';
 import ImageCard from './ImageCard';
 import TagEditorModal from './TagEditorModal';
+import LazyImage from '../Discovery/LazyImage';
 
 export default function Materials() {
   const {
@@ -500,7 +501,7 @@ export default function Materials() {
                       >
                         <td className="py-2 px-3 flex items-center gap-2">
                           <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
-                          <img src={imgSrc(file.path)} alt="" className="w-8 h-8 object-cover rounded shrink-0" loading="lazy" />
+                          <LazyImage src={imgSrc(file.path)} alt="" className="w-8 h-8 rounded shrink-0" />
                           <span className="truncate">{file.name}</span>
                           {s && s.score > 0 && (
                             <span className={`ml-2 text-[10px] font-bold px-1 py-0.5 rounded ${s.score >= 70 ? 'text-success bg-success/10' : s.score >= 40 ? 'text-warning bg-warning/10' : 'text-danger bg-danger/10'}`}>
