@@ -368,9 +368,9 @@ export default function PipelinePage() {
 
         {/* ── 历史侧边栏 ── */}
         <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          historyExpanded ? 'w-64' : 'w-0'
+          historyExpanded ? 'w-80' : 'w-0'
         }`}>
-          <div className="w-64">
+          <div className="w-80">
             <div className="card p-0 overflow-hidden sticky top-6">
               <div className="flex items-center justify-between px-4 pt-3 pb-2">
                 <div className="flex items-center gap-1">
@@ -380,7 +380,7 @@ export default function PipelinePage() {
                     title="收起侧栏"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="m15 18-6-6 6-6" />
+                      <path d="m9 18 6-6-6-6" />
                     </svg>
                   </button>
                   <span className="text-sm font-medium text-text">运行历史</span>
@@ -395,36 +395,69 @@ export default function PipelinePage() {
                 <div className="space-y-0.5 px-2 pb-2 max-h-[calc(100vh-220px)] overflow-y-auto">
                   {history.map((run) => {
                     const isActive = detailRun?.run_id === run.run_id;
+                    const totalTokens = (run.prompt_tokens ?? 0) + (run.completion_tokens ?? 0);
                     return (
                       <button
                         key={run.run_id}
                         onClick={() => openDetail(run)}
-                        className={`w-full text-left flex items-start gap-2.5 text-xs p-2 rounded-lg transition-colors group ${
+                        className={`w-full text-left p-3 rounded-lg transition-colors group ${
                           isActive ? 'bg-accent/10 text-accent' : 'hover:bg-bg-secondary text-text'
                         }`}
                       >
-                        <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 ${statusColor(run.status)}`} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{run.title || run.run_id}</div>
-                          <div className="flex items-center gap-2 text-text-muted mt-0.5">
-                            {run.started_at && <span>{fmtTime(run.started_at)}</span>}
-                            <span>处理 {run.processed} 失败 {run.failed}</span>
+                        {/* Header: status + time */}
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor(run.status)}`} />
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              run.status === 'completed' ? 'bg-green-500/10 text-green-600' :
+                              run.status === 'partial_failure' ? 'bg-yellow-500/10 text-yellow-600' :
+                              'bg-blue-500/10 text-blue-600'
+                            }`}>
+                              {statusText(run.status)}
+                            </span>
                           </div>
-                          {(run.prompt_tokens ?? 0) + (run.completion_tokens ?? 0) > 0 && (
-                            <div className="text-text-muted/60 mt-0.5">token {run.prompt_tokens! + run.completion_tokens!}</div>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {run.started_at && (
+                              <span className="text-[10px] text-text-muted/60 font-mono">{fmtTime(run.started_at)}</span>
+                            )}
+                            {run.status === 'running' && (
+                              <span
+                                onClick={(e) => { e.stopPropagation(); handleContinueRun(run); }}
+                                className="p-1 rounded-md hover:bg-accent/20 text-accent transition-all"
+                                title="继续运行"
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                  <polygon points="6 3 20 12 6 21 6 3" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        {run.status === 'running' && (
-                          <span
-                            onClick={(e) => { e.stopPropagation(); handleContinueRun(run); }}
-                            className="shrink-0 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent/20 text-accent transition-all"
-                            title="继续运行"
-                          >
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon points="6 3 20 12 6 21 6 3" />
-                            </svg>
-                          </span>
-                        )}
+
+                        {/* Title */}
+                        <div className="text-sm font-medium text-text truncate mb-2">{run.title || run.run_id}</div>
+
+                        {/* Stats grid */}
+                        <div className="grid grid-cols-4 gap-1">
+                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
+                            <div className="text-xs font-semibold text-text">{run.processed}</div>
+                            <div className="text-[10px] text-text-muted/70 leading-tight">处理</div>
+                          </div>
+                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
+                            <div className="text-xs font-semibold text-green-600">{run.processed - run.failed}</div>
+                            <div className="text-[10px] text-text-muted/70 leading-tight">成功</div>
+                          </div>
+                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
+                            <div className={`text-xs font-semibold ${run.failed > 0 ? 'text-red-500' : 'text-text'}`}>{run.failed}</div>
+                            <div className="text-[10px] text-text-muted/70 leading-tight">失败</div>
+                          </div>
+                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
+                            <div className="text-xs font-semibold text-text-muted">
+                              {totalTokens > 0 ? totalTokens.toLocaleString() : '-'}
+                            </div>
+                            <div className="text-[10px] text-text-muted/70 leading-tight">Token</div>
+                          </div>
+                        </div>
                       </button>
                     );
                   })}
@@ -442,7 +475,7 @@ export default function PipelinePage() {
             title="展开运行历史"
           >
             <svg className="w-3.5 h-3.5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="m9 18 6-6-6-6" />
+              <path d="m15 18-6-6 6-6" />
             </svg>
           </button>
         )}

@@ -3307,7 +3307,7 @@ async def pipeline_run(req: PipelineRunRequest):
         pipeline_cancel_events.pop(run_id, None)
         pipeline_confirm_events.pop(run_id, None)
 
-    from services.pipeline_agent import PipelineAgent, PipelineConfig
+    from services.pipeline import PipelineAgent, PipelineConfig
 
     audit_path = create_run_log_path(run_id)
 

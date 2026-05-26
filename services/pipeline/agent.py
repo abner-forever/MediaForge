@@ -1,9 +1,6 @@
-"""Pipeline Agent — AI 驱动的自动化流水线编排。
+"""PipelineAgent — AI 驱动的自动化流水线编排核心类。
 
 7 步流程：健康检查 → 抓取帖子 → 下载图片 → AI 评分 → 生成内容 → 加入队列 → 发布。
-
-Agent 在关键节点调用 LLM 做真实决策（内容筛选、质量判断、标题评审、合规检查），
-并取消和发布前审批确认。
 """
 
 from __future__ import annotations
@@ -13,76 +10,39 @@ import random
 import re
 import time
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Event
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from config import POSTS_CACHE_PATH, settings
-from utils.file import hash_text, read_json, write_json
+from config import settings
 from utils.logger import get_logger
 
+from services.pipeline.constants import (
+    EVENT_AGENT_DECISION,
+    EVENT_CANCELLED,
+    EVENT_CHECKPOINT,
+    EVENT_COMPLETED,
+    EVENT_DECISION_REQUIRED,
+    EVENT_STEP_COMPLETE,
+    EVENT_STEP_ERROR,
+    EVENT_STEP_PROGRESS,
+    EVENT_STEP_START,
+    STEP_DOWNLOAD,
+    STEP_ENQUEUE,
+    STEP_FETCH,
+    STEP_GENERATE,
+    STEP_HEALTH,
+    STEP_NAMES,
+    STEP_PUBLISH,
+    STEP_SCORE,
+    PipelineEventCallback,
+)
+from services.pipeline.config import PipelineConfig
+from services.pipeline.exceptions import PipelineCancelledError
+from services.pipeline.dedup import _load_cache, _save_cache
+from utils.file import hash_text
+
 logger = get_logger(__name__)
-
-# ── 事件类型常量 ───────────────────────────────────────
-EVENT_STEP_START = "step_start"
-EVENT_STEP_PROGRESS = "step_progress"
-EVENT_STEP_COMPLETE = "step_complete"
-EVENT_STEP_ERROR = "step_error"
-EVENT_AGENT_DECISION = "agent_decision"
-EVENT_CHECKPOINT = "checkpoint_required"
-EVENT_DECISION_REQUIRED = "decision_required"
-EVENT_COMPLETED = "completed"
-EVENT_CANCELLED = "cancelled"
-
-# ── 步骤常量 ───────────────────────────────────────────
-STEP_HEALTH = "health_check"
-STEP_FETCH = "fetch"
-STEP_DOWNLOAD = "download"
-STEP_SCORE = "score"
-STEP_GENERATE = "generate"
-STEP_ENQUEUE = "enqueue"
-STEP_PUBLISH = "publish"
-
-STEP_NAMES = {
-    STEP_HEALTH: "健康检查",
-    STEP_FETCH: "抓取帖子",
-    STEP_DOWNLOAD: "下载图片",
-    STEP_SCORE: "AI 评分",
-    STEP_GENERATE: "生成内容",
-    STEP_ENQUEUE: "加入队列",
-    STEP_PUBLISH: "发布",
-}
-
-# ── 回调签名 ───────────────────────────────────────────
-PipelineEventCallback = Callable[[str, str, dict], None]
-
-
-@dataclass
-class PipelineConfig:
-    """流水线运行配置。"""
-    platform: str = "weibo"
-    mode: str = ""
-    celebrities: List[str] = field(default_factory=list)
-    search_tags: List[str] = field(default_factory=list)
-    super_topics: List[str] = field(default_factory=list)
-    max_pages: int = 2
-    post_limit: int = 3
-    dry_run: bool = False
-    require_confirm: bool = True
-    account_id: Optional[str] = None
-    filter_watermark: bool = True
-    min_clean_images: int = 3
-    allow_watermark_fallback: bool = True
-    min_images_per_post: int = 5
-    max_retries: int = 3
-    ai_decisions: bool = True
-    ai_decision_mode: str = "auto"  # "auto" 全自动 | "interactive" 交互确认
-
-
-class PipelineCancelledError(Exception):
-    """流水线被用户取消。"""
-    pass
 
 
 class PipelineAgent:
@@ -1314,23 +1274,3 @@ class PipelineAgent:
             "step": STEP_PUBLISH,
             "result": {"published": published, "total": len(pipeline_items)},
         })
-
-
-# ── 去重缓存（与 main.py 共享） ──────────────────────
-def _load_cache() -> Dict[str, Set[str]]:
-    raw = read_json(POSTS_CACHE_PATH, default={})
-    if isinstance(raw, list):
-        return {"post_ids": set(), "post_hashes": set(str(v) for v in raw)}
-    if isinstance(raw, dict):
-        return {
-            "post_ids": set(str(v) for v in raw.get("post_ids", [])),
-            "post_hashes": set(str(v) for v in raw.get("post_hashes", [])),
-        }
-    return {"post_ids": set(), "post_hashes": set()}
-
-
-def _save_cache(cache: Dict[str, Set[str]]) -> None:
-    write_json(POSTS_CACHE_PATH, {
-        "post_ids": sorted(cache["post_ids"]),
-        "post_hashes": sorted(cache["post_hashes"]),
-    })
