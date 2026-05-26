@@ -55,11 +55,11 @@ export default function Discovery() {
       setPlatforms(p.platforms);
       const def = p.default || 'weibo';
       if (p.platforms[def]) { setPlatform(def); setMode(p.platforms[def].default_fetch_mode); }
-      if (!celebs && s.weibo_celebrities) setCelebs(s.weibo_celebrities);
-      if (!tags && s.weibo_search_tags) setTags(s.weibo_search_tags);
-      if (!superTopics && s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
-      if (!toutiaoKeywords && s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
-      if (!tags && s.xhs_search_tags) setTags(s.xhs_search_tags);
+      if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
+      if (s.weibo_search_tags) setTags(s.weibo_search_tags);
+      if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
+      if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
+      if (s.xhs_search_tags && def === 'xhs') setTags(s.xhs_search_tags);
       if (s.post_limit) setLimit(s.post_limit);
     }).catch(() => {});
   }, []);
@@ -298,7 +298,24 @@ export default function Discovery() {
       />
 
       {discoveryPosts.length > 0 && (
-        <div className="card stagger">
+        <div className="relative overflow-hidden rounded-xl border border-border p-5 stagger">
+          {/* Decorative background blobs for glass effect */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+            <div
+              className="absolute -top-24 -right-20 w-72 h-72 rounded-full"
+              style={{
+                background: 'radial-gradient(circle at center, var(--accent) 0%, transparent 70%)',
+                opacity: '0.08',
+              }}
+            />
+            <div
+              className="absolute -bottom-20 -left-20 w-56 h-56 rounded-full"
+              style={{
+                background: 'radial-gradient(circle at center, var(--accent) 0%, transparent 70%)',
+                opacity: '0.06',
+              }}
+            />
+          </div>
           {/* Tab bar */}
           <div className="flex items-center gap-0 mb-4 border-b border-border">
             <button

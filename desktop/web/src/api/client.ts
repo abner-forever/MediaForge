@@ -402,6 +402,32 @@ export const dashboardApi = {
   clearOperations: () => post<{ success: boolean; deleted: number }>('/api/dashboard/operations/delete', { clear: true }),
 };
 
+/* ── Logs API ──────────────────────────────────── */
+
+export interface LogFileInfo {
+  name: string;
+  size: number;
+  mtime: string;
+}
+
+export interface LogContentResponse {
+  name: string;
+  lines: string[];
+  total: number;
+}
+
+export const logsApi = {
+  list: () => get<{ files: LogFileInfo[] }>('/api/logs/list'),
+  content: (file: string, maxLines = 500) =>
+    get<LogContentResponse>(`/api/logs/content?file=${encodeURIComponent(file)}&max_lines=${maxLines}`),
+  copyToClipboard: (text: string) =>
+    post<{ success: boolean }>('/api/logs/clipboard', { text }),
+  saveToDownloads: (file: string) =>
+    post<{ success: boolean; path: string }>('/api/logs/save-to-downloads', { file }),
+  logToast: (message: string, type = 'info') =>
+    post<{ success: boolean }>('/api/logs/toast', { message, type }),
+};
+
 /* ── Settings API ─────────────────────────────── */
 
 export const settingsApi = {
@@ -603,6 +629,8 @@ export const materialsApi = {
   renameFolder: (path: string, newName: string) =>
     put<{ success: boolean; path: string }>('/api/materials/folder', { path, new_name: newName }),
   deleteFolder: (path: string) => del<{ success: boolean }>(`/api/materials/folder?path=${encodeURIComponent(path)}`),
+  renameFile: (path: string, newName: string) =>
+    put<{ success: boolean; path: string }>('/api/materials/file', { path, new_name: newName }),
   moveItems: (items: string[], destination: string) =>
     post<{ success: boolean; moved: number }>('/api/materials/move', { items, destination }),
 

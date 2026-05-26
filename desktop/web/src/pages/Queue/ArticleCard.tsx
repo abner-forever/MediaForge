@@ -8,7 +8,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
 
-const ArticleCard = React.memo(function ArticleCard({ item }: { item: QueueItem }) {
+const ArticleCard = React.memo(function ArticleCard({ item, seq }: { item: QueueItem; seq?: number }) {
   const itemId = item.id!;
   const navigate = useNavigate();
   const { addToast, setQueue } = useStore();
@@ -92,6 +92,11 @@ const ArticleCard = React.memo(function ArticleCard({ item }: { item: QueueItem 
     <div className="card overflow-visible">
       <div className="flex flex-col md:flex-row">
         <div className="md:w-48 relative bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 min-h-[140px]">
+          {seq !== undefined && (
+            <div className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center shadow-sm ring-2 ring-bg-card">
+              {seq}
+            </div>
+          )}
           {item.cover ? (
             <img src={imgSrc(item.cover)} alt="" className="w-full h-full absolute inset-0 object-cover" />
           ) : (

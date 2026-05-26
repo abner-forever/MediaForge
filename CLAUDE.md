@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-**MediaForge**（图文工坊）是一个自动化微信公众号内容发布系统。核心流程：微博/头条图文发现 → 图片下载与水印过滤 → AI 智能评分/写作 → 文章草稿与发布队列 → 一键保存草稿或发布到微信公众号。
+**MediaForge**（图文工坊）是一个自动化微信公众号内容发布系统。核心流程：微博/头条/小红书图文发现 → 图片下载与水印过滤 → AI 智能评分/写作 → 文章草稿与发布队列 → 一键保存草稿或发布到微信公众号。
 
 双界面共享同一套后端服务：
 - **命令行模式**（`main.py`）：线性流水线，支持 dry-run 试跑，适合批量定时任务
@@ -96,20 +96,25 @@ iscc /dMyAppVersion="$(python -c "import tomllib; print(tomllib.load(open('pypro
 工作流文件：`.github/workflows/build.yml`
 PyInstaller 配置：`desktop/build.spec`
 
-> 注意：Playwright Chromium 浏览器已打包进安装包（约 350MB），开箱即用。微博扫码登录已改用系统 WebView，无需 Playwright。
+> 注意：Playwright Chromium 浏览器已打包进安装包（约 350MB），开箱即用。微博/小红书/头条扫码登录均已改用系统 WebView，无需 Playwright 内置浏览器。
 
 ## 架构
 
 ### 数据流
 ```
-微博/头条抓取 -> 图片下载（线程池 + 水印过滤）
+微博/头条/小红书抓取 -> 图片下载（线程池 + 水印过滤）
   -> AI 评分（Vision / 启发式）-> AI 生成标题/正文
   -> 文章草稿/发布队列 -> HTML 排版 -> Playwright 自动化保存草稿或发布到微信公众号
 ```
 
 ### 服务层（`services/`）
-- **platforms/** — 平台插件架构，基类 `base.py` 定义 `PlatformService` 协议。内置微博（`weibo.py`）和今日头条（`toutiao.py`）实现。
+- **platforms/** — 平台插件架构，基类 `base.py` 定义 `PlatformService` 协议。内置：
+  - `weibo.py` — 微博平台服务（搜索用户/超话帖子）
+  - `toutiao.py` — 今日头条平台服务（搜索文章/图文）
+  - `xhs.py` — 小红书平台服务（搜索笔记，通过 Playwright 拦截带 x-s/x-t 签名的 API）
 - **weibo_login.py** — 内置 WebView 微博扫码登录，自动获取 Cookie。
+- **toutiao_login.py** — 今日头条扫码登录，捕获 HTTP-only cookie（sessionid、tt_webid 等）。
+- **xhs_login.py** — 小红书扫码/手机号登录，通过 Playwright 捕获完整 Cookie。
 - **downloader.py** — 并发下载图片到 `data/images/<celebrity>/<scene>/<post_id>/`，每张独立水印过滤。
 - **ai.py** — OpenAI 兼容 chat completions，支持标题生成、文章生成、校对润色、去 AI 味儿、排版优化和对话式改写。支持 Mimo/DeepSeek/GLM/OpenAI/Qwen/MiniMax 多供应商，失败时回退硬编码。
 - **wechat.py** — Playwright Chromium 自动化，处理扫码登录、文章编辑、图片上传、封面选择、保存草稿/发布，多账号通过独立 profile 与 `storage_state` 隔离。
@@ -121,38 +126,45 @@ PyInstaller 配置：`desktop/build.spec`
 - **api_key_store.py** — API Key 本地存储
 - **file.py** — 文件读取/写入，JSON 缓存，文本 hash
 - **pathsafe.py** — 安全路径处理
-- **logger.py** — 日志配置，按天轮转
+- **logger.py** — 日志配置，支持控制台输出 + 按大小轮转的文件日志（5MB/备份3个），自动清理超过 7 天的旧日志
 - **settings_store.py** — 桌面设置持久化到 `data/state/settings.json`
 - **weibo_auth_store.py** — 微博 Cookie/UID/头像本地存储与清空
 - **wechat_auth_store.py** — 微信公众号多账号注册表、默认账号、独立 profile/state 路径
+- **toutiao_auth_store.py** — 今日头条 Cookie/UID/用户名/头像本地存储与清空
+- **xhs_auth_store.py** — 小红书 Cookie/UID/用户名/头像本地存储与清空
 
 ### 桌面 API（`desktop/api.py`）
-FastAPI 路由，覆盖 50+ 个端点：
-- 设置 CRUD（读写配置）
-- 微信公众号账号（新增、登录、登出、默认账号、删除）
-- 仪表盘（健康检查、统计、操作记录）
-- 发现（搜索、下载、评分、水印检测、SSE 流式下载进度）
-- 文章（草稿 CRUD、灵感搜索、封面搜索/下载、AI 写作工具、加入队列、发布）
-- 队列（增删改、AI 润色、发布、发布日志轮询）
-- 素材（列表浏览、文件夹树、移动、重命名、新建文件夹、批量删除）
-- 图片代理（本地图片静态服务、远程图片 proxy）
+FastAPI 路由，覆盖 60+ 个端点：
+
+- **系统** — 健康检查、统计、运行记录
+- **设置 CRUD** — 读写所有配置项，AI 连接测试
+- **平台** — 列出可用平台及元信息
+- **微信公众号账号** — 新增、登录（SSE 流式）、登出、默认账号、删除、发布历史
+- **发现** — 搜索（SSE 流式）、下载（SSE 流式进度）、评分、水印检测、热门艺人推荐
+- **文章** — 草稿 CRUD、AI 生成/润色/去 AI 味儿/标题候选/排版优化、灵感搜索、封面搜索/下载、对话式改写、加入队列、发布
+- **队列** — 增删改、AI 润色、发布（保存草稿/直接发布）、发布日志轮询
+- **素材** — 分组列表、文件夹树/浏览、创建/重命名/删除文件夹、重命名文件、批量删除、移动、评分、元数据（标签/评分/使用记录）
+- **图片代理** — 本地图片静态服务、远程图片 proxy
+- **日志与反馈** — 日志文件列表/内容阅读、系统剪贴板写入、保存到下载目录、Toast 日志记录
+- **发布效果** — 发布后数据记录与查询
+- **合规** — 标题查重
 
 ### 前端（`desktop/web/src/`）
 React 单页应用，6 个页面：
 - **Dashboard** — 健康状态、统计数据、快捷操作、最近操作记录
-- **Discovery** — 搜索参数配置、帖子列表、本地图片画廊、AI 评分
-- **ArticlePublish** — 文章草稿、Markdown 编辑、灵感搜索、封面搜索、AI 写作工具、发布流转
+- **Discovery** — 多平台搜索参数配置、帖子列表、本地图片画廊、AI 评分
+- **ArticlePublish** — 文章草稿、Markdown 编辑、灵感搜索、封面搜索、AI 写作工具（生成/润色/去AI/标题候选/排版/对话改写）、发布流转
 - **Queue** — 发布队列管理、AI 润色、保存草稿/直接发布/删除
-- **Materials** — 按艺人+场景分组的本地素材管理、右键菜单
-- **Settings** — 主题切换（3 种模式 + 4 套配色）、大模型配置、微博/头条配置、微信公众号多账号、素材目录、水印参数
+- **Materials** — 按艺人+场景分组或文件夹树浏览的本地素材管理、右键菜单、文件重命名/移动/删除
+- **Settings** — 主题切换（3 种模式 + 4 套配色）、大模型配置、媒体来源（微博/头条/小红书配置与登录）、微信公众号多账号、素材目录、水印参数、版本信息与日志管理
 
-全局 Zustand store 管理：toast、lightbox、进度浮层、选中状态、文章列表、灵感结果。
+全局 Zustand store 管理：主题、toast、lightbox、进度浮层、发现页选中状态/评分、素材文件夹浏览/选中、文章列表/筛选、灵感结果、队列、微信侧边栏刷新、AI 推荐艺人。
 
 ### 配置
 `config.py` 是 `Settings` dataclass 单例。
 
 ### 主题系统
-支持浅色/深色/跟随系统三种模式，4 套主题配色（蓝/红/绿/紫），通过 CSS 变量动态切换。
+支持浅色/深色/跟随系统三种模式，4 套主题配色（默认蓝/清新绿/创作紫/暖阳橙），通过 CSS 变量动态切换。原生窗口主题同步（深色模式自动适配 macOS 窗口外观）。
 
 ### 数据存储
 - `data/images/` — 下载图片，按艺人/场景/帖子组织
@@ -160,7 +172,8 @@ React 单页应用，6 个页面：
 - `data/queue.json` — 发布队列持久化
 - `data/state/settings.json` — 桌面 GUI 配置
 - `data/state/articles.json` — 文章草稿
-- `data/state/operations.json` — 操作记录
+- `data/state/operations.json` — 操作审计记录
+- `data/state/materials_meta.json` — 素材元数据（标签、来源平台、评分、使用记录、封面标记等）
 - `data/state/wechat.json` — 旧版单账号公众号登录态
 - `data/state/wechat_accounts.json` — 微信公众号多账号索引
 - `data/state/wechat_accounts/` — 多账号独立 Chromium profile 与 storage_state
@@ -168,7 +181,10 @@ React 单页应用，6 个页面：
 - `data/state/weibo_auth.json` — 微博 Cookie/UID/头像
 - `data/state/weibo_uid_map.json` — 昵称→UID 缓存
 - `data/state/weibo_topic_map.json` — 超话名→hash 缓存
-- `data/logs/` — 运行日志
+- `data/state/toutiao_auth.json` — 今日头条 Cookie/UID/用户名/头像
+- `data/state/xhs_auth.json` — 小红书 Cookie/UID/用户名/头像
+- `data/state/xhs_storage.json` — 小红书 Playwright storage state
+- `data/logs/` — 运行日志（app.log + 轮转备份、crash.log、runs/ 审计日志）
 
 ## 语言与文档
 代码、注释、文档均为中文（简体），代码标识符使用英文。SPEC.md 含原始需求与设计，USER_GUIDE.md 含使用说明。

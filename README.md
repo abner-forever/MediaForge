@@ -5,29 +5,33 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
 
-自动化的微信公众号内容发布工具。从微博/头条发现优质图文 → 图片下载与水印过滤 → AI 智能评分/写作 → 草稿管理 → 一键保存草稿或发布到微信公众号。
+自动化的微信公众号内容发布工具。从微博/头条/小红书发现优质图文 → 图片下载与水印过滤 → AI 智能评分/写作 → 草稿管理 → 一键保存草稿或发布到微信公众号。
 
 ## 当前实现进展
 
 - **CLI 流水线已可用**：支持微博/头条抓取、去重缓存、图片下载、水印过滤、AI 标题生成、封面选择、微信公众号发布或 dry-run。
 - **桌面 GUI 已成型**：FastAPI + React + PyWebView，包含首页、图片发现、文章发布、发布队列、本地素材、系统设置 6 个工作区。
-- **文章发布工作台已接入**：支持本地文章草稿、Markdown 编辑、AI 生成正文、校对润色、去 AI 味儿、标题生成、排版优化、对话式改写、灵感搜索和封面搜索/下载。
-- **微信公众号多账号已实现**：每个账号使用独立 Chromium profile 与 `storage_state`，可设置默认账号、登录、登出、删除账号。
-- **本地配置与密钥存储已落地**：设置页写入 `data/state/settings.json`，AI Key 独立保存，微博鉴权独立保存并支持清空。
+- **多平台图文发现**：微博（五种模式）、今日头条（三种模式）、小红书均已接入，插件化架构可轻松扩展。
+- **文章发布工作台已接入**：支持本地文章草稿、Markdown 编辑、AI 生成正文、校对润色、去 AI 味儿、标题候选、排版优化、对话式改写、灵感搜索和封面搜索/下载。
+- **微信公众号多账号已实现**：每个账号使用独立 Chromium profile 与 `storage_state`，可设置默认账号、登录、登出、删除账号，支持发布历史查询。
+- **本地配置与密钥存储已落地**：设置页写入 `data/state/settings.json`，AI Key 独立保存，各平台鉴权独立保存并支持清空。
+- **素材管理升级**：支持文件夹树浏览、文件重命名、批量移动/删除、元数据管理（标签、评分、使用记录）。
+- **文件日志系统**：桌面程序自动写入轮转日志文件，内置日志查看器可复制/导出日志，方便反馈问题。
 - **测试与打包链路已建立**：`pytest`、前端 TypeScript 构建、PyInstaller、macOS DMG、Windows Inno Setup、GitHub Actions 自动构建与 semantic-release 发布。
 
 ## 功能特性
 
-- **多平台图文发现** — 支持微博（明星列表、本人时间线、超话、关键词五种模式）和今日头条
-- **微博扫码登录** — 内置系统 WebView 扫码获取 Cookie，减少手动复制 Cookie
+- **多平台图文发现** — 支持微博（明星列表、本人时间线、超话、关键词五种模式）、今日头条（feed/用户/关键词三种模式）、小红书
+- **内置扫码登录** — 微博/头条/小红书均支持内置系统 WebView 扫码获取 Cookie，无需手动复制
 - **智能水印过滤** — 基于边缘检测的启发式算法，自动识别并过滤水印图片
 - **AI 图片评分** — Vision API + 启发式回退，多维度评分筛选优质图片
-- **AI 内容生产** — 标题、正文、校对、去 AI 味儿、排版优化，支持 Mimo / DeepSeek / GLM / OpenAI / Qwen / MiniMax 等 OpenAI 兼容接口
+- **AI 内容生产** — 标题、正文、校对、去 AI 味儿、排版优化、标题候选、对话式改写，支持 Mimo / DeepSeek / GLM / OpenAI / Qwen / MiniMax 等 OpenAI 兼容接口
 - **文章草稿与发布队列** — 独立文章工作台 + 队列管理，可编辑正文、选择封面、保存草稿或直接发布
-- **微信公众号多账号** — 多公众号账号注册、默认账号、独立登录态与浏览器配置
+- **微信公众号多账号** — 多公众号账号注册、默认账号、独立登录态与浏览器配置、发布历史
 - **双模式运行** — 命令行批量处理 + 桌面 GUI 交互式管理
-- **主题系统** — 浅色/深色/跟随系统，4 套主题配色可切换
-- **素材管理** — 按艺人+场景分组的本地图片浏览与管理
+- **主题系统** — 浅色/深色/跟随系统，4 套主题配色可切换（默认蓝/清新绿/创作紫/暖阳橙）
+- **素材管理** — 按艺人+场景分组或文件夹树浏览，支持文件重命名、移动、批量删除、元数据标记
+- **日志管理** — 应用日志自动轮转，内置查看器支持在线查看、复制全部、保存到下载目录，集成 vConsole 开发者面板
 
 ## 快速开始
 
@@ -61,8 +65,7 @@ python3 main.py --limit 3 --pages 2
 
 ```bash
 cd desktop/web
-npm install
-npm run build
+pnpm install && pnpm run build
 cd ..
 python3 main.py
 ```
@@ -72,18 +75,16 @@ python3 main.py
 ### 前端开发
 
 ```bash
-# 安装python依赖
-pip install -r requirements.txt
-
 cd desktop/web
-npm run dev    # Vite 热更新，端口 5173，API 代理到 8765
+pnpm install
+pnpm run dev    # Vite 热更新，端口 5173，API 代理到 8765
 ```
 
 ### 打包桌面应用
 
 ```bash
 # 构建前端
-cd desktop/web && npm ci && npm run build
+cd desktop/web && pnpm install --frozen-lockfile && pnpm run build
 
 # 安装打包工具
 pip install pyinstaller pillow
@@ -104,6 +105,7 @@ pyinstaller desktop/build.spec --clean
 |------|------|------|
 | **微博** (`weibo`) | `own` / `celebrities` / `mixed` / `super_topic` / `keyword` | 明星时间线聚合、超话、关键词搜索 |
 | **今日头条** (`toutiao`) | `feed` / `user` / `keyword` | feed 模式因签名限制会回退到关键词搜索 |
+| **小红书** (`xhs`) | `search` | 通过 Playwright 拦截带 x-s/x-t 签名的 API，需要登录 |
 
 采用 `services/platforms/` 插件架构，新增平台只需实现 `PlatformService` 协议。
 
@@ -118,25 +120,30 @@ MediaForge/
 │   ├── platforms/          # 平台插件架构
 │   │   ├── base.py         #   PlatformService 协议
 │   │   ├── weibo.py        #   微博数据采集
-│   │   └── toutiao.py      #   今日头条数据采集
+│   │   ├── toutiao.py      #   今日头条数据采集
+│   │   └── xhs.py          #   小红书数据采集
 │   ├── ai.py               # AI 标题/文章生成、润色、排版优化
 │   ├── downloader.py       # 图片下载与水印过滤
 │   ├── extensions.py       # 图片评分/封面/排版
 │   ├── watermark.py        # 水印检测
 │   ├── wechat.py           # 公众号发布（Playwright）
-│   └── weibo_login.py      # 微博扫码登录
+│   ├── weibo_login.py      # 微博扫码登录
+│   ├── toutiao_login.py    # 今日头条扫码登录
+│   └── xhs_login.py        # 小红书扫码登录
 ├── utils/
-│   ├── logger.py           # 日志
+│   ├── logger.py           # 日志（控制台 + 文件轮转）
 │   ├── file.py             # 文件与缓存
 │   ├── audit.py            # 审计日志（操作记录）
 │   ├── api_key_store.py    # API Key 本地存储
 │   ├── settings_store.py   # 桌面 GUI 设置持久化
 │   ├── wechat_auth_store.py# 微信公众号多账号登录态
 │   ├── weibo_auth_store.py # 微博 Cookie/UID/头像信息
+│   ├── toutiao_auth_store.py # 今日头条 Cookie/UID/头像信息
+│   ├── xhs_auth_store.py   # 小红书 Cookie/UID/头像信息
 │   └── pathsafe.py         # 安全路径处理
 ├── desktop/
 │   ├── main.py             # 桌面应用入口
-│   ├── api.py              # FastAPI 路由（~30 端点）
+│   ├── api.py              # FastAPI 路由（60+ 端点）
 │   ├── app_state.py        # 应用状态管理
 │   ├── build.spec          # PyInstaller 打包配置
 │   ├── build_dmg.sh        # macOS DMG 制作脚本
@@ -159,15 +166,20 @@ MediaForge/
     │   ├── settings.json   #   桌面设置
     │   ├── articles.json   #   文章草稿
     │   ├── operations.json #   操作记录
-    │   ├── wechat.json     #   公众号登录态
-    │   ├── wechat_accounts.json
-    │   ├── wechat_accounts/ #  多账号独立 Chromium profile + storage_state
+    │   ├── materials_meta.json # 素材元数据（标签/评分/使用记录）
+    │   ├── wechat.json     #   旧版公众号登录态
+    │   ├── wechat_accounts.json # 多账号索引
+    │   ├── wechat_accounts/ #   多账号独立 Chromium profile + storage_state
     │   ├── weibo_auth.json #   微博鉴权
     │   ├── weibo_uid_map.json
     │   ├── weibo_topic_map.json
+    │   ├── toutiao_auth.json # 今日头条鉴权
+    │   ├── xhs_auth.json   #   小红书鉴权
+    │   ├── xhs_storage.json #  小红书 storage state
     │   ├── api_keys.json   #   API Key 本地存储
-    │   └── wechat_chromium_profile/  # Chromium 用户数据
+    │   └── wechat_chromium_profile/ # Chromium 用户数据
     └── logs/               # 运行日志
+        └── runs/           # 审计日志文件
 ```
 
 ## 技术栈
@@ -200,6 +212,10 @@ MediaForge/
 | | `TOUTIAO_USER_ID` | 用户 ID | — |
 | | `TOUTIAO_FETCH_MODE` | 抓取模式: `feed` / `user` / `keyword` | feed |
 | | `TOUTIAO_SEARCH_TAGS` | 搜索标签 | 时尚,明星,穿搭 |
+| **小红书** | `XHS_COOKIE` | 登录 Cookie | — |
+| | `XHS_UID` | 用户 UID | — |
+| | `XHS_FETCH_MODE` | 抓取模式: `search` | search |
+| | `XHS_SEARCH_TAGS` | 搜索标签 | 穿搭,美妆,护肤 |
 | **AI 模型** | `AI_PROVIDER` | 供应商: `mimo` / `deepseek` / `glm` / `openai` / `qwen` / `minimax` | mimo |
 | | `AI_MODEL` | 模型名 | mimo-chat |
 | | `AI_API_KEY` | 通用 API Key | — |
@@ -216,7 +232,7 @@ MediaForge/
 | | `WATERMARK_STRICT_MODE` | 严格模式 | true |
 | | `MIN_CLEAN_IMAGES` | 最少干净图数 | 3 |
 | | `ALLOW_WATERMARK_FALLBACK` | 无水印图时降级使用 | false |
-| **发布控制** | `PLATFORM` | 数据源: `weibo` / `toutiao` | weibo |
+| **发布控制** | `PLATFORM` | 数据源: `weibo` / `toutiao` / `xhs` | weibo |
 | | `POST_LIMIT` | 每次处理条数 | 3 |
 | | `WEIBO_PAGES` | 微博翻页数 | 2 |
 | | `PUBLISH_INTERVAL_SECONDS` | 发布间隔（秒） | 10 |

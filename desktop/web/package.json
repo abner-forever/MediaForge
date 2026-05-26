@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "desktop:start": "vite build && cd ../ && python3 main.py",
     "test": "cd ../../ && python3 -m pytest -v",
-    "test:cov": "cd ../../ && python3 -m pytest --cov -v"
+    "test:cov": "cd ../../ && python3 -m pytest --cov -v",
+    "install:package": "pnpm i"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

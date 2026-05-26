@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { logsApi, type LogFileInfo } from '../../api/client';
+import { useStore } from '../../stores';
 
 let vConsoleInstance: any = null;
 
@@ -12,8 +14,139 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return iso;
+  }
+}
+
 export default function AboutSection() {
+  const { addToast } = useStore();
+  const [clickCount, setClickCount] = useState(0);
   const [devMode, setDevMode] = useState(false);
+
+  // ── 日志管理状态 ──
+  const [logFiles, setLogFiles] = useState<LogFileInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [logError, setLogError] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const [openedFile, setOpenedFile] = useState<string | null>(null);
+  const [fileContents, setFileContents] = useState<Record<string, string[]>>({});
+  const [loadingContent, setLoadingContent] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
+
+  useEffect(() => {
+    logsApi.list().then(res => {
+      setLogFiles(res.files);
+      setLogError('');
+    }).catch(err => {
+      setLogError(err.message || '加载日志列表失败');
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleCopyAll = useCallback(async () => {
+    setCopying(true);
+    try {
+      const parts: string[] = [];
+      for (const f of logFiles) {
+        try {
+          const res = await logsApi.content(f.name, 1000);
+          parts.push(`── ${f.name} (${res.total} 行) ──\n${res.lines.join('\n')}`);
+        } catch {
+          parts.push(`── ${f.name} (读取失败) ──`);
+        }
+      }
+      await logsApi.copyToClipboard(parts.join('\n\n'));
+      addToast('所有日志已复制到剪贴板', 'success');
+    } catch (err: any) {
+      addToast(err.message || '复制失败', 'error');
+    } finally {
+      setCopying(false);
+    }
+  }, [logFiles, addToast]);
+
+  const handleSaveAll = useCallback(async () => {
+    setSavingAll(true);
+    try {
+      let saved = 0;
+      for (const f of logFiles) {
+        try {
+          await logsApi.saveToDownloads(f.name);
+          saved++;
+        } catch { /* skip */ }
+      }
+      addToast(`${saved} 个日志文件已保存到下载目录`, 'success');
+    } catch (err: any) {
+      addToast(err.message || '保存失败', 'error');
+    } finally {
+      setSavingAll(false);
+    }
+  }, [logFiles, addToast]);
+
+  const toggleFile = useCallback(async (name: string) => {
+    if (openedFile === name) {
+      setOpenedFile(null);
+      return;
+    }
+    setOpenedFile(name);
+    if (!fileContents[name]) {
+      setLoadingContent(name);
+      try {
+        const res = await logsApi.content(name, 100);
+        setFileContents(prev => ({ ...prev, [name]: res.lines }));
+      } catch {
+        setFileContents(prev => ({ ...prev, [name]: ['（读取失败）'] }));
+      } finally {
+        setLoadingContent(null);
+      }
+    }
+  }, [openedFile, fileContents]);
+
+  const handleCopyFile = useCallback(async (file: LogFileInfo) => {
+    setCopying(true);
+    try {
+      const res = await logsApi.content(file.name, 2000);
+      const header = `── ${file.name} (${formatSize(file.size)}, ${res.total} 行) ──\n`;
+      await logsApi.copyToClipboard(header + res.lines.join('\n'));
+      addToast(`「${file.name}」日志已复制到剪贴板`, 'success');
+    } catch (err: any) {
+      addToast(err.message || '复制失败', 'error');
+    } finally {
+      setCopying(false);
+    }
+  }, [addToast]);
+
+  const handleVersionClick = useCallback(async () => {
+    const next = clickCount + 1;
+    setClickCount(next);
+
+    if (next >= 5) {
+      setClickCount(0);
+      if (vConsoleInstance) return;
+
+      try {
+        await loadScript('https://unpkg.com/vconsole@3/dist/vconsole.min.js');
+        const VConsole = (window as any).VConsole;
+        vConsoleInstance = new VConsole();
+        setDevMode(true);
+      } catch (err) {
+        console.error('vConsole 加载失败:', err);
+      }
+      return;
+    }
+
+    setTimeout(() => setClickCount(c => Math.max(0, c - 1)), 2000);
+  }, [clickCount]);
 
   const handleExitDevMode = () => {
     if (vConsoleInstance) {
@@ -23,16 +156,15 @@ export default function AboutSection() {
     setDevMode(false);
   };
 
+  const totalSize = logFiles.reduce((s, f) => s + f.size, 0);
+
   return (
     <div className="space-y-5">
       {/* ── App Info Card ── */}
       <div className="card space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-soft shrink-0">
-            <svg className="w-7 h-7 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5v-15A2.5 2.5 0 016.5 2H20v20H6.5a2.5 2.5 0 010-5H20" />
-              <path d="M12 6v7M9 9l3-3 3 3" />
-            </svg>
+            <img src="/static/logo.png" alt="图文工坊" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
           </div>
           <div>
             <h2 className="text-lg font-bold text-text tracking-tight">MediaForge</h2>
@@ -72,15 +204,165 @@ export default function AboutSection() {
       {/* ── Version Card ── */}
       <div className="card">
         <div className="section-header mb-3">版本信息</div>
-        <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-bg-secondary">
+        <button
+          onClick={handleVersionClick}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-bg-secondary hover:bg-accent-softer transition-colors cursor-pointer"
+        >
           <span className="text-sm text-text-secondary">应用版本</span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-text font-mono">v{__APP_VERSION__}</span>
+            {clickCount > 0 && !devMode && (
+              <span className="text-[10px] text-accent font-medium bg-accent-soft px-2 py-0.5 rounded-full">
+                {5 - clickCount}
+              </span>
+            )}
+            {devMode && (
+              <span className="text-[10px] text-green-500 font-medium bg-green-500/10 px-2 py-0.5 rounded-full">
+                已解锁
+              </span>
+            )}
           </div>
+        </button>
+        <div className="flex items-center justify-between px-4 py-2.5 mt-1 rounded-xl bg-bg-secondary/50">
+          <span className="text-sm text-text-secondary">更新时间</span>
+          <span className="text-sm text-text-muted">
+            {new Date(__BUILD_TIME__).toLocaleString('zh-CN', {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit'
+            })}
+          </span>
         </div>
       </div>
 
-      {/* ── Dev mode hint (hidden unless triggered via console) ── */}
+      {/* ── 日志与反馈 ── */}
+      <div className="card space-y-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <svg className={`w-4 h-4 text-text-muted transition-transform ${expanded ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            <span className="section-header">日志与反馈</span>
+          </div>
+          {!loading && !logError && (
+            <span className="text-xs text-text-muted">{logFiles.length} 个文件 · {formatSize(totalSize)}</span>
+          )}
+        </button>
+
+        {/* 折叠状态下只显示懒人操作按钮 */}
+        {!expanded && !loading && !logError && logFiles.length > 0 && (
+          <div className="flex items-center gap-2 pt-1">
+            <button onClick={handleCopyAll} disabled={copying} className="btn btn-sm">
+              {copying ? '复制中...' : '复制全部日志'}
+            </button>
+            <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
+              {savingAll ? '保存中...' : '保存到下载目录'}
+            </button>
+          </div>
+        )}
+        {!expanded && !loading && !logError && logFiles.length === 0 && (
+          <p className="text-sm text-text-muted pt-1">暂无日志文件</p>
+        )}
+
+        {/* 展开后显示详情 */}
+        {expanded && (
+          <>
+            {loading && (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span className="ml-2 text-sm text-text-muted">加载日志列表...</span>
+              </div>
+            )}
+
+            {logError && (
+              <div className="empty-state py-4">
+                <p className="text-sm text-danger">{logError}</p>
+                <button className="btn btn-xs mt-2" onClick={() => { setLoading(true); setLogError('');
+                  logsApi.list().then(res => { setLogFiles(res.files); setLogError(''); }).catch(err => setLogError(err.message || '加载失败')).finally(() => setLoading(false));
+                }}>重试</button>
+              </div>
+            )}
+
+            {!loading && !logError && logFiles.length === 0 && (
+              <div className="empty-state py-4">
+                <p className="text-sm text-text-muted">暂无日志文件</p>
+              </div>
+            )}
+
+            {!loading && !logError && logFiles.length > 0 && (
+              <div className="space-y-1">
+                {logFiles.map(file => (
+                  <div key={file.name} className="rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => toggleFile(file.name)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-bg-secondary hover:bg-accent-softer transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <svg className={`w-3.5 h-3.5 text-text-muted shrink-0 transition-transform ${openedFile === file.name ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                        <svg className="w-4 h-4 text-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-text">{file.name}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <span className="text-xs text-text-muted">{formatSize(file.size)}</span>
+                        <span className="text-xs text-text-muted">{formatTime(file.mtime)}</span>
+                      </div>
+                    </button>
+
+                    {openedFile === file.name && (
+                      <div className="border-t border-border bg-bg-secondary/50">
+                        <pre className="max-h-60 overflow-auto p-3 text-[11px] leading-relaxed text-text-secondary font-mono whitespace-pre-wrap break-all select-text">
+                          {loadingContent === file.name ? (
+                            <span className="text-text-muted">加载中...</span>
+                          ) : fileContents[file.name]?.length ? (
+                            fileContents[file.name].join('\n')
+                          ) : (
+                            <span className="text-text-muted">（空）</span>
+                          )}
+                        </pre>
+                        <div className="flex justify-end px-3 pb-2">
+                          <button
+                            onClick={() => handleCopyFile(file)}
+                            disabled={copying}
+                            className="btn btn-xs"
+                          >
+                            {copying ? '复制中...' : '复制此文件'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!loading && !logError && logFiles.length > 0 && (
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={handleCopyAll} disabled={copying} className="btn btn-sm">
+                  {copying ? '复制中...' : '复制全部日志'}
+                </button>
+                <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
+                  {savingAll ? '保存中...' : '保存到下载目录'}
+                </button>
+              </div>
+            )}
+
+            <p className="text-xs text-text-muted pt-1">
+              日志文件包含应用运行期间的操作记录和错误信息。如需反馈问题，请复制日志内容并联系开发团队。
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* ── Dev mode hint ── */}
       {devMode && (
         <div className="card border-accent/30 bg-accent-softer">
           <div className="flex items-center justify-between">

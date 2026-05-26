@@ -12,9 +12,10 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   menuPosition?: 'bottom' | 'top';
+  size?: 'md' | 'sm';
 }
 
-export default function Select({ value, onChange, options, placeholder, disabled, menuPosition = 'bottom' }: SelectProps) {
+export default function Select({ value, onChange, options, placeholder, disabled, menuPosition = 'bottom', size = 'md' }: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -47,9 +48,10 @@ export default function Select({ value, onChange, options, placeholder, disabled
         onClick={() => !disabled && setOpen((v) => !v)}
         className={`
           w-full flex items-center justify-between
-          px-3 py-[8px] rounded-lg border text-[13px] text-left
+          rounded-lg border text-left
           transition-all duration-150
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
+          ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-[8px] text-[13px]'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           ${open
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
@@ -64,7 +66,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
           {selected ? selected.label : placeholder ?? '请选择'}
         </span>
         <svg
-          className={`w-3.5 h-3.5 shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''} ${size === 'sm' ? 'w-3 h-3 ml-1.5' : 'w-3.5 h-3.5 ml-2'}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         >
           <path d="m6 9 6 6 6-6" />
@@ -83,7 +85,8 @@ export default function Select({ value, onChange, options, placeholder, disabled
                 key={opt.value}
                 onClick={() => { onChange(opt.value); close(); }}
                 className={`
-                  px-3 py-2 text-[13px] cursor-pointer transition-colors duration-100
+                  cursor-pointer transition-colors duration-100
+                  ${size === 'sm' ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-[13px]'}
                   ${isActive
                     ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
                     : 'text-[var(--text)] hover:bg-[var(--bg-secondary)]'

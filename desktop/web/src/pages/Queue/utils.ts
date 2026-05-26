@@ -19,7 +19,14 @@ export function formatTime(timeStr?: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}小时前`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}天前`;
-  const months = Math.floor(days / 30);
-  return `${months}个月前`;
+  if (days >= 1) {
+    const d = new Date(timeStr);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day} ${hh}:${mm}`;
+  }
+  return `${hours}小时前`;
 }

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Post, ScoreInfo, QueueItem, ArticleItem, InspirationTopic, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
-import { settingsApi } from '../api/client';
+import { settingsApi, logsApi } from '../api/client';
 
 /* ── Theme Presets ──────────────────────────── */
 export interface ThemePreset {
@@ -54,6 +54,7 @@ interface AppState {
   openLightbox: (images: string[], index: number, originals?: string[]) => void;
   closeLightbox: () => void;
   lightboxNav: (delta: number) => void;
+  lightboxGoTo: (index: number) => void;
 
   // Progress overlay
   progress: { current: number; total: number; detail: string } | null;
@@ -98,6 +99,7 @@ interface AppState {
   toggleFolderExpanded: (path: string) => void;
   matToggleSelect: (path: string) => void;
   matSelectAll: (paths: string[]) => void;
+  matSetSelection: (paths: string[]) => void;
   matClearSelection: () => void;
   setViewMode: (mode: 'grid' | 'list') => void;
 
@@ -188,6 +190,8 @@ export const useStore = create<AppState>((set, get) => ({
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
     }, 3000);
+    // 将 toast 写入 app.log（静默失败）
+    logsApi.logToast(msg, type).catch(() => {});
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
@@ -202,6 +206,11 @@ export const useStore = create<AppState>((set, get) => ({
     const total = lb.images.length;
     const newIdx = (lb.index + delta + total) % total;
     set({ lightbox: { ...lb, index: newIdx } });
+  },
+  lightboxGoTo: (index) => {
+    const lb = get().lightbox;
+    if (!lb || index < 0 || index >= lb.images.length) return;
+    set({ lightbox: { ...lb, index } });
   },
 
   // Progress
@@ -288,6 +297,7 @@ export const useStore = create<AppState>((set, get) => ({
       const isAll = s.matSelected.size === all.size && [...all].every((p) => s.matSelected.has(p));
       return { matSelected: isAll ? new Set() : all };
     }),
+  matSetSelection: (paths) => set({ matSelected: new Set(paths) }),
   matClearSelection: () => set({ matSelected: new Set() }),
   setViewMode: (mode) => set({ viewMode: mode }),
 

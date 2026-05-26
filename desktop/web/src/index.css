@@ -56,6 +56,11 @@
   /* Easing */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-blur: 12px;
 }
 
 [data-theme="dark"] {
@@ -91,6 +96,11 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* Glassmorphism */
+  --glass-bg: rgba(15, 16, 17, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: 12px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -121,6 +131,11 @@
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+    /* Glassmorphism */
+    --glass-bg: rgba(15, 16, 17, 0.5);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-blur: 12px;
   }
 }
 
@@ -159,6 +174,8 @@ input, textarea, [contenteditable="true"] {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
 
 /* ── Form Elements — Linear style ─────────────── */
 input, select, textarea {
@@ -592,6 +609,13 @@ input[type="range"] { display: none; }
 .card-hover:hover {
   border-color: var(--accent);
   background: var(--accent-softer);
+}
+
+/* ── Glassmorphism ──────────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
 }
 
 /* ── Status indicators ──────────────────────── */

@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -50,7 +51,34 @@ from services.xhs_login import run_xhs_login
 from utils.audit import create_run_log_path, append_audit
 from utils.file import read_json
 
+# 初始化文件日志（桌面 GUI 启动时自动捕获日志到 data/logs/app.log）
+from utils.logger import setup_file_logging
+setup_file_logging(LOG_DIR)
+
 app = FastAPI(title="图文工坊")
+
+# ── 请求日志中间件：记录所有 API 调用到 app.log ──────────
+from utils.logger import get_logger as _get_req_logger
+_req_logger = _get_req_logger("api")
+
+@app.middleware("http")
+async def _log_requests(request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    cost = time.time() - start
+    if request.url.path.startswith("/api/"):
+        _req_logger.info("%s %s → %s (%.0fms)", request.method, request.url.path, response.status_code, cost * 1000)
+    return response
+
+# ── Toast 日志写入（前端操作提示落地到 app.log）────────
+class ToastLogRequest(BaseModel):
+    message: str
+    type: str = "info"
+
+@app.post("/api/logs/toast")
+async def log_toast(req: ToastLogRequest):
+    _req_logger.info("[TOAST/%s] %s", req.type, req.message)
+    return {"success": True}
 
 # 静态文件（Vite 构建输出 + logo 等资源）
 # 在冻结（PyInstaller）环境中，静态文件可能被放到 sys._MEIPASS 或 dist/<app>/_internal/desktop/static
@@ -2226,6 +2254,33 @@ async def materials_rename_folder(req: FolderRenameRequest):
     return {"success": True, "path": new_path.relative_to(root).as_posix()}
 
 
+class FileRenameRequest(BaseModel):
+    path: str
+    new_name: str
+
+
+@app.put("/api/materials/file")
+async def materials_rename_file(req: FileRenameRequest):
+    """重命名文件。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    target = (root / req.path).resolve()
+    if not target.exists() or not target.is_file():
+        raise HTTPException(404, f"文件不存在: {req.path}")
+    if not str(target).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+    new_name = req.new_name.strip()
+    if not new_name:
+        raise HTTPException(400, "文件名不能为空")
+    # 若新名称没有后缀名则提示
+    if '.' not in new_name:
+        raise HTTPException(400, "文件名必须包含后缀名（如 .jpg、.png）")
+    new_path = target.parent / new_name
+    if new_path.exists():
+        raise HTTPException(409, f"目标文件已存在: {new_name}")
+    target.rename(new_path)
+    return {"success": True, "path": new_path.relative_to(root).as_posix()}
+
+
 @app.delete("/api/materials/folder")
 async def materials_delete_folder(path: str = Query(...)):
     """递归删除文件夹及其内容。"""
@@ -3059,6 +3114,136 @@ def _collect_publish_history() -> list:
     # 按时间倒序
     items.sort(key=lambda x: x.get("publish_time", ""), reverse=True)
     return items
+
+
+# ── 日志与反馈 API ──────────────────────────────
+
+
+@app.get("/api/logs/list")
+async def list_log_files():
+    """列出所有可用的日志文件（app.log, crash.log, runs/*.jsonl）。"""
+    files = []
+
+    # 主日志文件 app.log（含备份）
+    for f in sorted(LOG_DIR.glob("app.log*"), reverse=True):
+        files.append({
+            "name": f.name,
+            "size": f.stat().st_size,
+            "mtime": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+        })
+
+    # 崩溃日志
+    crash = LOG_DIR / "crash.log"
+    if crash.exists():
+        files.append({
+            "name": "crash.log",
+            "size": crash.stat().st_size,
+            "mtime": datetime.fromtimestamp(crash.stat().st_mtime).isoformat(),
+        })
+
+    # 运行审计日志（最近 10 个）
+    runs_dir = LOG_DIR / "runs"
+    if runs_dir.exists():
+        for f in sorted(runs_dir.glob("*.jsonl"), reverse=True)[:10]:
+            files.append({
+                "name": f"runs/{f.name}",
+                "size": f.stat().st_size,
+                "mtime": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            })
+
+    return {"files": files}
+
+
+@app.get("/api/logs/content")
+async def get_log_content(file: str = Query(...), max_lines: int = Query(500)):
+    """读取指定日志文件内容，默认最多 500 行。
+
+    安全限制：文件路径必须位于 LOG_DIR 下，防止目录穿越。
+    """
+    # 安全检查：防止目录穿越
+    safe_path = (LOG_DIR / file).resolve()
+    if not str(safe_path).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(403, "不允许访问该路径")
+    if not safe_path.exists() or not safe_path.is_file():
+        raise HTTPException(404, "日志文件不存在")
+    if safe_path.stat().st_size > 50 * 1024 * 1024:
+        raise HTTPException(413, "日志文件过大（超过 50MB）")
+
+    lines = safe_path.read_text(encoding="utf-8").splitlines()
+    total = len(lines)
+    if max_lines > 0 and total > max_lines:
+        lines = lines[-max_lines:]
+    return {"name": file, "lines": lines, "total": total}
+
+
+@app.post("/api/logs/clipboard")
+async def copy_log_to_clipboard(req: dict):
+    """将日志内容复制到系统剪贴板。
+
+    前端读取日志内容后，POST 到本接口，由后端写入系统剪贴板，
+    避免 PyWebView 前端无法访问剪贴板的问题。
+    """
+    text = (req.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "内容为空")
+
+    try:
+        _copy_to_clipboard(text)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(500, f"复制到系统剪贴板失败: {e}")
+
+
+@app.post("/api/logs/save-to-downloads")
+async def save_log_to_downloads(req: dict):
+    """将日志文件保存到系统下载目录。"""
+    file = (req.get("file") or "").strip()
+    if not file:
+        raise HTTPException(400, "缺少文件名")
+
+    safe_path = (LOG_DIR / file).resolve()
+    if not str(safe_path).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(403, "不允许访问该路径")
+    if not safe_path.exists() or not safe_path.is_file():
+        raise HTTPException(404, "日志文件不存在")
+
+    downloads = Path.home() / "Downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+
+    dest = downloads / safe_path.name
+    # 同名文件自动添加序号
+    counter = 1
+    while dest.exists():
+        stem = safe_path.stem
+        suffix = safe_path.suffix
+        dest = downloads / f"{stem}_{counter}{suffix}"
+        counter += 1
+
+    import shutil
+    shutil.copy2(str(safe_path), str(dest))
+    return {"success": True, "path": str(dest)}
+
+
+def _copy_to_clipboard(text: str) -> None:
+    """跨平台写入系统剪贴板。"""
+    import subprocess
+    try:
+        if sys.platform == "darwin":
+            proc = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-8"))
+        elif sys.platform == "win32":
+            proc = subprocess.Popen(["clip"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-8"))
+        else:
+            # Linux: 尝试 xclip 或 xsel
+            try:
+                proc = subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE)
+                proc.communicate(input=text.encode("utf-8"))
+            except FileNotFoundError:
+                proc = subprocess.Popen(["xsel", "--clipboard", "--input"], stdin=subprocess.PIPE)
+                proc.communicate(input=text.encode("utf-8"))
+    except Exception as e:
+        raise RuntimeError(f"剪贴板写入失败: {e}")
 
 
 # ── SPA Catch-All（放在所有路由最后）─────────────────

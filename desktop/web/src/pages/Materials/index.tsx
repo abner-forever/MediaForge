@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../../stores';
 import { materialsApi, queueApi } from '../../api/client';
 import type { TreeNode, BrowseFolder, BrowseFile, ScoreInfo, MaterialMeta } from '../../api/client';
@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import Modal from '../../components/Modal';
 import Loading from '../../components/Loading';
 import Checkbox from '../../components/Checkbox';
+import Select, { type SelectOption } from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
 import { imgSrc, formatSize } from './utils';
 import FolderTree from './FolderTree';
@@ -20,15 +21,16 @@ export default function Materials() {
     folderTree, currentPath, currentFolders, currentFiles, breadcrumb,
     matSelected, viewMode,
     setFolderTree, setCurrentPath, setCurrentFolders, setCurrentFiles, setBreadcrumb,
-    toggleFolderExpanded, matToggleSelect, matSelectAll, matClearSelection, setViewMode,
+    toggleFolderExpanded, matToggleSelect, matSelectAll, matSetSelection, matClearSelection, setViewMode,
     openLightbox, addToast,
   } = useStore();
 
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string; type: 'file' | 'folder' } | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteFolderConfirm, setShowDeleteFolderConfirm] = useState<string | null>(null);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; target: string; type: 'file' | 'folder' } | null>(null);
@@ -49,6 +51,11 @@ export default function Materials() {
   const [filterScene, setFilterScene] = useState('');
   const [filterUsage, setFilterUsage] = useState<'all' | 'used' | 'unused'>('all');
   const [tagEditorTarget, setTagEditorTarget] = useState<string | null>(null);
+
+  // Box selection
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [boxStyle, setBoxStyle] = useState<React.CSSProperties | null>(null);
+  const boxTracking = useRef({ active: false, dragging: false, startX: 0, startY: 0, rect: null as { left: number; top: number; width: number; height: number } | null });
 
   const loadScoresAndMeta = useCallback(async () => {
     try {
@@ -126,6 +133,26 @@ export default function Materials() {
     return true;
   });
 
+  // 有筛选条件时，只显示包含匹配文件的文件夹
+  const hasFilter = filterTag || filterCelebrity || filterScene || filterUsage !== 'all';
+  const matchingPaths = hasFilter
+    ? new Set(
+        Object.entries(metaMap)
+          .filter(([, m]) => {
+            if (filterTag && !m?.tags?.includes(filterTag)) return false;
+            if (filterCelebrity && m?.celebrity !== filterCelebrity) return false;
+            if (filterScene && m?.scene !== filterScene) return false;
+            if (filterUsage === 'used' && !m?.used_count) return false;
+            if (filterUsage === 'unused' && m?.used_count) return false;
+            return true;
+          })
+          .map(([path]) => path),
+      )
+    : null;
+  const filteredFolders = matchingPaths
+    ? currentFolders.filter(f => [...matchingPaths].some(p => p.startsWith(f.path + '/')))
+    : currentFolders;
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     await withCreating(async () => {
@@ -147,7 +174,11 @@ export default function Materials() {
     if (!renameTarget || !renameValue.trim()) return;
     await withRenaming(async () => {
       try {
-        await materialsApi.renameFolder(renameTarget.path, renameValue.trim());
+        if (renameTarget.type === 'folder') {
+          await materialsApi.renameFolder(renameTarget.path, renameValue.trim());
+        } else {
+          await materialsApi.renameFile(renameTarget.path, renameValue.trim());
+        }
         addToast('已重命名', 'success');
         setRenameTarget(null);
         await refreshCurrent();
@@ -158,6 +189,27 @@ export default function Materials() {
       }
     });
   };
+
+  // 重命名弹窗打开时，自动选中文件名部分（不含后缀）
+  useEffect(() => {
+    if (!renameTarget) return;
+    // Modal 使用 requestAnimationFrame 延迟渲染 DOM，setTimeout 确保在 Modal 完成挂载后执行
+    const timer = setTimeout(() => {
+      const input = renameInputRef.current;
+      if (!input) return;
+      input.focus();
+      const val = input.value;
+      if (renameTarget.type === 'file') {
+        const dot = val.lastIndexOf('.');
+        if (dot > 0) {
+          input.setSelectionRange(0, dot);
+          return;
+        }
+      }
+      input.select();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [renameTarget]);
 
   const handleDeleteFolder = async (path: string) => {
     try {
@@ -271,18 +323,99 @@ export default function Materials() {
     if (type === 'folder') {
       return [
         { label: '打开', onClick: () => navigateTo(target) },
-        { label: '重命名', onClick: () => { setRenameTarget({ path: target, name }); setRenameValue(name); } },
+        { label: '重命名', onClick: () => { setRenameTarget({ path: target, name, type: 'folder' }); setRenameValue(name); } },
         { label: '删除文件夹', danger: true, onClick: () => setShowDeleteFolderConfirm(target) },
       ];
     }
     return [
       { label: '查看大图', onClick: () => openLightboxFor(target) },
       { label: '编辑标签', onClick: () => setTagEditorTarget(target) },
+      { label: '重命名', onClick: () => { setRenameTarget({ path: target, name, type: 'file' }); setRenameValue(name); } },
       { label: '加入发布队列', onClick: async () => { try { await queueApi.add({ title: '', desc: '', images: [target], cover: target }); addToast('已加入发布队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); } } },
       { label: name, disabled: true },
       { label: '删除此图片', danger: true, onClick: async () => { try { await materialsApi.delete([target]); addToast('已删除', 'success'); await refreshCurrent(); const t = await materialsApi.tree(); setFolderTree(t.tree); } catch (err: any) { addToast(err.message, 'error'); } } },
     ];
   };
+
+  // Box selection: pointerdown on grid empty space
+  const handleGridPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-mat-path]') || target.closest('.folder-card')) return;
+    const t = boxTracking.current;
+    t.active = true;
+    t.dragging = false;
+    t.startX = e.clientX;
+    t.startY = e.clientY;
+    t.rect = null;
+    e.preventDefault();
+  }, []);
+
+  // Global pointermove/pointerup for box selection
+  useEffect(() => {
+    const t = boxTracking.current;
+    const onMove = (e: PointerEvent) => {
+      if (!t.active) return;
+      const dx = e.clientX - t.startX;
+      const dy = e.clientY - t.startY;
+      if (!t.dragging && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+        t.dragging = true;
+        useStore.getState().matClearSelection();
+      }
+      if (t.dragging) {
+        t.rect = {
+          left: Math.min(t.startX, e.clientX),
+          top: Math.min(t.startY, e.clientY),
+          width: Math.abs(dx),
+          height: Math.abs(dy),
+        };
+        setBoxStyle({
+          position: 'fixed',
+          left: t.rect.left,
+          top: t.rect.top,
+          width: t.rect.width,
+          height: t.rect.height,
+          pointerEvents: 'none',
+          zIndex: 9999,
+        });
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!t.active) return;
+      const rect = t.rect;
+      if (t.dragging && rect && rect.width > 0 && rect.height > 0) {
+        const selectedPaths: string[] = [];
+        gridRef.current?.querySelectorAll('[data-mat-path]').forEach(el => {
+          const r = el.getBoundingClientRect();
+          if (!(r.right < rect.left || r.left > rect.left + rect.width ||
+                r.bottom < rect.top || r.top > rect.top + rect.height)) {
+            const p = (el as HTMLElement).dataset.matPath;
+            if (p) selectedPaths.push(p);
+          }
+        });
+        if (e.ctrlKey || e.metaKey) {
+          const existing = useStore.getState().matSelected;
+          const next = new Set(existing);
+          selectedPaths.forEach(p => next.add(p));
+          useStore.getState().matSetSelection([...next]);
+        } else {
+          useStore.getState().matSetSelection(selectedPaths);
+        }
+      } else {
+        useStore.getState().matClearSelection();
+      }
+      t.active = false;
+      t.dragging = false;
+      t.rect = null;
+      setBoxStyle(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, []);
 
   if (loading && folderTree.length === 0) {
     return (
@@ -293,7 +426,7 @@ export default function Materials() {
     );
   }
 
-  const allSelectable = [...filteredFiles.map(f => f.path), ...currentFolders.map(f => f.path)];
+  const allSelectable = [...filteredFiles.map(f => f.path), ...filteredFolders.map(f => f.path)];
 
   return (
     <div className="space-y-4 animate-in">
@@ -319,41 +452,32 @@ export default function Materials() {
           {allTags.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-text-muted">标签</span>
-              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
-                value={filterTag} onChange={e => setFilterTag(e.target.value)}>
-                <option value="">全部</option>
-                {allTags.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <Select size="sm" value={filterTag} onChange={setFilterTag}
+                options={[{ label: '全部', value: '' }, ...allTags.map(t => ({ label: t, value: t }))]} />
             </div>
           )}
           {allCelebrities.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-text-muted">人物</span>
-              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
-                value={filterCelebrity} onChange={e => setFilterCelebrity(e.target.value)}>
-                <option value="">全部</option>
-                {allCelebrities.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Select size="sm" value={filterCelebrity} onChange={setFilterCelebrity}
+                options={[{ label: '全部', value: '' }, ...allCelebrities.map(c => ({ label: c, value: c }))]} />
             </div>
           )}
           {allScenes.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-text-muted">场景</span>
-              <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
-                value={filterScene} onChange={e => setFilterScene(e.target.value)}>
-                <option value="">全部</option>
-                {allScenes.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select size="sm" value={filterScene} onChange={setFilterScene}
+                options={[{ label: '全部', value: '' }, ...allScenes.map(s => ({ label: s, value: s }))]} />
             </div>
           )}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-text-muted">使用状态</span>
-            <select className="text-xs px-2 py-1 rounded-md border border-border bg-bg-base text-text"
-              value={filterUsage} onChange={e => setFilterUsage(e.target.value as any)}>
-              <option value="all">全部</option>
-              <option value="used">已使用</option>
-              <option value="unused">未使用</option>
-            </select>
+            <Select size="sm" value={filterUsage} onChange={v => setFilterUsage(v as any)}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '已使用', value: 'used' },
+                { label: '未使用', value: 'unused' },
+              ]} />
           </div>
           {(filterTag || filterCelebrity || filterScene || filterUsage !== 'all') && (
             <button className="text-xs text-accent hover:underline" onClick={() => { setFilterTag(''); setFilterCelebrity(''); setFilterScene(''); setFilterUsage('all'); }}>
@@ -415,7 +539,7 @@ export default function Materials() {
               <button className="btn btn-sm btn-danger" onClick={() => setShowBatchDeleteConfirm(true)} disabled={!matSelected.size || deleting}>删除</button>
 
               <div className="ml-auto text-xs text-text-muted tabular-nums">
-                {currentFolders.length + currentFiles.length} 项
+                {filteredFolders.length + filteredFiles.length} 项
                 {matSelected.size > 0 && <span className="ml-2">已选 <strong className="text-text">{matSelected.size}</strong></span>}
               </div>
             </div>
@@ -423,7 +547,7 @@ export default function Materials() {
 
           {loading ? (
             <div className="card flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
-          ) : currentFolders.length === 0 && currentFiles.length === 0 ? (
+          ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
             <div className="card">
               <div className="empty-state py-16">
                 <div className="empty-state-icon">📁</div>
@@ -432,33 +556,40 @@ export default function Materials() {
               </div>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
-              {currentFolders.map(folder => (
-                <FolderCard
-                  key={folder.path}
-                  folder={folder}
-                  onDoubleClick={() => navigateTo(folder.path)}
-                  onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDropOnFolder(e, folder.path)}
-                  isDragOver={dragOverFolder === folder.path}
-                  setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
-                />
-              ))}
-              {filteredFiles.map(file => (
-                <ImageCard
-                  key={file.path}
-                  file={file}
-                  selected={matSelected.has(file.path)}
-                  onToggleSelect={() => matToggleSelect(file.path)}
-                  onOpenLightbox={() => openLightboxFor(file.path)}
-                  onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                  onDragStart={(e) => handleDragStart(e, file.path)}
-                  scoreInfo={scoreMap[file.path] || null}
-                  meta={metaMap[file.path] || null}
-                />
-              ))}
-            </div>
+            <>
+              <div ref={gridRef} className={`grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 ${boxStyle ? 'select-none' : ''}`}
+                onPointerDown={handleGridPointerDown}>
+                {filteredFolders.map(folder => (
+                  <FolderCard
+                    key={folder.path}
+                    folder={folder}
+                    onDoubleClick={() => navigateTo(folder.path)}
+                    onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDropOnFolder(e, folder.path)}
+                    isDragOver={dragOverFolder === folder.path}
+                    setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
+                  />
+                ))}
+                {filteredFiles.map(file => (
+                  <div key={file.path} data-mat-path={file.path}>
+                    <ImageCard
+                      file={file}
+                      selected={matSelected.has(file.path)}
+                      onToggleSelect={() => matToggleSelect(file.path)}
+                      onOpenLightbox={() => openLightboxFor(file.path)}
+                      onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                      onDragStart={(e) => handleDragStart(e, file.path)}
+                      scoreInfo={scoreMap[file.path] || null}
+                      meta={metaMap[file.path] || null}
+                    />
+                  </div>
+                ))}
+              </div>
+              {boxStyle && (
+                <div style={boxStyle} className="fixed pointer-events-none z-[9999] rounded border-2 border-accent bg-accent/10" />
+              )}
+            </>
           ) : (
             <div className="card overflow-hidden">
               <table className="w-full text-sm">
@@ -470,7 +601,7 @@ export default function Materials() {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentFolders.map(folder => (
+                  {filteredFolders.map(folder => (
                     <tr key={folder.path} className="border-b border-border/50 hover:bg-bg-base/50 cursor-pointer"
                       onDoubleClick={() => navigateTo(folder.path)}
                       onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
@@ -562,8 +693,8 @@ export default function Materials() {
       </Modal>
 
       <Modal open={!!renameTarget} onClose={() => setRenameTarget(null)} className="w-80">
-        <h3 className="text-sm font-bold text-text mb-3">重命名文件夹</h3>
-        <input type="text" className="w-full text-sm mb-3" value={renameValue}
+        <h3 className="text-sm font-bold text-text mb-3">{renameTarget?.type === 'folder' ? '重命名文件夹' : '重命名文件'}</h3>
+        <input ref={renameInputRef} type="text" className="w-full text-sm mb-3" value={renameValue}
           onChange={e => setRenameValue(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenameTarget(null); }}
           autoFocus />

@@ -493,41 +493,95 @@ def _select_cover(page, editor_frame, on_log=None, cover_path: Optional[str] = N
         _emit("未找到从正文选择，跳过封面设置", on_log)
         return False
     _emit("已点击从正文选择", on_log)
-    _human_sleep(0.5, 0.3)
+    _human_sleep(1.5, 0.5)
 
     # 4. 在弹窗中选择第一张图片（已上传到正文的图片）
     for attempt in range(3):
         if attempt > 0:
             _emit(f"重试查找封面图片（第{attempt+1}次）...", on_log)
             _human_sleep(2.0, 0.5)
-        img_selectors = [
-            ".weui-desktop-dialog__body img",
-            ".weui-desktop-dialog__bd img",
-            ".weui-desktop-dialog img",
-            ".weui-desktop-dialog li",
-            "[role='dialog'] img",
-            "[role='dialog'] li",
-            ".weui-desktop-grid__item",
-            "[class*='img-picker'] li",
-            "[class*='imgPicker'] li",
-        ]
-        if _click_first_available(page, img_selectors, wait_ms=3000):
-            _emit("已选择封面图片", on_log)
-            return _confirm_cover_dialogs(page, on_log)
 
-        # 降级：dialog 内任何可见图片
+        # 方案 A: 遍历所有可见 dialog/弹窗内的图片
         for scope in [page] + page.frames:
-            for role_sel in ["[role='dialog']", ".weui-desktop-dialog"]:
+            try:
+                if scope.is_detached():
+                    continue
+            except Exception:
+                continue
+
+            # A1: 已知 dialog 结构选择器
+            for dialog_sel in ["[role='dialog']", ".weui-desktop-dialog", ".weui-dialog",
+                               "[class*='dialog']", "[class*='Dialog']",
+                               ".weui-desktop-dialog__wrapper",
+                               ".weui-desktop-panel__ft", ".appmsg_cover_selector"]:
                 try:
-                    dialog = scope.locator(role_sel).first
-                    if dialog.is_visible(timeout=500):
-                        imgs = dialog.locator("img")
-                        if imgs.count() > 0:
-                            imgs.first.click()
-                            _emit("降级选择封面图片", on_log)
-                            return _confirm_cover_dialogs(page, on_log)
+                    dialog = scope.locator(dialog_sel).first
+                    if not dialog.is_visible(timeout=300):
+                        continue
+                    # dialog 内找 img 并点击
+                    imgs = dialog.locator("img")
+                    if imgs.count() > 0:
+                        imgs.first.scroll_into_view_if_needed()
+                        imgs.first.click()
+                        _emit("已选择封面图片", on_log)
+                        return _confirm_cover_dialogs(page, on_log)
                 except Exception:
                     continue
+
+            # A2: 直接在整个 scope 中找可见 img（弹窗可能无特定 role）
+            try:
+                all_imgs = scope.locator("img:visible")
+                count = all_imgs.count()
+                if count > 0:
+                    # 排除 tiny/icon 类图片（宽度 < 50）
+                    for i in range(count):
+                        try:
+                            box = all_imgs.nth(i).bounding_box()
+                            if box and box["width"] >= 50:
+                                all_imgs.nth(i).click()
+                                _emit("已选择封面图片(可见图片降级)", on_log)
+                                return _confirm_cover_dialogs(page, on_log)
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+
+        # 方案 B: 用 JS 查找弹窗中所有图片并点击第一张可见的
+        for scope in [page] + page.frames:
+            try:
+                if scope.is_detached():
+                    continue
+                clicked = scope.evaluate("""() => {
+                    // 找所有可见的弹窗/浮层
+                    const dialogs = document.querySelectorAll('[role="dialog"], .weui-desktop-dialog, ' +
+                        '[class*="dialog"], [class*="Dialog"], .weui-desktop-dialog__wrapper');
+                    for (const dlg of dialogs) {
+                        if (dlg.offsetParent === null) continue;
+                        const imgs = dlg.querySelectorAll('img');
+                        for (const img of imgs) {
+                            const r = img.getBoundingClientRect();
+                            if (r.width >= 50 && r.height >= 30) {
+                                img.click();
+                                return true;
+                            }
+                        }
+                    }
+                    // 兜底：页面中任何宽高大于 100x100 的可见图片
+                    const allImgs = document.querySelectorAll('img');
+                    for (const img of allImgs) {
+                        const r = img.getBoundingClientRect();
+                        if (r.width >= 80 && r.height >= 60 && r.top >= 0) {
+                            img.click();
+                            return true;
+                        }
+                    }
+                    return false;
+                }""")
+                if clicked:
+                    _emit("已选择封面图片(JS降级)", on_log)
+                    return _confirm_cover_dialogs(page, on_log)
+            except Exception:
+                continue
 
     _emit("未找到可选封面图片", on_log)
     return False

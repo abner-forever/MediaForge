@@ -10,9 +10,9 @@ import { imgSrc } from './utils';
 import ArticleCard from './ArticleCard';
 import LazyImage from '../Discovery/LazyImage';
 
-const MAX_VISIBLE_THUMBS = 9;
+const MAX_VISIBLE_THUMBS = 3;
 
-const QueueCard = React.memo(function QueueCard({ item }: { item: QueueItem }) {
+const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem; seq?: number }) {
   const itemId = item.id!;
   const { openLightbox, addToast, setQueue } = useStore();
   const [title, setTitle] = useState(item.title);
@@ -221,13 +221,18 @@ const QueueCard = React.memo(function QueueCard({ item }: { item: QueueItem }) {
   };
 
   if (item.type === 'article') {
-    return <ArticleCard item={item} />;
+    return <ArticleCard item={item} seq={seq} />;
   }
 
   return (
     <div className="card overflow-visible">
       <div className="flex flex-col md:flex-row">
-        <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0">
+        <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 relative">
+          {seq !== undefined && (
+            <div className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center shadow-sm ring-2 ring-bg-card">
+              {seq}
+            </div>
+          )}
           {cover && (
             <div className="relative mb-3 rounded-xl overflow-hidden cursor-pointer group"
               onClick={() => openLightbox(images.map(imgSrc), images.indexOf(cover))}>
@@ -250,12 +255,12 @@ const QueueCard = React.memo(function QueueCard({ item }: { item: QueueItem }) {
                 const globalIdx = thumbStart + ii;
                 return (
                   <LazyImage key={globalIdx} src={imgSrc(img)} alt=""
-                    className={`shrink-0 w-9 h-9 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
+                    className={`shrink-0 w-12 h-12 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
                     onClick={() => openLightbox(images.map(imgSrc), globalIdx)} />
                 );
               })}
               {hiddenCount > 0 && (
-                <div className="shrink-0 w-9 h-9 rounded-lg border border-border bg-bg-secondary flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent-softer transition-all"
+                <div className="shrink-0 w-12 h-12 rounded-lg border border-border bg-bg-secondary flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent-softer transition-all"
                   onClick={() => openLightbox(images.map(imgSrc), thumbStart + MAX_VISIBLE_THUMBS)}
                   title={`查看全部 ${images.length} 张图片`}>
                   <span className="text-xs font-semibold text-text-muted">+{hiddenCount}</span>

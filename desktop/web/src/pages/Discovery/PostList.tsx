@@ -49,7 +49,7 @@ export default function PostList({
             const showImgs = isExpanded ? displayImgs : displayImgs.slice(0, MAX_PREVIEW);
             const hiddenCount = displayImgs.length - MAX_PREVIEW;
             return (
-              <div key={origIdx} className={`rounded-xl p-4 border transition-all ${isChecked ? 'bg-accent-soft border-accent' : 'bg-bg-card border-border hover:border-accent/30'}`}>
+              <div key={origIdx} className={`rounded-xl p-4 border transition-all ${isChecked ? 'bg-accent-soft border-accent' : 'glass border-border hover:border-accent/30'}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <Checkbox checked={isChecked} onChange={() => onTogglePostSelect(origIdx)} />
                     <span className="text-sm font-semibold text-text">{p.celebrity}</span>

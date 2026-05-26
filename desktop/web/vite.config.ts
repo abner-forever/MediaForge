@@ -6,9 +6,10 @@ import { resolve } from 'node:path'
 
 const pyproject = readFileSync(resolve(__dirname, '../../pyproject.toml'), 'utf-8');
 const version = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1] || '0.0.0';
+const buildTime = new Date().toISOString();
 
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), __BUILD_TIME__: JSON.stringify(buildTime) },
   plugins: [react()],
   build: {
     outDir: fileURLToPath(new URL('../static', import.meta.url)),
