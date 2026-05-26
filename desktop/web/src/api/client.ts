@@ -56,6 +56,10 @@ export interface RunInfo {
   processed: number;
   failed: number;
   payload: Record<string, unknown>;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  started_at?: string;
+  title?: string;
 }
 
 export interface Post {
@@ -802,4 +806,108 @@ export const effectsApi = {
   get: (itemId: string) => get<{ effect: PublishEffect | null }>(`/api/effects/${itemId}`),
   save: (itemId: string, data: Partial<PublishEffect>) =>
     post<{ success: boolean; effect: PublishEffect }>(`/api/effects/${itemId}`, data),
+};
+
+/* ── Pipeline Agent API ─────────────────────────── */
+
+export interface PipelineConfig {
+  platform: string;
+  mode: string;
+  celebrities: string[];
+  search_tags: string[];
+  super_topics: string[];
+  max_pages: number;
+  post_limit: number;
+  dry_run: boolean;
+  require_confirm: boolean;
+  account_id?: string;
+  filter_watermark: boolean;
+  min_images_per_post: number;
+  ai_decision_mode?: string;
+}
+
+export interface PipelineEvent {
+  type: string;
+  step: string;
+  [key: string]: unknown;
+}
+
+export interface PipelineSummary {
+  run_id: string;
+  started_at: string;
+  total_posts: number;
+  total_images: number;
+  published: number;
+  skipped: number;
+  failed: number;
+  elapsed_seconds?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  items: Array<{
+    title: string;
+    celebrity: string;
+    images: number;
+    score: number;
+    status: string;
+  }>;
+}
+
+export const pipelineApi = {
+  run: (
+    config: PipelineConfig,
+    onEvent: (evt: PipelineEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<PipelineSummary> => {
+    return fetch('/api/pipeline/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+      signal,
+    }).then(async (res) => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let summary: PipelineSummary | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6)) as PipelineEvent;
+            onEvent(evt);
+            if (evt.type === 'completed' && evt.summary) {
+              summary = evt.summary as unknown as PipelineSummary;
+            }
+            if (evt.type === 'step_error') {
+              console.error('[Pipeline] step error:', evt.error);
+            }
+            if (evt.type === 'cancelled') {
+              throw new DOMException('Cancelled', 'AbortError');
+            }
+          } catch (e) {
+            if (e instanceof DOMException && e.name === 'AbortError') throw e;
+          }
+        }
+      }
+      if (!summary) throw new Error('Pipeline did not complete');
+      return summary;
+    });
+  },
+
+  confirm: (runId: string) =>
+    post<{ success: boolean }>(`/api/pipeline/confirm/${runId}`),
+
+  cancel: (runId: string) =>
+    post<{ success: boolean }>(`/api/pipeline/cancel/${runId}`),
+
+  detail: (runId: string) =>
+    get<{ run_id: string; events: Array<{ ts: string; event: string; payload: Record<string, unknown> }> }>(`/api/pipeline/runs/${runId}`),
+
+  decide: (runId: string, optionId: string) =>
+    post<{ success: boolean }>(`/api/pipeline/decide/${runId}`, { option_id: optionId }),
 };

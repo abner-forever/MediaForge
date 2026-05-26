@@ -104,7 +104,7 @@ def _score_with_vision(path: str) -> Tuple[int, str]:
         reason = str(data.get("reason", ""))[:50]
         return max(0, min(100, score)), reason
     except Exception as err:
-        logger.warning("Vision 评分失败 %s: %s", path, err)
+        logger.debug("Vision 评分失败 %s: %s", path, err)
         return -1, ""
 
 

@@ -10,6 +10,7 @@ const Queue = lazy(() => import('./pages/Queue'));
 const Materials = lazy(() => import('./pages/Materials'));
 const Settings = lazy(() => import('./pages/Settings'));
 const ArticlePublish = lazy(() => import('./pages/ArticlePublish'));
+const Pipeline = lazy(() => import('./pages/Pipeline'));
 
 export default function App() {
   return (
@@ -21,6 +22,9 @@ export default function App() {
           } />
           <Route path="/discovery" element={
             <Suspense fallback={<PageLoading />}><Discovery /></Suspense>
+          } />
+          <Route path="/pipeline" element={
+            <Suspense fallback={<PageLoading />}><Pipeline /></Suspense>
           } />
           <Route path="/articles" element={
             <Suspense fallback={<PageLoading />}><ArticlePublish /></Suspense>

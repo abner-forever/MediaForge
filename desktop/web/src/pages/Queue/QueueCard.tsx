@@ -134,7 +134,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
           offset = d.total;
         }
       } catch {}
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 2000));
     }
   }, [logSessionId]);
 

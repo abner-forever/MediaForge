@@ -9,6 +9,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -54,6 +55,12 @@ from utils.file import read_json
 # 初始化文件日志（桌面 GUI 启动时自动捕获日志到 data/logs/app.log）
 from utils.logger import setup_file_logging
 setup_file_logging(LOG_DIR)
+
+# ── Pipeline Agent 跨线程通信 ────────────────────────
+pipeline_cancel_events: Dict[str, threading.Event] = {}
+pipeline_confirm_events: Dict[str, threading.Event] = {}
+pipeline_decision_events: Dict[str, threading.Event] = {}
+pipeline_decision_results: Dict[str, str] = {}
 
 app = FastAPI(title="图文工坊")
 
@@ -1339,14 +1346,29 @@ async def recent_runs():
             continue
         start = next((e for e in events if e.get("event") == "run_started"), None)
         finish = next((e for e in events if e.get("event") == "run_finished"), None)
-        processed = sum(1 for e in events if e.get("event") == "post_processed")
-        failed = sum(1 for e in events if e.get("event") == "post_failed")
+        processed = sum(1 for e in events if e.get("event") == "step_complete")
+        failed = sum(1 for e in events if e.get("event") == "step_error")
+        fp = finish.get("payload", {}) if finish else {}
+        sp = start.get("payload", {}) if start else {}
+        status = "running"
+        if finish:
+            status = fp.get("status", "completed")
+        # 从 payload 生成标题描述
+        celebrities = sp.get("celebrities", [])
+        platform = sp.get("platform", "")
+        title_parts = [f"[{platform}]"] if platform else []
+        if celebrities:
+            title_parts.append(", ".join(celebrities[:3]))
         results.append({
             "run_id": run_file.stem,
-            "status": "completed" if finish else "running",
+            "status": status,
             "processed": processed,
             "failed": failed,
-            "payload": start.get("payload", {}) if start else {},
+            "payload": sp,
+            "prompt_tokens": fp.get("prompt_tokens", 0),
+            "completion_tokens": fp.get("completion_tokens", 0),
+            "started_at": start.get("ts", "") if start else "",
+            "title": " ".join(title_parts) if title_parts else run_file.stem,
         })
     return results
 
@@ -1950,7 +1972,12 @@ async def serve_thumbnail(path: str, size: int = Query(320, alias="size")):
 async def serve_image(path: str):
     file_path = DOWNLOAD_DIR / path
     if not file_path.exists():
-        raise HTTPException(404, "图片不存在")
+        # 也支持绝对路径（流水线等场景存入的是绝对路径）
+        abs_path = Path(path)
+        if abs_path.exists() and str(abs_path).startswith(str(DATA_DIR)):
+            file_path = abs_path
+        else:
+            raise HTTPException(404, "图片不存在")
     return FileResponse(str(file_path))
 
 
@@ -3244,6 +3271,181 @@ def _copy_to_clipboard(text: str) -> None:
                 proc.communicate(input=text.encode("utf-8"))
     except Exception as e:
         raise RuntimeError(f"剪贴板写入失败: {e}")
+
+
+# ── Pipeline Agent 端点 ──────────────────────────────
+
+
+class PipelineRunRequest(BaseModel):
+    platform: str = "weibo"
+    mode: str = ""
+    celebrities: List[str] = []
+    search_tags: List[str] = []
+    super_topics: List[str] = []
+    max_pages: int = 2
+    post_limit: int = 3
+    dry_run: bool = False
+    require_confirm: bool = True
+    account_id: Optional[str] = None
+    filter_watermark: bool = True
+    min_images_per_post: int = 5
+    ai_decision_mode: str = "auto"
+
+
+@app.post("/api/pipeline/run")
+async def pipeline_run(req: PipelineRunRequest):
+    """启动 AI 流水线，返回 SSE 事件流。"""
+    from queue import Empty, Queue
+
+    msg_queue: Queue = Queue()
+    cancel_event = threading.Event()
+    run_id = uuid.uuid4().hex[:8]
+    pipeline_cancel_events[run_id] = cancel_event
+
+    def _cleanup() -> None:
+        time.sleep(30)
+        pipeline_cancel_events.pop(run_id, None)
+        pipeline_confirm_events.pop(run_id, None)
+
+    from services.pipeline_agent import PipelineAgent, PipelineConfig
+
+    audit_path = create_run_log_path(run_id)
+
+    def _on_event(event_type: str, step: str, data: dict) -> None:
+        """同时推送到 SSE 队列和写入审计日志。"""
+        msg_queue.put((event_type, step, data))
+        # 记录关键事件到审计日志
+        if event_type in ("step_start", "step_complete", "step_error", "agent_decision", "completed", "cancelled"):
+            audit_entry = {"step": step}
+            for key in ("reasoning", "decision", "error", "message", "result", "name"):
+                if key in data:
+                    val = data[key]
+                    # 精简 result 避免日志过大
+                    if key == "result" and isinstance(val, dict):
+                        audit_entry[key] = {k: v for k, v in val.items() if not isinstance(v, list)}
+                    else:
+                        audit_entry[key] = str(val)[:200]
+            append_audit(audit_path, event_type, audit_entry)
+
+    def run_pipeline() -> None:
+        try:
+            config = PipelineConfig(**req.model_dump())
+            agent = PipelineAgent(config, _on_event, cancel_event)
+
+            append_audit(audit_path, "run_started", {
+                "platform": req.platform,
+                "mode": req.mode,
+                "celebrities": req.celebrities,
+                "search_tags": req.search_tags,
+                "super_topics": req.super_topics,
+                "max_pages": req.max_pages,
+                "post_limit": req.post_limit,
+                "dry_run": req.dry_run,
+                "require_confirm": req.require_confirm,
+                "account_id": req.account_id,
+                "filter_watermark": req.filter_watermark,
+                "min_images_per_post": req.min_images_per_post,
+                "ai_decision_mode": req.ai_decision_mode,
+            })
+
+            summary = agent.run()
+
+            # 记录完成状态
+            status = "completed" if summary.get("failed", 0) == 0 else "partial_failure"
+            append_audit(audit_path, "run_finished", {
+                "status": status,
+                "total_posts": summary.get("total_posts", 0),
+                "published": summary.get("published", 0),
+                "skipped": summary.get("skipped", 0),
+                "failed": summary.get("failed", 0),
+                "elapsed_seconds": summary.get("elapsed_seconds", 0),
+                "prompt_tokens": summary.get("prompt_tokens", 0),
+                "completion_tokens": summary.get("completion_tokens", 0),
+            })
+
+            # 添加到操作记录
+            detail = (
+                f"平台={req.platform} 模式={req.mode} "
+                f"处理 {summary.get('total_posts', 0)} 条 "
+                f"发布 {summary.get('published', 0)} 条 "
+                f"跳过 {summary.get('skipped', 0)} 条 "
+                f"失败 {summary.get('failed', 0)} 条"
+            )
+            app_state.add_operation("流水线", detail)
+        except Exception as err:
+            msg_queue.put(("error", "", {"error": str(err)}))
+        finally:
+            msg_queue.put(("__done__", "", {}))
+            threading.Thread(target=_cleanup, daemon=True).start()
+
+    threading.Thread(target=run_pipeline, daemon=True).start()
+
+    async def event_stream():
+        while True:
+            try:
+                event_type, step, data = msg_queue.get(timeout=0.5)
+            except Empty:
+                if cancel_event.is_set():
+                    yield f"data: {json.dumps({'type': 'cancelled', 'reason': 'user cancelled'}, ensure_ascii=False)}\n\n"
+                    break
+                yield ": keepalive\n\n"
+                continue
+
+            if event_type == "__done__":
+                break
+
+            sse_data = {"type": event_type, "step": step, **data}
+            yield f"data: {json.dumps(sse_data, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/pipeline/confirm/{run_id}")
+async def pipeline_confirm(run_id: str):
+    """用户确认发布，通过 checkpoint 继续执行。"""
+    evt = pipeline_confirm_events.get(run_id)
+    if not evt:
+        raise HTTPException(404, "流水线不存在或已处理")
+    evt.set()
+    return {"success": True}
+
+
+@app.post("/api/pipeline/cancel/{run_id}")
+async def pipeline_cancel(run_id: str):
+    """取消正在运行的流水线。"""
+    evt = pipeline_cancel_events.get(run_id)
+    if not evt:
+        raise HTTPException(404, "流水线不存在或已结束")
+    evt.set()
+    return {"success": True}
+
+
+@app.post("/api/pipeline/decide/{run_id}")
+async def pipeline_decide(run_id: str, data: Dict[str, Any]):
+    """用户提交交互决策结果。"""
+    evt = pipeline_decision_events.get(run_id)
+    option_id = data.get("option_id", "")
+    if not evt:
+        raise HTTPException(404, "流水线不存在或已处理")
+    if option_id:
+        pipeline_decision_results[run_id] = option_id
+    evt.set()
+    return {"success": True}
+
+
+@app.get("/api/pipeline/runs/{run_id}")
+async def pipeline_run_detail(run_id: str):
+    """读取指定流水线运行的审计事件。"""
+    from utils.audit import create_run_log_path
+    path = create_run_log_path(run_id)
+    if not path.exists():
+        raise HTTPException(404, "运行记录不存在")
+    try:
+        lines = path.read_text(encoding="utf-8").strip().splitlines()
+        events = [json.loads(line) for line in lines if line.strip()]
+    except Exception:
+        raise HTTPException(500, "读取运行记录失败")
+    return {"run_id": run_id, "events": events}
 
 
 # ── SPA Catch-All（放在所有路由最后）─────────────────

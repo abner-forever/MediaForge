@@ -124,6 +124,10 @@ interface AppState {
   // AI Recommended Celebrities (cached)
   recommendedCelebs: string[];
   setRecommendedCelebs: (celebs: string[]) => void;
+
+  // Pipeline running state (global, persists across page navigation)
+  pipelineRunning: boolean;
+  setPipelineRunning: (running: boolean) => void;
 }
 
 const THEME_KEY = 'w2w-theme';
@@ -322,6 +326,10 @@ export const useStore = create<AppState>((set, get) => ({
   // AI Recommended Celebrities (cached)
   recommendedCelebs: [],
   setRecommendedCelebs: (celebs) => set({ recommendedCelebs: celebs }),
+
+  // Pipeline running state
+  pipelineRunning: false,
+  setPipelineRunning: (running) => set({ pipelineRunning: running }),
 }));
 
 // Apply initial theme

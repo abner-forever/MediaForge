@@ -14,6 +14,7 @@ function Icon({ children, className = 'w-5 h-5' }: { children: React.ReactNode; 
 const ICONS = {
   home: (<Icon><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></Icon>),
   search: (<Icon><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></Icon>),
+  pipeline: (<Icon><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></Icon>),
   edit: (<Icon><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></Icon>),
   list: (<Icon><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></Icon>),
   image: (<Icon><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></Icon>),
@@ -23,6 +24,7 @@ const ICONS = {
 const NAV_ITEMS = [
   { path: '/', icon: ICONS.home, label: '首页' },
   { path: '/discovery', icon: ICONS.search, label: '图片发现' },
+  { path: '/pipeline', icon: ICONS.pipeline, label: '智能流水线' },
   { path: '/articles', icon: ICONS.edit, label: '文章发布' },
   { path: '/queue', icon: ICONS.list, label: '发布队列' },
   { path: '/materials', icon: ICONS.image, label: '本地素材' },
