@@ -227,6 +227,17 @@ class AppState:
             self._save_materials_meta()
         return deleted
 
+    def get_folder_sort_order(self, folder_path: str) -> list:
+        """获取文件夹内文件的自定义排序顺序（文件名列表）。"""
+        meta = self._ensure_materials_meta()
+        return meta.get(f"_sort:{folder_path}", [])
+
+    def set_folder_sort_order(self, folder_path: str, order: list) -> None:
+        """保存文件夹内文件的自定义排序顺序。"""
+        meta = self._ensure_materials_meta()
+        meta[f"_sort:{folder_path}"] = order
+        self._save_materials_meta()
+
     # ── 发布效果 ──────────────────────────────────────
     @staticmethod
     def _load_publish_effects() -> Dict[str, Any]:

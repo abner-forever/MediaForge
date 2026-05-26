@@ -3,7 +3,7 @@ import type { TreeNode } from '../../api/client';
 
 export default function FolderTree({
   items, currentPath, onNavigate, expandedFolders, onToggle,
-  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver,
+  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver, onFileClick,
 }: {
   items: TreeNode[]; currentPath: string;
   onNavigate: (path: string) => void;
@@ -12,6 +12,7 @@ export default function FolderTree({
   dragOverFolder: string | null; setDragOverFolder: (path: string | null) => void;
   onDrop: (e: React.DragEvent, path: string) => void;
   onDragOver: (e: React.DragEvent) => void;
+  onFileClick?: (path: string) => void;
 }) {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
 
@@ -53,6 +54,7 @@ export default function FolderTree({
           setDragOverFolder={setDragOverFolder}
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onFileClick={onFileClick}
         />
       ))}
     </div>
@@ -61,7 +63,7 @@ export default function FolderTree({
 
 function FolderTreeItem({
   node, currentPath, onNavigate, expandedFolders, onToggle, depth,
-  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver,
+  onContextMenu, dragOverFolder, setDragOverFolder, onDrop, onDragOver, onFileClick,
 }: {
   node: TreeNode; currentPath: string;
   onNavigate: (path: string) => void;
@@ -70,6 +72,7 @@ function FolderTreeItem({
   dragOverFolder: string | null; setDragOverFolder: (path: string | null) => void;
   onDrop: (e: React.DragEvent, path: string) => void;
   onDragOver: (e: React.DragEvent) => void;
+  onFileClick?: (path: string) => void;
 }) {
   const isExpanded = expandedFolders.has(node.path);
   const isActive = currentPath === node.path;
@@ -91,7 +94,7 @@ function FolderTreeItem({
         onDragLeave={() => setDragOverFolder(null)}
         onDrop={(e) => onDrop(e, node.path)}
       >
-        {node.children.length > 0 ? (
+        {node.children.length > 0 || (node.files?.length ?? 0) > 0 ? (
           <span
             className={`tree-arrow ${isExpanded ? 'expanded' : ''}`}
             onClick={(e) => { e.stopPropagation(); onToggle(node.path); }}
@@ -103,8 +106,27 @@ function FolderTreeItem({
         <span className="truncate text-sm">{node.name}</span>
         <span className="ml-auto text-[10px] text-text-muted tabular-nums">{node.item_count}</span>
       </div>
-      {isExpanded && node.children.length > 0 && (
+      {isExpanded && (
         <div>
+          {/* 文件列表 */}
+          {node.files?.map(file => (
+            <div
+              key={file.path}
+              className="folder-tree-file-item"
+              style={{ paddingLeft: `${12 + (depth + 1) * 16}px` }}
+              onClick={(e) => { e.stopPropagation(); onFileClick?.(file.path); }}
+              title={file.name}
+            >
+              <span className="w-3 shrink-0" />
+              <svg className="w-4 h-4 shrink-0 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+              </svg>
+              <span className="truncate text-sm text-text-muted">{file.name}</span>
+            </div>
+          ))}
+          {/* 子文件夹 */}
           {node.children.map(child => (
             <FolderTreeItem
               key={child.path}
@@ -119,6 +141,7 @@ function FolderTreeItem({
               setDragOverFolder={setDragOverFolder}
               onDrop={onDrop}
               onDragOver={onDragOver}
+              onFileClick={onFileClick}
             />
           ))}
         </div>

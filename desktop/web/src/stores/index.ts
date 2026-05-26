@@ -13,7 +13,7 @@ export interface ThemePreset {
 
 export const THEME_PRESETS: ThemePreset[] = [
   { id: 'blue', name: '默认蓝', light: '#0969DA', dark: '#58A6FF', hover: '#0550AE' },
-  { id: 'green', name: '清新绿', light: '#10B981', dark: '#34D399', hover: '#059669' },
+  { id: 'green', name: '清新绿', light: '#07C160', dark: '#2BD67B', hover: '#06A556' },
   { id: 'purple', name: '创作紫', light: '#5645d4', dark: '#8b6ff0', hover: '#4534b3' },
   { id: 'orange', name: '暖阳橙', light: '#dd5b00', dark: '#ff8a4a', hover: '#b84900' },
 ];
@@ -143,6 +143,25 @@ function getInitialAccent(): string {
   return localStorage.getItem(ACCENT_KEY) || 'blue';
 }
 
+function hexToRgb(hex: string) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+    : null;
+}
+
+/** Blend a foreground hex color into a dark background at `amount` (0-1). */
+function blendIntoDark(hex: string, amount: number, bg = '#010102') {
+  const fg = hexToRgb(hex);
+  const bgRgb = hexToRgb(bg);
+  if (!fg || !bgRgb) return bg;
+  return `rgb(${[
+    Math.round(bgRgb.r + (fg.r - bgRgb.r) * amount),
+    Math.round(bgRgb.g + (fg.g - bgRgb.g) * amount),
+    Math.round(bgRgb.b + (fg.b - bgRgb.b) * amount),
+  ].join(',')})`;
+}
+
 function applyAccentVars(accentId: string, theme: string) {
   const preset = THEME_PRESETS.find((p) => p.id === accentId) || THEME_PRESETS[0];
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -153,6 +172,23 @@ function applyAccentVars(accentId: string, theme: string) {
   root.style.setProperty('--accent-solid', accent);
   root.style.setProperty('--accent-soft', accent + '14');
   root.style.setProperty('--accent-softer', accent + '0a');
+  if (isDark) {
+    root.style.setProperty('--bg-sidebar', '#0f1011');
+    root.style.setProperty('--sidebar-hover', '#1e1f22');
+    root.style.setProperty('--sidebar-text', '#f0f2f5');
+    root.style.setProperty('--sidebar-text-secondary', '#c5c9d0');
+    root.style.setProperty('--sidebar-text-muted', '#7e838c');
+    root.style.setProperty('--sidebar-text-logo', '#f0f2f5');
+    root.style.setProperty('--sidebar-border', 'rgba(255,255,255,0.06)');
+  } else {
+    root.style.setProperty('--bg-sidebar', '#eaebec');
+    root.style.setProperty('--sidebar-hover', '#d8dadd');
+    root.style.setProperty('--sidebar-text', '#1a1c20');
+    root.style.setProperty('--sidebar-text-secondary', '#5f6368');
+    root.style.setProperty('--sidebar-text-muted', '#7a7f85');
+    root.style.setProperty('--sidebar-text-logo', '#1a1c20');
+    root.style.setProperty('--sidebar-border', 'rgba(0,0,0,0.06)');
+  }
   localStorage.setItem(ACCENT_KEY, accentId);
 }
 

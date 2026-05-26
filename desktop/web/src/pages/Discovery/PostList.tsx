@@ -33,12 +33,21 @@ export default function PostList({
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-4">
-        {allLocalImages.length > 0 && <span className="tag tag-accent">已下载 {allLocalImages.length} 张</span>}
-        <button className="btn btn-sm ml-auto" onClick={onHandleSelectAllFiltered}>全选/取消</button>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-text-muted">
+            <strong className="text-text font-semibold tabular-nums">{filteredIndices.length}</strong> 篇帖子
+          </span>
+          {allLocalImages.length > 0 && (
+            <span className="text-xs text-text-muted">
+              · 已下载 <strong className="text-green-600 font-semibold tabular-nums">{allLocalImages.length}</strong> 张
+            </span>
+          )}
+        </div>
+        <button className="btn btn-sm" onClick={onHandleSelectAllFiltered}>全选/取消</button>
       </div>
       {filteredIndices.length > 0 ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredIndices.map((origIdx) => {
             const p = discoveryPosts[origIdx];
             const imgs = p.local_images || [];
@@ -49,33 +58,65 @@ export default function PostList({
             const showImgs = isExpanded ? displayImgs : displayImgs.slice(0, MAX_PREVIEW);
             const hiddenCount = displayImgs.length - MAX_PREVIEW;
             return (
-              <div key={origIdx} className={`rounded-xl p-4 border transition-all ${isChecked ? 'bg-accent-soft border-accent' : 'glass border-border hover:border-accent/30'}`}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Checkbox checked={isChecked} onChange={() => onTogglePostSelect(origIdx)} />
-                    <span className="text-sm font-semibold text-text">{p.celebrity}</span>
-                    {p.screen_name && (
-                      p.screen_name === p.celebrity
-                        ? <span className="tag tag-accent text-[10px]">本人</span>
-                        : <span className="tag text-[10px]">@{p.screen_name}</span>
-                    )}
-                    <span className="tag text-[10px]">{p.scene}</span>
-                    <span className="text-xs text-text-muted">{remoteImgs.length} 张图{imgs.length ? ` · 已下载 ${imgs.length}` : ''}</span>
-                    {p.created_at && <span className="text-xs text-text-muted">{fmtTime(p.created_at)}</span>}
-                    <div className="ml-auto flex gap-1.5">
-                      <button className="btn btn-sm btn-ghost" onClick={() => onDownload(String(origIdx))} disabled={downloading}>下载</button>
-                      <button className="btn btn-sm btn-ghost text-text-muted hover:text-danger" onClick={() => setRemoveConfirmIndex(origIdx)}>删除</button>
+              <div
+                key={origIdx}
+                className={`rounded-xl border transition-all overflow-hidden ${
+                  isChecked
+                    ? 'ring-1 ring-accent border-accent bg-accent-softer/20'
+                    : 'border-border bg-bg-card hover:border-accent/30 hover:shadow-sm'
+                }`}
+              >
+                {/* Card header */}
+                <div className="flex items-start gap-2 px-3.5 pt-3 pb-2">
+                  <Checkbox checked={isChecked} onChange={() => onTogglePostSelect(origIdx)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-text">{p.celebrity}</span>
+                      {p.screen_name && (
+                        p.screen_name === p.celebrity
+                          ? <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-accent/10 text-accent">本人</span>
+                          : <span className="text-[10px] text-text-muted px-1.5 py-0.5 rounded-full bg-bg-secondary">@{p.screen_name}</span>
+                      )}
+                      <span className="text-[10px] text-text-muted px-1.5 py-0.5 rounded-full bg-bg-secondary">{p.scene}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
+                      <span>{remoteImgs.length} 张图</span>
+                      {imgs.length > 0 && <span className="text-green-600">已下载 {imgs.length}</span>}
+                      {p.created_at && <span>{fmtTime(p.created_at)}</span>}
                     </div>
                   </div>
-                  {p.text && <div className="text-xs text-text-muted mb-3 line-clamp-2 leading-relaxed">{p.text.slice(0, 100)}</div>}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-1 shrink-0">
+                    <button className="btn btn-xs btn-ghost" onClick={() => onDownload(String(origIdx))} disabled={downloading} title="下载此帖子图片">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                    <button className="btn btn-xs btn-ghost text-text-muted hover:text-danger" onClick={() => setRemoveConfirmIndex(origIdx)} title="删除此帖子">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Text preview */}
+                {p.text && (
+                  <div className="px-3.5 pb-2">
+                    <p className="text-xs text-text-muted leading-relaxed line-clamp-2">{p.text.slice(0, 100)}</p>
+                  </div>
+                )}
+
+                {/* Image grid */}
+                <div className="px-3.5 pb-3">
+                  <div className="flex flex-wrap gap-1.5">
                     {showImgs.map((img: string, ii: number) => (
-                      <div key={ii} className="w-[80px] h-[80px] rounded-xl border border-border overflow-hidden bg-bg-secondary">
+                      <div key={ii} className="w-[calc(16.666%-6px)] min-w-[60px] aspect-square rounded-lg border border-border/50 overflow-hidden bg-bg-secondary flex-1">
                         <LazyImage src={thumbSrc(img)} className="w-full h-full cursor-pointer" onClick={() => onOpenLightbox(origIdx, ii)} />
                       </div>
                     ))}
                     {hiddenCount > 0 && !isExpanded && (
                       <button
-                        className="w-[80px] h-[80px] rounded-xl border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-bg-tertiary hover:border-accent/50 transition-all cursor-pointer"
+                        className="aspect-square min-w-[60px] rounded-lg border border-border flex items-center justify-center text-xs font-medium text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer flex-1"
                         onClick={() => toggleExpand(origIdx)}
                         title="展开全部图片"
                       >
@@ -84,7 +125,7 @@ export default function PostList({
                     )}
                     {isExpanded && displayImgs.length > MAX_PREVIEW && (
                       <button
-                        className="w-[80px] h-[80px] rounded-xl border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-bg-tertiary hover:border-accent/50 transition-all cursor-pointer"
+                        className="aspect-square min-w-[60px] rounded-lg border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer flex-1"
                         onClick={() => toggleExpand(origIdx)}
                         title="收起图片"
                       >
@@ -93,16 +134,22 @@ export default function PostList({
                     )}
                   </div>
                 </div>
+              </div>
             );
           })}
         </div>
       ) : (
-        <div className="text-center py-12 text-text-muted text-sm">没有图片数 ≥ {minImages} 的帖子</div>
+        <div className="text-center py-12 text-text-muted text-sm">
+          <svg className="w-10 h-10 mx-auto mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+          </svg>
+          没有图片数 ≥ {minImages} 的帖子
+        </div>
       )}
       {filteredIndices.length > 0 && (
         <div className="flex items-center justify-center gap-4 pt-4 border-t border-border mt-4">
-          <span className="text-sm text-text-muted">第 {currentPage} 页</span>
-          <button className="btn" onClick={loadMore} disabled={searching}>
+          <span className="text-xs text-text-muted">第 <strong className="text-text">{currentPage}</strong> 页</span>
+          <button className="btn btn-sm" onClick={loadMore} disabled={searching}>
             {searching ? <Loading size="sm" inline text="加载中" /> : '加载更多'}
           </button>
         </div>

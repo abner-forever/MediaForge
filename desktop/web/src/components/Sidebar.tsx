@@ -1,8 +1,16 @@
 import { NavLink } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { wechatAccountApi, type WeChatAccount } from '../api/client';
 import { useStore } from '../stores';
 
+/* ── Constants ───────────────────────────────────── */
+const COLLAPSE_THRESHOLD = 140;
+const NARROW_WIDTH = 60;
+const MIN_EXPANDED = 180;
+const MAX_WIDTH = 400;
+const STORAGE_KEY = 'w2w-sidebar-width';
+
+/* ── Icons ────────────────────────────────────────── */
 function Icon({ children, className = 'w-5 h-5' }: { children: React.ReactNode; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={`${className} shrink-0`}>
@@ -30,9 +38,30 @@ const NAV_ITEMS = [
   { path: '/materials', icon: ICONS.image, label: '本地素材' },
 ] as const;
 
+function getInitialWidth(): number {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const w = parseInt(saved, 10);
+      if (!isNaN(w)) return w;
+    }
+  } catch {}
+  return 240;
+}
+
 export default function Sidebar() {
   const [account, setAccount] = useState<WeChatAccount | null>(null);
   const wechatRefreshKey = useStore(s => s.wechatRefreshKey);
+  const [width, setWidth] = useState(getInitialWidth);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoverHandle, setHoverHandle] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
+  const collapsed = width <= NARROW_WIDTH + 10;
+  const effectiveWidth = collapsed ? NARROW_WIDTH : width;
 
   useEffect(() => {
     wechatAccountApi.list().then(({ accounts }) => {
@@ -40,69 +69,158 @@ export default function Sidebar() {
     }).catch(() => setAccount(null));
   }, [wechatRefreshKey]);
 
+  const snapWidth = useCallback((w: number) => {
+    if (w < COLLAPSE_THRESHOLD) return NARROW_WIDTH;
+    if (w < MIN_EXPANDED) return MIN_EXPANDED;
+    return Math.min(w, MAX_WIDTH);
+  }, []);
+
+  const persistWidth = useCallback((w: number) => {
+    try { localStorage.setItem(STORAGE_KEY, String(w)); } catch {}
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = effectiveWidth;
+  }, [effectiveWidth]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const delta = e.clientX - startXRef.current;
+        const newWidth = startWidthRef.current + delta;
+        const snapped = snapWidth(newWidth);
+        setWidth(snapped);
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      setWidth(w => {
+        const final = snapWidth(w);
+        persistWidth(final);
+        return final;
+      });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging, snapWidth, persistWidth]);
+
+  const toggleCollapse = useCallback(() => {
+    setWidth(w => {
+      const next = w <= NARROW_WIDTH + 10 ? MIN_EXPANDED : NARROW_WIDTH;
+      persistWidth(next);
+      return next;
+    });
+  }, [persistWidth]);
+
   return (
-    <aside style={{
-      display: 'flex',
-      flexDirection: 'column',
-      width: 240,
-      height: '100%',
-      flexShrink: 0,
-      background: 'var(--bg-sidebar)',
-      borderRight: '1px solid rgba(255,255,255,0.06)',
-    }}>
+    <aside
+      ref={asideRef}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: effectiveWidth,
+        height: '100%',
+        flexShrink: 0,
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--sidebar-border)',
+        transition: isDragging ? 'none' : 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
       {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px 24px' }}>
-        <div style={{ width: 42, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : undefined,
+        gap: collapsed ? 0 : 14,
+        padding: collapsed ? '16px 0 24px' : '16px 20px 24px',
+      }}>
+        <div style={{
+          width: collapsed ? 36 : 42,
+          height: collapsed ? 36 : 42,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}>
           <img src="/static/logo.png" alt="图文工坊" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: '#f7f8f8', letterSpacing: '-0.3px', lineHeight: 1.3 }}>图文工坊</div>
-          <div style={{ fontSize: 11, color: 'rgba(247,248,248,0.3)', letterSpacing: '0.4px', fontWeight: 500, marginTop: 1 }}>MediaForge</div>
-        </div>
+        {!collapsed && (
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--sidebar-text-logo)', letterSpacing: '-0.3px', lineHeight: 1.3, whiteSpace: 'nowrap' }}>图文工坊</div>
+            <div style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', letterSpacing: '0.4px', fontWeight: 500, marginTop: 1 }}>MediaForge</div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav style={{ flex: 1, padding: '0 10px' }}>
+      <nav style={{ flex: 1, padding: collapsed ? '0 6px' : '0 10px' }}>
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-[10px] rounded-lg text-sm font-medium transition-all duration-150 ${
+              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
                   ? 'bg-[var(--accent)] text-white'
-                  : 'text-[#8a8f98] hover:text-[#f7f8f8] hover:bg-white/[0.06]'
+                  : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
               }`
             }
             style={{ marginBottom: 2, textDecoration: 'none' }}
+            title={collapsed ? item.label : undefined}
           >
             {item.icon}
-            <span>{item.label}</span>
+            {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
           </NavLink>
         ))}
       </nav>
 
       {/* Bottom */}
-      <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <NavLink
-          to="/settings"
-          className="block rounded-lg px-3 py-[10px] mb-2 hover:bg-white/[0.04]"
-          style={{ textDecoration: 'none', border: '1px solid rgba(255,255,255,0.06)' }}
-          title="进入公众号账号设置"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 999, background: account?.logged_in ? '#22c55e' : '#ef4444', flexShrink: 0 }} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: '#d0d6e0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {account?.name || '未设置公众号'}
-              </div>
-              <div style={{ fontSize: 11, color: account?.logged_in ? '#6ee7b7' : '#fca5a5' }}>
-                {account?.logged_in ? '默认账号已登录' : '需要扫码登录'}
+      <div style={{
+        padding: collapsed ? '12px 4px' : '12px 10px',
+        borderTop: '1px solid var(--sidebar-border)',
+      }}>
+        {!collapsed && (
+          <NavLink
+            to="/settings"
+            className="block rounded-lg px-3 py-[10px] mb-2 hover:bg-[var(--sidebar-hover)]"
+            style={{ textDecoration: 'none', border: '1px solid var(--sidebar-border)' }}
+            title="进入公众号账号设置"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: account?.logged_in ? '#22c55e' : '#ef4444', flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: 'var(--sidebar-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {account?.name || '未设置公众号'}
+                </div>
+                <div style={{ fontSize: 11, color: account?.logged_in ? '#6ee7b7' : '#fca5a5' }}>
+                  {account?.logged_in ? '默认账号已登录' : '需要扫码登录'}
+                </div>
               </div>
             </div>
-          </div>
-        </NavLink>
+          </NavLink>
+        )}
         <NavLink
           to="/settings"
           end
@@ -110,17 +228,53 @@ export default function Sidebar() {
             `flex items-center justify-center gap-2 px-3 py-[10px] rounded-lg text-sm font-medium transition-all duration-150 ${
               isActive
                 ? 'bg-[var(--accent)] text-white'
-                : 'text-[#62666d] hover:text-[#d0d6e0] hover:bg-white/[0.04]'
+                : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
             }`
           }
           style={{ textDecoration: 'none' }}
+          title={collapsed ? '设置' : undefined}
         >
           {ICONS.settings}
-          <span>系统设置</span>
+          {!collapsed && <span>设置</span>}
         </NavLink>
-        <div style={{ textAlign: 'center', marginTop: 10 }}>
-          <span style={{ fontSize: 11, color: '#3e3e44', letterSpacing: '0.15em' }}>v{__APP_VERSION__}</span>
-        </div>
+        {!collapsed && (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', letterSpacing: '0.15em', opacity: 0.4 }}>v{__APP_VERSION__}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        onMouseEnter={() => setHoverHandle(true)}
+        onMouseLeave={() => setHoverHandle(false)}
+        onDoubleClick={toggleCollapse}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 8,
+          cursor: 'col-resize',
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {/* Handle visual bar — shows on hover / drag */}
+        <div style={{
+          width: 3,
+          height: hoverHandle || isDragging ? '40%' : 0,
+          borderRadius: 999,
+          background: isDragging
+            ? 'var(--accent)'
+            : 'rgba(255,255,255,0.15)',
+          transition: 'height 0.15s, background 0.15s, opacity 0.15s',
+          opacity: hoverHandle || isDragging ? 1 : 0,
+          pointerEvents: 'none',
+        }} />
       </div>
     </aside>
   );

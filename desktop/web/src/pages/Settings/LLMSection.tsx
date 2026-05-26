@@ -18,6 +18,9 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
   const [fullKey, setFullKey] = useState('');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [balance, setBalance] = useState<any>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceMessage, setBalanceMessage] = useState('');
   const current = PROVIDERS[provider];
 
   useEffect(() => {
@@ -27,6 +30,86 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
       }).catch(() => {});
     }
   }, [provider]);
+
+  useEffect(() => {
+    if (data.ai_api_keys?.[provider]) {
+      fetchBalance();
+    }
+  }, []);
+
+  async function fetchBalance(opts?: { provider?: string; base_url?: string; api_key?: string }) {
+    setBalanceLoading(true);
+    setBalanceMessage('');
+    try {
+      const res = await settingsApi.aiBalance({
+        provider: opts?.provider || provider,
+        base_url: opts?.base_url || baseUrl,
+        api_key: opts?.api_key || fullKey || apiKey || undefined,
+      });
+      if (res.success && res.balance) {
+        setBalance(res.balance);
+        setBalanceMessage('');
+      } else {
+        setBalance(null);
+        setBalanceMessage(res.message || '无法获取余额');
+      }
+    } catch {
+      setBalance(null);
+      setBalanceMessage('查询失败');
+    }
+    setBalanceLoading(false);
+  }
+
+  function formatBalanceLabel(): string {
+    if (!balance) return '';
+    // DeepSeek: balance_infos[]
+    if (Array.isArray(balance.balance_infos) && balance.balance_infos.length > 0) {
+      const info = balance.balance_infos[0];
+      const sym = info.currency === 'CNY' ? '¥' : '$';
+      return `${sym}${parseFloat(info.total_balance).toFixed(2)}`;
+    }
+    if (typeof balance.balance === 'number') {
+      return `¥${balance.balance.toFixed(2)}`;
+    }
+    if (typeof balance.total_granted === 'number') {
+      const available = balance.total_available ?? (balance.total_granted - balance.total_used);
+      return `$${available.toFixed(2)}`;
+    }
+    return '';
+  }
+
+  function formatBalanceDetails(): { label: string; value: string }[] | null {
+    if (!balance) return null;
+    // DeepSeek: balance_infos[]
+    if (Array.isArray(balance.balance_infos) && balance.balance_infos.length > 0) {
+      const info = balance.balance_infos[0];
+      return [
+        { label: '总余额', value: `${info.currency === 'CNY' ? '¥' : '$'}${parseFloat(info.total_balance).toFixed(2)}` },
+        { label: '充值', value: `${info.currency === 'CNY' ? '¥' : '$'}${parseFloat(info.topped_up_balance).toFixed(2)}` },
+        { label: '赠送', value: `${info.currency === 'CNY' ? '¥' : '$'}${parseFloat(info.granted_balance).toFixed(2)}` },
+        { label: '状态', value: balance.is_available ? '可用' : '不可用' },
+      ];
+    }
+    if (typeof balance.balance === 'number') {
+      return [
+        { label: '余额', value: `¥${balance.balance.toFixed(2)}` },
+        { label: '状态', value: balance.is_available ? '可用' : '不可用' },
+      ];
+    }
+    if (typeof balance.total_granted === 'number') {
+      return [
+        { label: '总额度', value: `$${balance.total_granted.toFixed(2)}` },
+        { label: '已使用', value: `$${balance.total_used.toFixed(2)}` },
+        { label: '剩余', value: `$${(balance.total_granted - balance.total_used).toFixed(2)}` },
+      ];
+    }
+    return null;
+  }
+
+  function balanceRawDisplay(): string {
+    if (!balance) return '';
+    try { return JSON.stringify(balance); } catch { return ''; }
+  }
 
   function handleProviderChange(p: string) {
     const prev = provider;
@@ -41,6 +124,12 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
       settingsApi.getKey(p).then(({ key }) => {
         if (key) setApiKey(key);
       }).catch(() => {});
+    }
+    if (data.ai_api_keys?.[p]) {
+      fetchBalance({ provider: p, base_url: PROVIDERS[p]?.baseUrl });
+    } else {
+      setBalance(null);
+      setBalanceMessage('未配置 API Key');
     }
   }
 
@@ -130,9 +219,53 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
           </div>
         </label>
       </div>
-      <div className="bg-bg-secondary rounded-xl p-3">
+      <div className="bg-bg-secondary rounded-xl p-3 space-y-2">
         <p className="text-xs text-text-muted leading-relaxed">Base URL 请填写 OpenAI 兼容地址，以 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/v1</code> 结尾。系统自动拼接 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/chat/completions</code>。</p>
+        {current && (
+          <details className="text-xs text-text-muted">
+            <summary className="cursor-pointer hover:text-text-secondary transition-colors select-none">
+              📖 如何获取 {current.name} API Key
+            </summary>
+            <div className="mt-2 pl-2 border-l-2 border-border space-y-1">
+              <p>{current.guide}</p>
+              <a href={current.guideUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                {current.guideUrl}
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M7 7h10v10" /></svg>
+              </a>
+            </div>
+          </details>
+        )}
       </div>
+
+      {/* 余额展示 */}
+      <div className="bg-bg-secondary rounded-xl p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-text-muted">账户余额</span>
+          <button type="button" onClick={() => fetchBalance()} disabled={balanceLoading} className="text-xs text-primary hover:underline disabled:opacity-50 inline-flex items-center gap-1">
+            <svg className={`w-3 h-3 ${balanceLoading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+            刷新
+          </button>
+        </div>
+        {balance || balanceMessage ? (
+          balance ? (
+            <div>
+              <span className="text-lg font-semibold">{formatBalanceLabel()}</span>
+              {formatBalanceDetails() ? (
+                <div className="flex gap-4 mt-1 text-xs text-text-muted">
+                  {formatBalanceDetails()!.map(d => (
+                    <span key={d.label}>{d.label}: {d.value}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-text-muted mt-1 break-all">{balanceRawDisplay()}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-text-muted mt-1">{balanceMessage}</p>
+          )
+        ) : null}
+      </div>
+
       <div className="flex items-center gap-2">
         <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); })} disabled={saving}>
           {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}

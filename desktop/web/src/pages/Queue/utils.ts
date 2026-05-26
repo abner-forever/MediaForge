@@ -6,6 +6,15 @@ export const imgSrc = (p: string) => {
   return `/images/${encodeURIComponent(rel).replace(/%2F/g, '/')}`;
 };
 
+/** 压缩缩略图，用于列表和封面选择等场景，避免加载大图 */
+export const thumbSrc = (p: string) => {
+  if (p.startsWith('http')) return `/proxy?url=${encodeURIComponent(p)}&thumbnail=1`;
+  if (!p.startsWith('/')) return `/images/thumbnail/${encodeURIComponent(p).replace(/%2F/g, '/')}?size=320`;
+  const idx = p.indexOf('data/images/');
+  const rel = idx >= 0 ? p.slice(idx + 'data/images/'.length) : (p.split('/').pop() || '');
+  return `/images/thumbnail/${encodeURIComponent(rel).replace(/%2F/g, '/')}?size=320`;
+};
+
 export function formatTime(timeStr?: string): string {
   if (!timeStr) return '';
   const now = Date.now();

@@ -126,9 +126,10 @@ export interface MaterialsData {
 export interface TreeNode {
   name: string;
   path: string;
-  type: 'folder';
+  type: 'folder' | 'file';
   item_count: number;
   children: TreeNode[];
+  files: TreeNode[];
 }
 
 export interface BrowseFolder {
@@ -442,6 +443,8 @@ export const settingsApi = {
   setWindowAppearance: (theme: string) => post<{ success: boolean }>('/api/theme/window-native', { theme }),
   testAiConnection: (params: { provider?: string; model?: string; base_url?: string; api_key?: string }) =>
     post<{ success: boolean; message: string }>('/api/settings/ai-test', params),
+  aiBalance: (params: { provider?: string; base_url?: string; api_key?: string }) =>
+    post<{ success: boolean; balance: any; message?: string }>('/api/settings/ai-balance', params),
   verifyWeibo: (cookie?: string) => post<WeiboVerifyResult>('/api/settings/weibo-verify', { cookie }),
   clearWeibo: () => post<{ success: boolean }>('/api/settings/weibo-clear'),
   weiboLogin: (onEvent: (evt: WeiboLoginEvent) => void): Promise<void> => {
@@ -649,6 +652,12 @@ export const materialsApi = {
   updateMeta: (path: string, data: Partial<MaterialMeta>) =>
     put<{ success: boolean; meta: MaterialMeta }>('/api/materials/meta', { path, ...data }),
   getTags: () => get<MaterialsTagsResponse>('/api/materials/tags'),
+
+  // 自定义排序
+  setSortOrder: (path: string, order: string[]) =>
+    put<{ success: boolean }>('/api/materials/sort-order', { path, order }),
+  getSortOrder: (path: string) =>
+    get<{ path: string; order: string[] }>(`/api/materials/sort-order?path=${encodeURIComponent(path)}`),
 };
 
 /* ── Publish Log Polling ──────────────────────── */

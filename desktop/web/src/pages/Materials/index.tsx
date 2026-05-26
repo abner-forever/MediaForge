@@ -57,6 +57,10 @@ export default function Materials() {
   const [boxStyle, setBoxStyle] = useState<React.CSSProperties | null>(null);
   const boxTracking = useRef({ active: false, dragging: false, startX: 0, startY: 0, rect: null as { left: number; top: number; width: number; height: number } | null });
 
+  // Drag reorder (不会冲突现有的文件移动拖拽——drop 到 grid 内部触发排序，drop 到文件夹树触发移动)
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+
   const loadScoresAndMeta = useCallback(async () => {
     try {
       const { meta } = await materialsApi.getMeta();
@@ -152,6 +156,57 @@ export default function Materials() {
   const filteredFolders = matchingPaths
     ? currentFolders.filter(f => [...matchingPaths].some(p => p.startsWith(f.path + '/')))
     : currentFolders;
+
+  // ── 拖拽排序 ────────────────────────────
+  const handleGridDragStart = (e: React.DragEvent, index: number, path: string) => {
+    setDragIndex(index);
+    e.dataTransfer.setData('text/plain', path);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleGridDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropIndex(index);
+  };
+
+  const handleGridDrop = async (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const srcIdx = dragIndex;
+    if (srcIdx === null || srcIdx === targetIndex) {
+      setDragIndex(null);
+      setDropIndex(null);
+      return;
+    }
+
+    const reordered = [...filteredFiles];
+    const [moved] = reordered.splice(srcIdx, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    // 将重排顺序映射到 currentFiles
+    const orderMap = new Map(reordered.map((f, i) => [f.path, i]));
+    const sorted = [...currentFiles].sort((a, b) => {
+      const ai = orderMap.get(a.path);
+      const bi = orderMap.get(b.path);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return 0;
+    });
+    setCurrentFiles(sorted);
+
+    try {
+      await materialsApi.setSortOrder(currentPath, reordered.map(f => f.name));
+    } catch { /* ignore */ }
+
+    setDragIndex(null);
+    setDropIndex(null);
+  };
+
+  const handleGridDragEnd = () => {
+    setDragIndex(null);
+    setDropIndex(null);
+  };
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
@@ -283,6 +338,19 @@ export default function Materials() {
     openLightbox(all.map(imgSrc), idx >= 0 ? idx : 0);
   };
 
+  const handleTreeFileClick = async (path: string) => {
+    const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+    await navigateTo(parent);
+    const files = useStore.getState().currentFiles;
+    const all = files.map(f => f.path);
+    const idx = all.indexOf(path);
+    if (idx >= 0) {
+      openLightbox(all.map(imgSrc), idx);
+    } else {
+      openLightbox([imgSrc(path)], 0);
+    }
+  };
+
   const handleDragStart = (e: React.DragEvent, path: string) => {
     e.dataTransfer.setData('text/plain', path);
     e.dataTransfer.effectAllowed = 'move';
@@ -337,7 +405,7 @@ export default function Materials() {
     ];
   };
 
-  // Box selection: pointerdown on grid empty space
+  // Box selection: pointerdown on grid
   const handleGridPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
@@ -419,9 +487,9 @@ export default function Materials() {
 
   if (loading && folderTree.length === 0) {
     return (
-      <div className="space-y-6 animate-in">
-        <h1 className="text-2xl font-bold text-text tracking-tight">本地素材</h1>
-        <div className="card flex items-center justify-center min-h-[200px]"><Loading text="加载中" /></div>
+      <div className="h-full flex flex-col overflow-hidden animate-in">
+        <h1 className="text-2xl font-bold text-text tracking-tight shrink-0">本地素材</h1>
+        <div className="flex-1 min-h-0 card flex items-center justify-center mt-4"><Loading text="加载中" /></div>
       </div>
     );
   }
@@ -429,12 +497,12 @@ export default function Materials() {
   const allSelectable = [...filteredFiles.map(f => f.path), ...filteredFolders.map(f => f.path)];
 
   return (
-    <div className="space-y-4 animate-in">
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col overflow-hidden animate-in">
+      <div className="flex items-center justify-between shrink-0">
         <h1 className="text-2xl font-bold text-text tracking-tight">本地素材</h1>
       </div>
 
-      <div className="flex items-center gap-1 text-sm flex-wrap">
+      <div className="flex items-center gap-1 text-sm flex-wrap shrink-0 mt-4">
         {breadcrumb.map((item, i) => (
           <React.Fragment key={i}>
             {i > 0 && <span className="text-text-muted mx-0.5">/</span>}
@@ -448,7 +516,7 @@ export default function Materials() {
       </div>
 
       {(allTags.length > 0 || allCelebrities.length > 0 || allScenes.length > 0) && (
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap shrink-0 mt-4">
           {allTags.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-text-muted">标签</span>
@@ -487,8 +555,8 @@ export default function Materials() {
         </div>
       )}
 
-      <div className="flex gap-4 min-h-[600px]">
-        <div className="w-[220px] shrink-0 card p-2 overflow-y-auto max-h-[75vh]">
+      <div className="flex gap-4 flex-1 min-h-0 mt-4">
+        <div className="w-[220px] shrink-0 card p-2 overflow-y-auto">
           <FolderTree
             items={folderTree}
             currentPath={currentPath}
@@ -500,165 +568,180 @@ export default function Materials() {
             setDragOverFolder={setDragOverFolder}
             onDrop={handleDropOnFolder}
             onDragOver={handleDragOver}
+            onFileClick={handleTreeFileClick}
           />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="card p-3 mb-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex bg-bg-base rounded-lg p-0.5 border border-border">
-                <button className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="网格视图">
-                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-                </button>
-                <button className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="列表视图">
-                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="14" height="3" rx="1"/><rect x="1" y="6.5" width="14" height="3" rx="1"/><rect x="1" y="12" width="14" height="3" rx="1"/></svg>
-                </button>
-              </div>
-
-              <div className="w-px h-5 bg-border mx-1" />
-
-              <button className="btn btn-sm" onClick={() => { setNewFolderName(''); setShowNewFolder(true); }}>
-                <svg className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                新建文件夹
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="shrink-0 flex items-center gap-0.5 overflow-x-auto py-1.5 border-b border-border">
+            <div className="flex bg-bg-base rounded-md p-0.5 border border-border shrink-0">
+              <button className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="网格视图">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
               </button>
-
-              <div className="w-px h-5 bg-border mx-1" />
-
-              <button className="btn btn-sm" onClick={() => matSelectAll(allSelectable)}>
-                {matSelected.size === allSelectable.length && allSelectable.length > 0 ? '取消全选' : '全选'}
+              <button className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="列表视图">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="14" height="3" rx="1"/><rect x="1" y="6.5" width="14" height="3" rx="1"/><rect x="1" y="12" width="14" height="3" rx="1"/></svg>
               </button>
-              <div className="w-px h-5 bg-border mx-1" />
-              <button className="btn btn-sm" onClick={handleScoreAll} disabled={scoring || !currentFiles.length}>
-                {scoring ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 评分中</> : 'AI 评分'}
-              </button>
-              <div className="w-px h-5 bg-border mx-1" />
-              <button className="btn btn-sm" onClick={matClearSelection} disabled={!matSelected.size}>取消选择</button>
-              <button className="btn btn-sm" onClick={handleBatchEnqueue} disabled={!matSelected.size || enqueuing}>
-                {enqueuing ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 加入中</> : '加入发布队列'}
-              </button>
-              <button className="btn btn-sm btn-danger" onClick={() => setShowBatchDeleteConfirm(true)} disabled={!matSelected.size || deleting}>删除</button>
+            </div>
 
-              <div className="ml-auto text-xs text-text-muted tabular-nums">
-                {filteredFolders.length + filteredFiles.length} 项
-                {matSelected.size > 0 && <span className="ml-2">已选 <strong className="text-text">{matSelected.size}</strong></span>}
-              </div>
+            <div className="w-px h-4 bg-border mx-1.5 shrink-0" />
+
+            <button className="toolbar-item" onClick={() => { setNewFolderName(''); setShowNewFolder(true); }}>
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>新建文件夹</span>
+            </button>
+
+            <div className="w-px h-4 bg-border mx-1.5 shrink-0" />
+
+            <button className="toolbar-item" onClick={() => matSelectAll(allSelectable)}>
+              <span>{matSelected.size === allSelectable.length && allSelectable.length > 0 ? '取消全选' : '全选'}</span>
+            </button>
+            <button className="toolbar-item" onClick={handleScoreAll} disabled={scoring || !currentFiles.length}>
+              {scoring ? <span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> : null}
+              <span>{scoring ? '评分中' : 'AI 评分'}</span>
+            </button>
+
+            <div className="w-px h-4 bg-border mx-1.5 shrink-0" />
+
+            <button className="toolbar-item" onClick={matClearSelection} disabled={!matSelected.size}>取消选择</button>
+            <button className="toolbar-item" onClick={handleBatchEnqueue} disabled={!matSelected.size || enqueuing}>
+              {enqueuing ? <span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> : null}
+              <span>{enqueuing ? '加入中' : '加入发布队列'}</span>
+            </button>
+            <button className="toolbar-item text-danger hover:text-danger/80 disabled:text-text-muted/30" onClick={() => setShowBatchDeleteConfirm(true)} disabled={!matSelected.size || deleting}>
+              <span>删除</span>
+            </button>
+
+            <div className="ml-auto text-xs text-text-muted tabular-nums whitespace-nowrap shrink-0">
+              {filteredFolders.length + filteredFiles.length} 项
+              {matSelected.size > 0 && <span className="ml-2">已选 <strong className="text-text">{matSelected.size}</strong></span>}
             </div>
           </div>
 
-          {loading ? (
-            <div className="card flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
-          ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
-            <div className="card">
-              <div className="empty-state py-16">
-                <div className="empty-state-icon">📁</div>
-                <div className="empty-state-title">此文件夹为空</div>
-                <div className="empty-state-desc">新建文件夹或上传图片</div>
+          <div className="flex-1 min-h-0 overflow-y-auto mt-4">
+            {loading ? (
+              <div className="card flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
+            ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
+              <div className="card">
+                <div className="empty-state py-16">
+                  <div className="empty-state-icon">📁</div>
+                  <div className="empty-state-title">此文件夹为空</div>
+                  <div className="empty-state-desc">新建文件夹或上传图片</div>
+                </div>
               </div>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <>
-              <div ref={gridRef} className={`grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 ${boxStyle ? 'select-none' : ''}`}
-                onPointerDown={handleGridPointerDown}>
-                {filteredFolders.map(folder => (
-                  <FolderCard
-                    key={folder.path}
-                    folder={folder}
-                    onDoubleClick={() => navigateTo(folder.path)}
-                    onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDropOnFolder(e, folder.path)}
-                    isDragOver={dragOverFolder === folder.path}
-                    setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
-                  />
-                ))}
-                {filteredFiles.map(file => (
-                  <div key={file.path} data-mat-path={file.path}>
-                    <ImageCard
-                      file={file}
-                      selected={matSelected.has(file.path)}
-                      onToggleSelect={() => matToggleSelect(file.path)}
-                      onOpenLightbox={() => openLightboxFor(file.path)}
-                      onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                      onDragStart={(e) => handleDragStart(e, file.path)}
-                      scoreInfo={scoreMap[file.path] || null}
-                      meta={metaMap[file.path] || null}
-                    />
-                  </div>
-                ))}
-              </div>
-              {boxStyle && (
-                <div style={boxStyle} className="fixed pointer-events-none z-[9999] rounded border-2 border-accent bg-accent/10" />
-              )}
-            </>
-          ) : (
-            <div className="card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-text-muted text-xs">
-                    <th className="text-left py-2 px-3 font-medium">名称</th>
-                    <th className="text-right py-2 px-3 font-medium w-20">大小</th>
-                    <th className="text-right py-2 px-3 font-medium w-16">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
+            ) : viewMode === 'grid' ? (
+              <>
+                <div ref={gridRef} className={`grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 ${boxStyle ? 'select-none' : ''}`}
+                  onPointerDown={handleGridPointerDown}>
                   {filteredFolders.map(folder => (
-                    <tr key={folder.path} className="border-b border-border/50 hover:bg-bg-base/50 cursor-pointer"
+                    <FolderCard
+                      key={folder.path}
+                      folder={folder}
                       onDoubleClick={() => navigateTo(folder.path)}
                       onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
-                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                      onDragOver={handleDragOver}
                       onDrop={(e) => handleDropOnFolder(e, folder.path)}
-                    >
-                      <td className="py-2 px-3 flex items-center gap-2">
-                        <svg className="w-5 h-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
-                        <span className="truncate">{folder.name}</span>
-                        <span className="text-xs text-text-muted ml-auto">{folder.item_count} 张</span>
-                      </td>
-                      <td className="py-2 px-3 text-right text-text-muted">—</td>
-                      <td className="py-2 px-3 text-right">
-                        <button className="text-accent hover:underline text-xs" onClick={() => navigateTo(folder.path)}>打开</button>
-                      </td>
-                    </tr>
+                      isDragOver={dragOverFolder === folder.path}
+                      setDragOver={(v) => setDragOverFolder(v ? folder.path : null)}
+                    />
                   ))}
-                  {filteredFiles.map(file => {
-                    const s = scoreMap[file.path];
-                    const m = metaMap[file.path];
-                    return (
-                      <tr key={file.path}
-                        className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
+                  {filteredFiles.map((file, idx) => (
+                    <div key={file.path} data-mat-path={file.path}
+                      draggable
+                      onDragStart={(e) => handleGridDragStart(e, idx, file.path)}
+                      onDragOver={(e) => handleGridDragOver(e, idx)}
+                      onDrop={(e) => handleGridDrop(e, idx)}
+                      onDragEnd={handleGridDragEnd}
+                      className={dragIndex !== null && idx !== dragIndex ? 'opacity-50' : ''}
+                    >
+                      <ImageCard
+                        file={file}
+                        selected={matSelected.has(file.path)}
+                        onToggleSelect={() => matToggleSelect(file.path)}
+                        onOpenLightbox={() => openLightboxFor(file.path)}
                         onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, file.path)}
+                        scoreInfo={scoreMap[file.path] || null}
+                        meta={metaMap[file.path] || null}
+                      />
+                      {dropIndex === idx && dragIndex !== null && dragIndex !== idx && (
+                        <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {boxStyle && (
+                  <div style={boxStyle} className="fixed pointer-events-none z-[9999] rounded border-2 border-accent bg-accent/10" />
+                )}
+              </>
+            ) : (
+              <div className="card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-text-muted text-xs">
+                      <th className="text-left py-2 px-3 font-medium">名称</th>
+                      <th className="text-right py-2 px-3 font-medium w-20">大小</th>
+                      <th className="text-right py-2 px-3 font-medium w-16">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredFolders.map(folder => (
+                      <tr key={folder.path} className="border-b border-border/50 hover:bg-bg-base/50 cursor-pointer"
+                        onDoubleClick={() => navigateTo(folder.path)}
+                        onContextMenu={(e) => handleContextMenu(e, folder.path, 'folder')}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                        onDrop={(e) => handleDropOnFolder(e, folder.path)}
                       >
                         <td className="py-2 px-3 flex items-center gap-2">
-                          <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
-                          <LazyImage src={imgSrc(file.path)} alt="" className="w-8 h-8 rounded shrink-0" />
-                          <span className="truncate">{file.name}</span>
-                          {s && s.score > 0 && (
-                            <span className={`ml-2 text-[10px] font-bold px-1 py-0.5 rounded ${s.score >= 70 ? 'text-success bg-success/10' : s.score >= 40 ? 'text-warning bg-warning/10' : 'text-danger bg-danger/10'}`}>
-                              {s.score}
-                            </span>
-                          )}
-                          {m?.used_count > 0 && (
-                            <span className="text-[10px] text-accent bg-accent/5 px-1 py-0.5 rounded">使用 {m.used_count} 次</span>
-                          )}
-                          {m?.is_cover && (
-                            <span className="text-[10px] text-warning bg-warning/5 px-1 py-0.5 rounded">封面</span>
-                          )}
+                          <svg className="w-5 h-5 shrink-0 text-accent" viewBox="0 0 24 24" fill="currentColor"><path d="M2 6a2 2 0 012-2h5l2 3h9a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+                          <span className="truncate">{folder.name}</span>
+                          <span className="text-xs text-text-muted ml-auto">{folder.item_count} 张</span>
                         </td>
-                        <td className="py-2 px-3 text-right text-text-muted tabular-nums whitespace-nowrap">
-                          {m?.source_platform && <span className="text-xs text-text-muted mr-2">{m.source_platform}</span>}
-                          {formatSize(file.size)}
-                        </td>
+                        <td className="py-2 px-3 text-right text-text-muted">—</td>
                         <td className="py-2 px-3 text-right">
-                          <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
+                          <button className="text-accent hover:underline text-xs" onClick={() => navigateTo(folder.path)}>打开</button>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    ))}
+                    {filteredFiles.map(file => {
+                      const s = scoreMap[file.path];
+                      const m = metaMap[file.path];
+                      return (
+                        <tr key={file.path}
+                          className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
+                          onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, file.path)}
+                        >
+                          <td className="py-2 px-3 flex items-center gap-2">
+                            <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
+                            <LazyImage src={imgSrc(file.path)} alt="" className="w-8 h-8 rounded shrink-0" />
+                            <span className="truncate">{file.name}</span>
+                            {s && s.score > 0 && (
+                              <span className={`ml-2 text-[10px] font-bold px-1 py-0.5 rounded ${s.score >= 70 ? 'text-success bg-success/10' : s.score >= 40 ? 'text-warning bg-warning/10' : 'text-danger bg-danger/10'}`}>
+                                {s.score}
+                              </span>
+                            )}
+                            {m?.used_count > 0 && (
+                              <span className="text-[10px] text-accent bg-accent/5 px-1 py-0.5 rounded">使用 {m.used_count} 次</span>
+                            )}
+                            {m?.is_cover && (
+                              <span className="text-[10px] text-warning bg-warning/5 px-1 py-0.5 rounded">封面</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right text-text-muted tabular-nums whitespace-nowrap">
+                            {m?.source_platform && <span className="text-xs text-text-muted mr-2">{m.source_platform}</span>}
+                            {formatSize(file.size)}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

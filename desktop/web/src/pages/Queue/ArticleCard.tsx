@@ -1,32 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../stores';
-import { queueApi, wechatAccountApi, type QueueItem, type WeChatAccount } from '../../api/client';
+import { queueApi, type QueueItem, type WeChatAccount } from '../../api/client';
 import Select from '../../components/Select';
 import { imgSrc } from './utils';
-import ConfirmDialog from '../../components/ConfirmDialog';
-import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
+import { showConfirm, showPublishConfirm } from '../../components/modalApi.tsx';
 
-const ArticleCard = React.memo(function ArticleCard({ item, seq }: { item: QueueItem; seq?: number }) {
+const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
   const navigate = useNavigate();
   const { addToast, setQueue } = useStore();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [publishConfirm, setPublishConfirm] = useState<'draft' | 'publish' | null>(null);
-  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const tags = item.tags || [];
-
-  useEffect(() => {
-    wechatAccountApi.list().then(({ accounts }) => {
-      setWechatAccounts(accounts);
-      if (!item.account_id) {
-        const def = accounts.find(a => a.is_default);
-        if (def) setSelectedAccountId(def.account_id);
-      }
-    }).catch(() => {});
-  }, [item.account_id]);
 
   async function deleteItem() {
     try {
@@ -89,7 +75,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq }: { item: Queue
   const isPublished = item.status === 'published';
 
   return (
-    <div className="card overflow-visible">
+    <div className="card overflow-visible" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
       <div className="flex flex-col md:flex-row">
         <div className="md:w-48 relative bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 min-h-[140px]">
           {seq !== undefined && (
@@ -149,14 +135,14 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq }: { item: Queue
             </div>
           )}
 
-          {wechatAccounts.length > 0 && (
+          {accounts.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted shrink-0">发布到</span>
               <div className="w-44">
                 <Select
                   value={selectedAccountId}
                   onChange={setSelectedAccountId}
-                  options={wechatAccounts.map(acc => ({
+                  options={accounts.map(acc => ({
                       label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
                       value: acc.account_id,
                     }))}
@@ -171,39 +157,23 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq }: { item: Queue
             </button>
             {!isPublished ? (
               <>
-                <button className="btn btn-sm" onClick={() => setPublishConfirm('draft')}>保存草稿</button>
-                <button className="btn btn-sm" onClick={() => setPublishConfirm('publish')}>直接发布</button>
-                <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={() => setShowDeleteConfirm(true)}>删除</button>
+                <button className="btn btn-sm" onClick={async () => {
+                  const ok = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  if (ok) publish({ save_draft: true });
+                }}>保存草稿</button>
+                <button className="btn btn-sm" onClick={async () => {
+                  const ok = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  if (ok) publish({ save_draft: false });
+                }}>直接发布</button>
+                <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
+                  const ok = await showConfirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true });
+                  if (ok) deleteItem();
+                }}>删除</button>
               </>
             ) : (
               <EffectEntry itemId={itemId} title={item.title} />
             )}
           </div>
-
-          <ConfirmDialog
-            open={showDeleteConfirm}
-            title="删除发布队列项"
-            message={`确认删除《${item.title || '无标题'}》？`}
-            confirmText="删除"
-            danger
-            onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-          <PublishConfirmModal
-            open={!!publishConfirm}
-            action={publishConfirm || 'draft'}
-            account={wechatAccounts.find(a => a.account_id === selectedAccountId) || null}
-            title={item.title}
-            content={item.content || item.desc}
-            cover={item.cover}
-            images={item.images || []}
-            onConfirm={() => {
-              const action = publishConfirm;
-              setPublishConfirm(null);
-              publish({ save_draft: action !== 'publish' });
-            }}
-            onCancel={() => setPublishConfirm(null)}
-          />
         </div>
       </div>
     </div>

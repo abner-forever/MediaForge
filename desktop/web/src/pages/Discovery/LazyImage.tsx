@@ -13,6 +13,7 @@ interface LazyImageProps {
   src: string;
   alt?: string;
   className?: string;
+  imgClassName?: string;
   onClick?: () => void;
   onError?: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   placeholder?: React.ReactNode;
@@ -28,7 +29,7 @@ const shimmerSlideStyle = {
   animation: 'lazy-shimmer-slide 1.5s linear infinite',
 };
 
-export default function LazyImage({ src, alt = '', className, onClick, onError, placeholder, rootMargin = '200px' }: LazyImageProps) {
+export default function LazyImage({ src, alt = '', className, imgClassName, onClick, onError, placeholder, rootMargin = '200px' }: LazyImageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -64,7 +65,8 @@ export default function LazyImage({ src, alt = '', className, onClick, onError, 
         <img
           src={src}
           alt={alt}
-          className={`w-full h-full object-cover ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+          draggable={false}
+          className={`w-full h-full ${imgClassName || 'object-cover'} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => setLoaded(true)}
           onError={(e) => {
             setError(true);

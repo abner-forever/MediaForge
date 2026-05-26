@@ -51,6 +51,7 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8765',
       '/images': 'http://127.0.0.1:8765',
       '/proxy': 'http://127.0.0.1:8765',
+      '/static': 'http://127.0.0.1:8765',
     },
   },
 })

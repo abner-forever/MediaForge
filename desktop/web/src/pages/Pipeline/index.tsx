@@ -5,6 +5,16 @@ import ConfigPanel from './ConfigPanel';
 import ProgressView from './ProgressView';
 import SummaryPanel from './SummaryPanel';
 
+const PIPELINE_STEPS = [
+  { id: 'health_check', label: '健康检查', desc: '验证各项配置与登录状态' },
+  { id: 'fetch', label: '抓取帖子', desc: '搜索并获取目标帖子' },
+  { id: 'download', label: '下载图片', desc: '并发下载并过滤水印' },
+  { id: 'score', label: 'AI 评分', desc: '评估图片质量' },
+  { id: 'generate', label: '生成内容', desc: 'AI 写作标题与正文' },
+  { id: 'enqueue', label: '加入队列', desc: '纳入发布队列' },
+  { id: 'publish', label: '发布', desc: '保存草稿或直接发布' },
+];
+
 export default function PipelinePage() {
   const { addToast, setPipelineRunning } = useStore();
 
@@ -23,7 +33,7 @@ export default function PipelinePage() {
     items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }>;
   } | null>(null);
 
-  // Decision request state (交互决策)
+  // Decision request state
   const [decisionReq, setDecisionReq] = useState<{
     message: string;
     runId: string;
@@ -37,7 +47,6 @@ export default function PipelinePage() {
   const eventsRef = useRef<PipelineEvent[]>([]);
   const mountedRef = useRef(true);
 
-  // 组件卸载时自动中止流水线，防止 SSE 连接残留导致页面卡顿
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -156,7 +165,6 @@ export default function PipelinePage() {
     }
   }, [checkpoint, addToast]);
 
-  // ── 交互决策 ──
   const handleDecision = useCallback(async (optionId: string) => {
     if (!decisionReq || deciding) return;
     setDeciding(true);
@@ -226,7 +234,6 @@ export default function PipelinePage() {
     setDetailEvents(null);
   }, []);
 
-  // ── 继续运行（从历史记录恢复配置）──
   const handleContinueRun = useCallback((run: RunInfo) => {
     const p = run.payload as Record<string, unknown>;
     const config: PipelineConfig = {
@@ -283,7 +290,6 @@ export default function PipelinePage() {
     return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
-  // ── 状态颜色 by status ──
   const statusColor = (s: string) => {
     if (s === 'completed') return 'bg-green-500';
     if (s === 'partial_failure') return 'bg-yellow-500';
@@ -295,29 +301,107 @@ export default function PipelinePage() {
     return '进行中';
   };
 
+  const hasContent = running || summary || error || events.length > 0;
+
   return (
     <div className="py-6 px-4">
       <div className="flex gap-6 max-w-[1280px] mx-auto">
         {/* ── 主内容区 ── */}
-        <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex-1 min-w-0 space-y-5">
           {/* Header */}
-          <div>
-            <h1 className="text-lg font-bold text-text tracking-tight">智能流水线</h1>
-            <p className="text-sm text-text-muted mt-1">
-              AI 自动完成从发现到发布的完整流程，只需配置一次即可一键运行
-            </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-text tracking-tight flex items-center gap-2.5">
+                <svg className="w-6 h-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                智能流水线
+              </h1>
+              <p className="text-sm text-text-muted mt-1">
+                配置一次即可一键运行，AI 自动完成从内容发现到公众号发布的完整流程
+              </p>
+            </div>
           </div>
 
-          {/* Pipeline Flow Diagram */}
-          <div className="card bg-accent-softer/30 border-accent/10">
-            <div className="flex items-center justify-between text-xs text-text-muted">
-              {['健康检查', '抓取帖子', '下载图片', 'AI 评分', '生成内容', '加入队列', '发布'].map((step, i) => (
-                <div key={step} className="flex items-center gap-1">
-                  <span className="hidden sm:inline">{step}</span>
-                  <span className="sm:hidden">{step.slice(0, 2)}</span>
-                  {i < 6 && <span className="text-accent/40 mx-1">→</span>}
-                </div>
-              ))}
+          {/* 可视化流程概览 */}
+          <div className="card bg-gradient-to-br from-accent-softer/40 via-bg-card to-bg-card border-accent/10 relative">
+            {/* 背景装饰 — 单独裁剪避免遮挡 tooltip */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[inherit]">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-accent/3 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            </div>
+            <div className="relative">
+              <div className="flex items-start justify-between gap-1">
+                {PIPELINE_STEPS.map((step, i) => (
+                  <div key={step.id} className="flex items-start gap-0 flex-1 min-w-0">
+                    {/* 步骤卡片 */}
+                    <div className="group relative flex-1 min-w-0">
+                      <div className={`
+                        flex flex-col items-center text-center px-1 py-2 rounded-xl
+                        transition-all duration-200
+                        ${i < 3 ? 'opacity-80' : 'opacity-50'}
+                        hover:opacity-100 hover:bg-accent/5
+                      `}>
+                        {/* 图标圆 */}
+                        <div className={`
+                          w-8 h-8 rounded-xl flex items-center justify-center mb-1.5
+                          transition-colors duration-200
+                          ${i < 3 ? 'bg-accent/15 text-accent' : 'bg-bg-secondary text-text-muted'}
+                          group-hover:bg-accent/20
+                        `}>
+                          {i === 0 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            </svg>
+                          )}
+                          {i === 1 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                            </svg>
+                          )}
+                          {i === 2 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          )}
+                          {i === 3 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                          )}
+                          {i === 4 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          )}
+                          {i === 5 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" />
+                            </svg>
+                          )}
+                          {i === 6 && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-medium text-text leading-tight line-clamp-1">{step.label}</span>
+                      </div>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg bg-bg-elevated shadow-lg border border-border text-[11px] text-text-muted whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        {step.desc}
+                      </div>
+                    </div>
+                    {/* 连接箭头 */}
+                    {i < PIPELINE_STEPS.length - 1 && (
+                      <div className="flex items-center pt-3.5 px-0.5 shrink-0">
+                        <svg className="w-4 h-4 text-accent/25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M5 12h14" /><path d="m15 18 6-6-6-6" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -328,13 +412,21 @@ export default function PipelinePage() {
           <ProgressView events={events} currentStep={currentStep} stepProgress={stepProgress} />
 
           {/* Error */}
-          {error && !running && (
-            <div className="card border-red-500/30 bg-red-500/5">
-              <div className="flex items-center gap-2 text-red-500 text-sm">
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
-                {error}
+          {error && !running && !summary && (
+            <div className="card border-red-500/30 bg-red-500/[0.03]">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center text-red-500 shrink-0">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-red-500">运行出错</div>
+                  <p className="text-sm text-text-muted mt-1">{error}</p>
+                  <button onClick={handleRunAgain} className="text-xs text-accent mt-2 hover:underline">
+                    重新配置后再试
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -342,25 +434,100 @@ export default function PipelinePage() {
           {/* Summary */}
           {summary && <SummaryPanel summary={summary} onRunAgain={handleRunAgain} />}
 
-          {/* Inline loading state */}
+          {/* 启动中加载状态 */}
           {running && events.length === 0 && (
             <div className="card">
-              <div className="flex items-center justify-center py-8 gap-3">
+              <div className="flex items-center justify-center py-10 gap-3">
                 <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-text-muted">正在启动流水线...</span>
+                <div>
+                  <div className="text-sm font-medium text-text">正在启动流水线...</div>
+                  <div className="text-xs text-text-muted mt-0.5">正在初始化运行环境并验证配置</div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Empty state */}
-          {!running && !summary && !error && events.length === 0 && (
-            <div className="card">
-              <div className="text-center py-10 text-text-muted">
-                <svg className="w-12 h-12 mx-auto mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                <p className="text-sm">配置上方参数后点击「启动流水线」</p>
-                <p className="text-xs mt-1">AI 将自动完成从发现到发布的每一步</p>
+          {/* 空状态 — 引导式布局 */}
+          {!hasContent && (
+            <div className="card border-2 border-dashed border-border/60">
+              <div className="text-center py-12 px-8">
+                {/* 主图标 */}
+                <div className="w-20 h-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-accent/10 to-accent/5 flex items-center justify-center border border-accent/10">
+                  <svg className="w-10 h-10 text-accent/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    <line x1="12" y1="2" x2="12" y2="17.77" />
+                    <line x1="2" y1="9.27" x2="22" y2="9.27" />
+                  </svg>
+                </div>
+
+                <h3 className="text-base font-bold text-text mb-2">开始你的智能流水线</h3>
+                <p className="text-sm text-text-muted max-w-md mx-auto mb-8">
+                  只需 3 步即可完成从内容发现到公众号发布的全自动化流程
+                </p>
+
+                {/* 引导步骤卡片 */}
+                <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+                  {[
+                    {
+                      step: '1',
+                      title: '配置参数',
+                      desc: '选择数据平台、设置搜索目标和运行参数',
+                      icon: (
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      step: '2',
+                      title: '一键运行',
+                      desc: '点击「启动流水线」，AI 自动完成发现到发布',
+                      icon: (
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      step: '3',
+                      title: '查看结果',
+                      desc: '实时追踪进度，查看运行结果与处理明细',
+                      icon: (
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                      ),
+                    },
+                  ].map((item) => (
+                    <div key={item.step} className="bg-bg-secondary/50 rounded-xl p-4 border border-border/40 hover:border-accent/20 hover:bg-accent/5 transition-all duration-200">
+                      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent mb-3">
+                        {item.icon}
+                      </div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="w-4 h-4 rounded-full bg-accent/20 text-accent text-[10px] font-bold flex items-center justify-center">{item.step}</span>
+                        <span className="text-sm font-semibold text-text">{item.title}</span>
+                      </div>
+                      <p className="text-xs text-text-muted leading-relaxed">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-border/40 max-w-md mx-auto">
+                  <div className="flex items-center justify-center gap-6 text-xs text-text-muted">
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                      多平台支持
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                      AI 智能评分
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                      一键发布
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -385,12 +552,19 @@ export default function PipelinePage() {
                   </button>
                   <span className="text-sm font-medium text-text">运行历史</span>
                 </div>
-                <button onClick={loadHistory} className="text-xs text-text-muted hover:text-text" disabled={historyLoading}>
-                  {historyLoading ? '...' : '↻'}
+                <button onClick={loadHistory} className="text-xs text-text-muted hover:text-text p-1 rounded hover:bg-bg-secondary" disabled={historyLoading} title="刷新">
+                  <svg className={`w-3.5 h-3.5 ${historyLoading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
                 </button>
               </div>
               {history.length === 0 ? (
-                <div className="text-xs text-text-muted text-center py-6 px-4">暂无运行记录</div>
+                <div className="text-xs text-text-muted text-center py-8 px-4">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  暂无运行记录
+                </div>
               ) : (
                 <div className="space-y-0.5 px-2 pb-2 max-h-[calc(100vh-220px)] overflow-y-auto">
                   {history.map((run) => {
@@ -400,11 +574,10 @@ export default function PipelinePage() {
                       <button
                         key={run.run_id}
                         onClick={() => openDetail(run)}
-                        className={`w-full text-left p-3 rounded-lg transition-colors group ${
-                          isActive ? 'bg-accent/10 text-accent' : 'hover:bg-bg-secondary text-text'
+                        className={`w-full text-left p-3 rounded-xl transition-all group ${
+                          isActive ? 'bg-accent/10 text-accent ring-1 ring-accent/20' : 'hover:bg-bg-secondary text-text'
                         }`}
                       >
-                        {/* Header: status + time */}
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor(run.status)}`} />
@@ -434,25 +607,23 @@ export default function PipelinePage() {
                           </div>
                         </div>
 
-                        {/* Title */}
-                        <div className="text-sm font-medium text-text truncate mb-2">{run.title || run.run_id}</div>
+                        <div className="text-sm font-medium truncate mb-2">{run.title || run.run_id}</div>
 
-                        {/* Stats grid */}
                         <div className="grid grid-cols-4 gap-1">
                           <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-text">{run.processed}</div>
+                            <div className="text-xs font-semibold text-text tabular-nums">{run.processed}</div>
                             <div className="text-[10px] text-text-muted/70 leading-tight">处理</div>
                           </div>
                           <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-green-600">{run.processed - run.failed}</div>
+                            <div className="text-xs font-semibold text-green-600 tabular-nums">{run.processed - run.failed}</div>
                             <div className="text-[10px] text-text-muted/70 leading-tight">成功</div>
                           </div>
                           <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className={`text-xs font-semibold ${run.failed > 0 ? 'text-red-500' : 'text-text'}`}>{run.failed}</div>
+                            <div className={`text-xs font-semibold tabular-nums ${run.failed > 0 ? 'text-red-500' : 'text-text'}`}>{run.failed}</div>
                             <div className="text-[10px] text-text-muted/70 leading-tight">失败</div>
                           </div>
                           <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-text-muted">
+                            <div className="text-xs font-semibold text-text-muted tabular-nums">
                               {totalTokens > 0 ? totalTokens.toLocaleString() : '-'}
                             </div>
                             <div className="text-[10px] text-text-muted/70 leading-tight">Token</div>
@@ -497,7 +668,6 @@ export default function PipelinePage() {
               </div>
             </div>
 
-            {/* 帖子列表 */}
             {checkpoint.items && checkpoint.items.length > 0 && (
               <div className="flex-1 overflow-y-auto px-6 py-3 space-y-2">
                 {checkpoint.items.map((item, i) => {
@@ -508,7 +678,6 @@ export default function PipelinePage() {
                   return (
                     <div key={i} className="border border-border rounded-xl p-3 bg-bg-secondary/30">
                       <div className="flex items-start gap-3">
-                        {/* Cover */}
                         {item.cover && (
                           <img
                             src={imgSrc(item.cover)}
@@ -526,7 +695,6 @@ export default function PipelinePage() {
                               <span className="text-yellow-500">{item.score} 分</span>
                             )}
                           </div>
-                          {/* 图片预览缩略图 */}
                           {images.length > 1 && (
                             <div className="flex gap-1.5 mt-2 overflow-x-auto pb-1">
                               {images.map((img, j) => (
@@ -587,7 +755,6 @@ export default function PipelinePage() {
               </div>
             </div>
             <div className="px-6 py-4 space-y-2">
-              {/* 帖子预览列表 */}
               {(() => {
                 const posts = decisionReq.context?.posts as Array<{ index: number; text_preview: string; celebrity?: string; image_count?: number }> | undefined;
                 return posts && posts.length > 0 ? (
@@ -629,7 +796,6 @@ export default function PipelinePage() {
       {detailRun && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={closeDetail}>
           <div className="bg-bg-card rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-border">
               <div>
                 <div className="text-base font-bold text-text">运行详情</div>
@@ -642,7 +808,6 @@ export default function PipelinePage() {
               </button>
             </div>
 
-            {/* Tabs */}
             <div className="flex gap-1 px-6 pt-3 pb-0 border-b border-border">
               {([{ key: 'overview', label: '概览' }, { key: 'params', label: '参数' }, { key: 'log', label: '事件日志' }] as const).map(tab => (
                 <button
@@ -659,16 +824,13 @@ export default function PipelinePage() {
               ))}
             </div>
 
-            {/* Tab Content */}
             <div className="flex-1 overflow-y-auto min-h-0">
               {detailLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : detailTab === 'overview' ? (
-                /* ── Tab 1: 概览 ── */
                 <div className="p-6 space-y-5">
-                  {/* Status hero */}
                   <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold
                       ${detailRun.status === 'completed' ? 'bg-green-500/20 text-green-500' :
@@ -683,7 +845,6 @@ export default function PipelinePage() {
                     </div>
                   </div>
 
-                  {/* Stats */}
                   <div className="grid grid-cols-4 gap-3">
                     <StatBox label="处理帖子" value={detailRun.processed} color="text-accent" />
                     <StatBox label="成功" value={detailRun.processed - detailRun.failed} color="text-green-500" />
@@ -693,7 +854,6 @@ export default function PipelinePage() {
                     )}
                   </div>
 
-                  {/* Time info */}
                   {detailRun.started_at && (
                     <div className="text-xs text-text-muted flex gap-4 flex-wrap">
                       <span>开始时间: {fmtTimeFull(detailRun.started_at)}</span>
@@ -701,7 +861,6 @@ export default function PipelinePage() {
                   )}
                 </div>
               ) : detailTab === 'params' ? (
-                /* ── Tab 2: 参数 ── */
                 <div className="p-6">
                   {(() => {
                     const startedEvent = detailEvents?.find(e => e.event === 'run_started');
@@ -735,7 +894,6 @@ export default function PipelinePage() {
                   })()}
                 </div>
               ) : (
-                /* ── Tab 3: 事件日志 ── */
                 <div className="p-4">
                   {detailEvents && detailEvents.length > 0 ? (
                     <table className="w-full text-xs">
@@ -799,7 +957,7 @@ export default function PipelinePage() {
                               </td>
                             </tr>
                             {isExpanded && (
-                              <tr key={`${i}-detail`} className="bg-bg-secondary/30">
+                              <tr key={`${i}-d`} className="bg-bg-secondary/30">
                                 <td colSpan={5} className="py-2 px-3">
                                   <pre className="text-xs text-text-muted leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap break-all font-mono">
                                     {JSON.stringify(p, null, 2)}
@@ -819,7 +977,6 @@ export default function PipelinePage() {
               )}
             </div>
 
-            {/* Close button */}
             <div className="px-6 py-3 border-t border-border flex items-center justify-between">
               <button onClick={() => detailRun && handleContinueRun(detailRun)} className="btn btn-primary text-sm" disabled={running}>
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -839,7 +996,7 @@ export default function PipelinePage() {
 function StatBox({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
     <div className="bg-bg-secondary rounded-xl p-3 text-center">
-      <div className={`text-xl font-bold ${color}`}>{value}</div>
+      <div className={`text-xl font-bold tabular-nums ${color}`}>{value}</div>
       <div className="text-xs text-text-muted mt-0.5">{label}</div>
     </div>
   );

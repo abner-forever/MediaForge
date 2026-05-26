@@ -8,7 +8,7 @@ import SystemTab from './SystemTab';
 
 const TABS = [
   { id: 'general', label: '常规设置' },
-  { id: 'system', label: '系统设置' },
+  { id: 'system', label: '业务设置' },
 ];
 
 export default function Settings() {
@@ -37,7 +37,7 @@ export default function Settings() {
   return (
     <div className="space-y-6 animate-in">
       <div>
-        <h1 className="text-2xl font-bold text-text tracking-tight">系统设置</h1>
+        <h1 className="text-2xl font-bold text-text tracking-tight">设置</h1>
         <p className="text-sm text-text-secondary mt-1">修改后点击保存，配置将立即生效</p>
       </div>
 

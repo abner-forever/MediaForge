@@ -16,8 +16,8 @@
   --bg-card: #ffffff;
   --bg-secondary: #f0f1f2;
   --bg-elevated: #ffffff;
-  --bg-sidebar: #010102;
-  --bg-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --bg-sidebar: #eaebec;
+  --bg-sidebar-hover: #d8dadd;
   --bg-inset: #ecedee;
 
   /* Text */
@@ -76,8 +76,8 @@
   --bg-card: #0f1011;
   --bg-secondary: #141516;
   --bg-elevated: #18191a;
-  --bg-sidebar: #010102;
-  --bg-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --bg-sidebar: #0f1011;
+  --bg-sidebar-hover: #1e1f22;
   --bg-inset: #0a0b0c;
 
   /* Text */
@@ -115,8 +115,8 @@
     --bg-card: #0f1011;
     --bg-secondary: #141516;
     --bg-elevated: #18191a;
-    --bg-sidebar: #010102;
-    --bg-sidebar-hover: rgba(255, 255, 255, 0.06);
+    --bg-sidebar: #0f1011;
+    --bg-sidebar-hover: #1e1f22;
     --bg-inset: #0a0b0c;
 
     --text: #f7f8f8;
@@ -830,6 +830,23 @@ input[type="range"] { display: none; }
   outline-offset: -2px;
 }
 
+.folder-tree-file-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s;
+  color: var(--text-muted);
+  user-select: none;
+  min-height: 26px;
+}
+.folder-tree-file-item:hover {
+  background: var(--accent-softer);
+  color: var(--text-secondary);
+}
+
 .tree-arrow {
   display: flex;
   align-items: center;
@@ -848,6 +865,9 @@ input[type="range"] { display: none; }
 .breadcrumb-link { color: var(--accent); font-weight: 500; transition: opacity 0.15s; }
 .breadcrumb-link:hover { opacity: 0.75; }
 
+/* ── Drag reorder ───────────────────────── */
+[data-mat-path] { transition: opacity 0.15s ease; }
+
 /* ── View toggle ────────────────────────── */
 .view-toggle-btn {
   display: flex;
@@ -861,6 +881,21 @@ input[type="range"] { display: none; }
 }
 .view-toggle-btn:hover { background: var(--accent-soft); color: var(--text); }
 .view-toggle-btn.active { background: var(--accent); color: white; }
+
+/* ── Toolbar item (Finder/Win11 style) ──── */
+.toolbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.toolbar-item:hover { background: var(--accent-soft); color: var(--text); }
+.toolbar-item:disabled { opacity: 0.35; pointer-events: none; }
 
 /* ── Folder card ─────────────────────────── */
 .folder-card {

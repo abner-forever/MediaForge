@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../../stores';
-import { queueApi, publishLogsApi, wechatAccountApi, type QueueItem, type WeChatAccount } from '../../api/client';
+import { queueApi, publishLogsApi, type QueueItem, type WeChatAccount } from '../../api/client';
 import Select from '../../components/Select';
-import ConfirmDialog from '../../components/ConfirmDialog';
-import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
 import { useLoading } from '../../hooks/useLoading';
-import { imgSrc } from './utils';
+import { imgSrc, thumbSrc } from './utils';
 import ArticleCard from './ArticleCard';
 import LazyImage from '../Discovery/LazyImage';
+import { showConfirm, showPublishConfirm } from '../../components/modalApi.tsx';
 
 const MAX_VISIBLE_THUMBS = 3;
 
-const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem; seq?: number }) {
+const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
   const { openLightbox, addToast, setQueue } = useStore();
   const [title, setTitle] = useState(item.title);
@@ -20,9 +19,6 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
   const [cover, setCover] = useState(item.cover);
   const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishingAction, setPublishingAction] = useState<'draft' | 'publish' | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [publishConfirm, setPublishConfirm] = useState<'draft' | 'publish' | null>(null);
-  const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const isPublished = item.status === 'published';
   const { loading: generating, withLoading: withGenerating } = useLoading();
@@ -32,15 +28,13 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
   const pollReceivedRef = useRef(false);
   const [thumbStart, setThumbStart] = useState(0);
 
+  // 账号列表由父组件传入，不再独立请求
   useEffect(() => {
-    wechatAccountApi.list().then(({ accounts }) => {
-      setWechatAccounts(accounts);
-      if (!item.account_id) {
-        const def = accounts.find(a => a.is_default);
-        if (def) setSelectedAccountId(def.account_id);
-      }
-    }).catch(() => {});
-  }, [item.account_id]);
+    if (!item.account_id) {
+      const def = accounts.find(a => a.is_default);
+      if (def) setSelectedAccountId(def.account_id);
+    }
+  }, [item.account_id, accounts]);
 
   useEffect(() => {
     if (logs.length > logsLenRef.current) {
@@ -52,8 +46,6 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
     logsLenRef.current = logs.length;
   }, [logs]);
 
-  // 当队列项从服务端刷新后含有完整发布日志时，同步到本地
-  // 注意：发布中的轮询结束后 pollReceivedRef=true，不再用缓存的 publish_logs 覆盖
   useEffect(() => {
     if (pollReceivedRef.current) return;
     const isTerminal = ['failed', 'saved_to_wechat', 'published'].includes(item.status || '');
@@ -64,7 +56,6 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
 
   async function updateField(field: string, value: string) { await queueApi.update(itemId, { [field]: value } as any); }
 
-  // 标题/正文自动保存（防抖 800ms）
   const autoSave = useCallback((field: string, value: string) => {
     if (value !== item[field as keyof QueueItem]) {
       updateField(field, value);
@@ -118,13 +109,11 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
   const pollLogs = useCallback(async ({ signal }: { signal: AbortSignal }) => {
     let offset = 0;
     const sid = logSessionId;
-    // 等待后端发布开始（active=true），最多 3 秒
     for (let i = 0; i < 6; i++) {
       if (signal.aborted) return;
       try { const d = await publishLogsApi.get(0, sid); if (d.active) break; } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
-    // 持续轮询直到 publish 完成（信号被主动 abort），不再依赖 active 标志提前停止
     while (!signal.aborted) {
       try {
         const d = await publishLogsApi.get(offset, sid);
@@ -140,16 +129,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
 
   const publishRef = useRef(false);
 
-  /** 发布任务已后台启动，持续轮询直到队列状态变为终态。返回 true=成功。 */
   async function pollUntilDone(signal: AbortSignal): Promise<boolean> {
-    for (let i = 0; i < 150; i++) { // ~5 分钟上限
+    for (let i = 0; i < 150; i++) {
       if (signal.aborted) return false;
       try {
         const refreshed = await queueApi.get();
         setQueue(refreshed.queue);
         const updated = refreshed.queue.find(q => q.id === itemId);
         if (updated) {
-          // 只在队列项有最终完整日志时更新（发布中 publish_logs 为空，靠 pollLogs 增量拉取）
           if (updated.publish_logs && updated.publish_logs.length > 0) {
             const queueLogs = updated.publish_logs;
             setLogs(prev => queueLogs.length > prev.length ? queueLogs : prev);
@@ -172,18 +159,16 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
     pollLogs({ signal: ac.signal });
     let success = false;
     let started = false;
-    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } } catch (err: any) { /* 后端已启动后台任务，HTTP 可能先断，忽略 */ }
+    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } } catch (err: any) { /* empty */ }
     publishRef.current = false;
 
     if (started) {
-      // 后台执行，靠轮询等终态
       success = await pollUntilDone(ac.signal);
       addToast(success ? `${action}成功` : '发布失败', success ? 'success' : 'error');
     } else {
       await new Promise(r => setTimeout(r, 800));
     }
     ac.abort();
-    // 刷新队列确保本地状态与服务端一致
     try {
       const refreshed = await queueApi.get();
       setQueue(refreshed.queue);
@@ -221,11 +206,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
   };
 
   if (item.type === 'article') {
-    return <ArticleCard item={item} seq={seq} />;
+    return <ArticleCard item={item} seq={seq} accounts={accounts} />;
   }
 
   return (
-    <div className="card overflow-visible">
+    <div
+      className="card overflow-visible"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
+    >
       <div className="flex flex-col md:flex-row">
         <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 relative">
           {seq !== undefined && (
@@ -236,7 +224,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
           {cover && (
             <div className="relative mb-3 rounded-xl overflow-hidden cursor-pointer group"
               onClick={() => openLightbox(images.map(imgSrc), images.indexOf(cover))}>
-              <LazyImage src={imgSrc(cover)} alt="" className="w-full h-28 transition-transform duration-300 group-hover:scale-105" />
+              <LazyImage src={thumbSrc(cover)} alt="" className="w-full h-28 transition-transform duration-300 group-hover:scale-105" />
               <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
               <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/40 text-white/70 text-[10px] font-medium backdrop-blur">封面</div>
@@ -254,8 +242,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
               {visibleImages.map((img, ii) => {
                 const globalIdx = thumbStart + ii;
                 return (
-                  <LazyImage key={globalIdx} src={imgSrc(img)} alt=""
-                    className={`shrink-0 w-12 h-12 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'outline outline-2 outline-offset-[-1px] outline-accent border-accent' : 'border-border'}`}
+                  <LazyImage key={globalIdx} src={thumbSrc(img)} alt=""
+                    className={`shrink-0 w-12 h-12 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'border-accent' : 'border-border'}`}
                     onClick={() => openLightbox(images.map(imgSrc), globalIdx)} />
                 );
               })}
@@ -282,7 +270,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
           )}
         </div>
 
-        <div className="flex-1 p-4 space-y-3">
+        <div className="flex-1 p-4 space-y-3 min-w-0">
           <div className="flex items-center gap-2 flex-wrap text-sm">
             {item.celebrity && (
               <>
@@ -303,14 +291,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-danger/10 text-danger border border-danger/20">发布失败</span>
             )}
           </div>
-          {wechatAccounts.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted shrink-0">发布到</span>
-              <div className="w-44">
+          {accounts.length > 0 && (
+            <div className="flex items-start gap-3">
+              <span className="text-sm text-text-muted shrink-0 w-14 pt-2.5">发布到</span>
+              <div className="flex-1">
                 <Select
                   value={selectedAccountId}
                   onChange={setSelectedAccountId}
-                  options={wechatAccounts.map(acc => ({
+                  options={accounts.map(acc => ({
                       label: `${acc.name}${acc.logged_in ? '' : ' (未登录)'}`,
                       value: acc.account_id,
                     }))}
@@ -318,23 +306,67 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
               </div>
             </div>
           )}
-          <label>标题
-            <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" disabled={isPublished} />
-          </label>
-          <label>正文
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} onBlur={() => updateField('desc', desc)} rows={3} placeholder="正文内容（可选）…" disabled={isPublished} />
-          </label>
-          <label>封面
-            <Select value={cover} onChange={v => { setCover(v); updateField('cover', v); }} options={images.map(img => ({ label: img.split('/').pop() || img, value: img }))} disabled={isPublished} />
-          </label>
+          <div className="flex items-start gap-3">
+            <span className="text-sm text-text-muted shrink-0 w-14 pt-2.5">标题</span>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} onBlur={() => updateField('title', title)} maxLength={64} placeholder="输入标题…" disabled={isPublished} className="flex-1" />
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-sm text-text-muted shrink-0 w-14 pt-2.5">正文</span>
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} onBlur={() => updateField('desc', desc)} rows={3} placeholder="正文内容（可选）…" disabled={isPublished} className="flex-1" />
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-sm text-text-muted shrink-0 w-14 pt-2.5">封面</span>
+            <div className="flex-1 min-w-0">
+              {images.length === 0 ? (
+                <span className="text-xs text-text-muted/50">暂无图片</span>
+              ) : (
+                <div className="relative">
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin flex-nowrap">
+                    {images.map((img, i) => {
+                      const isActive = img === cover;
+                      return (
+                        <button key={i} type="button"
+                          className={`relative shrink-0 w-[88px] aspect-[3/4] rounded-lg border-2 overflow-hidden transition-all focus:outline-none ${
+                            isActive
+                              ? 'border-accent ring-1 ring-accent/30 shadow-sm'
+                              : 'border-border hover:border-accent/50 hover:shadow-xs'
+                          } ${isPublished ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                          onClick={() => { setCover(img); updateField('cover', img); }}
+                          disabled={isPublished}
+                          title={img.split('/').pop() || img}>
+                          <LazyImage src={thumbSrc(img)} alt="" className="w-full h-full object-cover" />
+                          {isActive && (
+                            <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
+                              <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {images.length > 1 && (
+                    <div className="text-[10px] text-text-muted/40 text-right mt-1 select-none">
+                      共 {images.length} 张 · 点击选择封面
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="flex gap-2 flex-wrap pt-1">
             {!isPublished ? (
               <>
-                <button className="btn btn-primary" onClick={() => setPublishConfirm('draft')} disabled={!!publishingAction || generating}>
+                <button className="btn btn-primary" onClick={async () => {
+                  const ok = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  if (ok) publish({ save_draft: true });
+                }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'draft' ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存草稿中...</> : '保存草稿'}
                 </button>
-                <button className="btn" onClick={() => setPublishConfirm('publish')} disabled={!!publishingAction || generating}>
+                <button className="btn" onClick={async () => {
+                  const ok = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  if (ok) publish({ save_draft: false });
+                }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'publish' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 发布中...</> : '直接发布'}
                 </button>
                 <button className="btn" onClick={generateContent} disabled={!!publishingAction || generating}>
@@ -343,30 +375,15 @@ const QueueCard = React.memo(function QueueCard({ item, seq }: { item: QueueItem
                     AI 润色</>
                   )}
                 </button>
-                <button className="btn btn-ghost text-danger" onClick={() => setShowDeleteConfirm(true)} disabled={!!publishingAction}>删除</button>
+                <button className="btn btn-ghost text-danger" onClick={async () => {
+                  const ok = await showConfirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true });
+                  if (ok) deleteItem();
+                }} disabled={!!publishingAction}>删除</button>
               </>
             ) : (
               <EffectEntry itemId={itemId} title={title} />
             )}
           </div>
-
-          <ConfirmDialog open={showDeleteConfirm} title="删除发布队列项" message={`确认删除《${title || '无标题'}》？`} confirmText="删除" danger onConfirm={() => { setShowDeleteConfirm(false); deleteItem(); }} onCancel={() => setShowDeleteConfirm(false)} />
-          <PublishConfirmModal
-            open={!!publishConfirm}
-            action={publishConfirm || 'draft'}
-            account={wechatAccounts.find(a => a.account_id === selectedAccountId) || null}
-            title={title}
-            content={desc}
-            cover={cover}
-            images={images}
-            loading={!!publishingAction}
-            onConfirm={() => {
-              const action = publishConfirm;
-              setPublishConfirm(null);
-              publish({ save_draft: action !== 'publish' });
-            }}
-            onCancel={() => setPublishConfirm(null)}
-          />
 
           {(logs.length > 0 || publishingAction) && (
             <div ref={logContainerRef} className="bg-bg-secondary border border-border rounded-xl p-3 max-h-44 overflow-y-auto">

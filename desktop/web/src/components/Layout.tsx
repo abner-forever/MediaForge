@@ -20,8 +20,8 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar />
-      <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px' }}>
+      <main style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px', flex: 1, minHeight: 0, width: '100%', overflowY: 'auto' }}>
           <Outlet />
         </div>
       </main>

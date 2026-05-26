@@ -591,6 +591,69 @@ async def test_ai_connection(data: dict):
     return {"success": False, "message": "\n".join(errors)}
 
 
+@app.post("/api/settings/ai-balance")
+async def get_ai_balance(data: dict):
+    """查询 AI 账户余额。DeepSeek 支持实际查询，其它供应商暂为占位。"""
+    from utils.settings_store import read_settings as _read_settings
+
+    cfg = _read_settings()
+    provider = (data.get("provider") or cfg.get("AI_PROVIDER") or "mimo").lower()
+    base_url = data.get("base_url") or cfg.get("AI_BASE_URL") or ""
+    api_key = data.get("api_key") or _get_provider_key(cfg, provider)
+
+    if not base_url or not api_key:
+        return {"success": False, "balance": None, "message": "请先配置 Base URL 和 API Key"}
+
+    base = base_url.rstrip("/")
+    for suffix in ("/messages", "/v1/messages", "/chat/completions"):
+        if base.endswith(suffix):
+            base = base[: -len(suffix)]
+    base = base.rstrip("/")
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "Accept": "application/json"}
+    timeout = int(cfg.get("REQUEST_TIMEOUT", 10))
+
+    # DeepSeek: /user/balance（注意不在 /v1 路径下）
+    if provider == "deepseek":
+        deepseek_base = base
+        if deepseek_base.endswith("/v1"):
+            deepseek_base = deepseek_base[:-3]
+        url = f"{deepseek_base}/user/balance"
+        print(f"[余额查询] GET {url}", flush=True)
+        print(f"[余额查询] key={api_key[:8]}...", flush=True)
+        try:
+            resp = http_requests.get(url, headers=headers, timeout=timeout)
+            print(f"[余额查询] 状态码={resp.status_code} 响应={resp.text[:500]}", flush=True)
+            if resp.status_code == 200:
+                bal = resp.json()
+                print(f"[余额查询] 解析结果: {bal}", flush=True)
+                return {"success": True, "balance": bal, "message": bal.get("is_available", False) and "可用" or "余额不足"}
+            return {"success": False, "balance": None, "message": f"查询失败（{resp.status_code}）"}
+        except Exception as e:
+            return {"success": False, "balance": None, "message": f"查询失败: {str(e)}"}
+
+    # OpenAI: /dashboard/billing/credit_grants
+    if provider == "openai":
+        try:
+            resp = http_requests.get(f"{base}/dashboard/billing/credit_grants", headers=headers, timeout=timeout)
+            if resp.status_code == 200:
+                return {"success": True, "balance": resp.json()}
+        except Exception:
+            pass
+        return {"success": False, "balance": None, "message": "请前往 OpenAI 控制台查看余额"}
+
+    # 其它供应商暂不支持
+    guide_urls = {
+        "mimo": "https://xiaomimimo.com/",
+        "glm": "https://open.bigmodel.cn/usercenter/apikeys",
+        "qwen": "https://bailian.console.aliyun.com/",
+        "minimax": "https://platform.minimaxi.com/",
+    }
+    url = guide_urls.get(provider, "")
+    msg = f"请前往 {url} 查看余额" if url else "当前供应商暂不支持余额查询"
+    return {"success": False, "balance": None, "message": msg}
+
+
 @app.get("/api/settings/weibo-login-stream")
 async def weibo_login_stream():
     """SSE 流：打开系统 WebView 弹出窗口让用户登录微博，捕获 Cookie 和 UID 后推送给前端。"""
@@ -2154,6 +2217,7 @@ def _build_tree_node(dir_path: Path, root: Path) -> Optional[dict]:
     rel = dir_path.relative_to(root)
     rel_str = str(rel.as_posix())
     children: list[dict] = []
+    files: list[dict] = []
     item_count = 0
     for child in sorted(dir_path.iterdir()):
         if child.name.startswith(".") or child.name == "__covers__":
@@ -2165,12 +2229,18 @@ def _build_tree_node(dir_path: Path, root: Path) -> Optional[dict]:
                 item_count += node["item_count"]
         elif child.suffix.lower() in _IMAGE_EXT:
             item_count += 1
+            files.append({
+                "name": child.name,
+                "path": str(child.relative_to(root).as_posix()),
+                "type": "file",
+            })
     return {
         "name": name,
         "path": rel_str,
         "type": "folder",
         "item_count": item_count,
         "children": children,
+        "files": files,
     }
 
 
@@ -2236,11 +2306,37 @@ async def materials_browse(path: str = Query("")):
             })
 
     rel_path = target.relative_to(root)
+    rel_path_str = str(rel_path.as_posix()) if str(rel_path) != "." else ""
+
+    # 应用自定义排序（如果存在）
+    sort_order: list = app_state.get_folder_sort_order(rel_path_str)
+    if sort_order:
+        order_map = {name: i for i, name in enumerate(sort_order)}
+        files.sort(key=lambda f: (order_map.get(f["name"], len(sort_order)), f["name"]))
+
     return {
         "folders": folders,
         "files": files,
         "breadcrumb": _build_breadcrumb(rel_path),
     }
+
+
+class SortOrderRequest(BaseModel):
+    path: str = ""
+    order: list[str] = []
+
+
+@app.put("/api/materials/sort-order")
+async def materials_set_sort_order(req: SortOrderRequest):
+    """保存文件夹内文件的自定义排序顺序。"""
+    app_state.set_folder_sort_order(req.path, req.order)
+    return {"success": True}
+
+
+@app.get("/api/materials/sort-order")
+async def materials_get_sort_order(path: str = Query("")):
+    """获取文件夹内文件的自定义排序顺序。"""
+    return {"path": path, "order": app_state.get_folder_sort_order(path)}
 
 
 class FolderCreateRequest(BaseModel):

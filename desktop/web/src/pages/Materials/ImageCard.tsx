@@ -4,14 +4,13 @@ import type { BrowseFile, ScoreInfo, MaterialMeta } from '../../api/client';
 import LazyImage from '../Discovery/LazyImage';
 
 export default function ImageCard({
-  file, selected, onToggleSelect, onOpenLightbox, onContextMenu, onDragStart, scoreInfo, meta,
+  file, selected, onToggleSelect, onOpenLightbox, onContextMenu, scoreInfo, meta,
 }: {
   file: BrowseFile;
   selected: boolean;
   onToggleSelect: () => void;
   onOpenLightbox: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onDragStart: (e: React.DragEvent) => void;
   scoreInfo?: ScoreInfo | null;
   meta?: MaterialMeta | null;
 }) {
@@ -22,11 +21,9 @@ export default function ImageCard({
     <div
       className={`relative rounded-xl overflow-hidden border transition-all group/image ${selected ? 'border-accent' : 'border-border hover:border-accent/50 hover:shadow-md'}`}
       onContextMenu={onContextMenu}
-      draggable
-      onDragStart={onDragStart}
     >
-      <div className="relative">
-        <LazyImage src={imgSrc(file.path)} alt="" className="w-full h-[150px] cursor-pointer" onClick={onOpenLightbox} />
+      <div className="relative bg-bg-secondary">
+        <LazyImage src={imgSrc(file.path)} alt="" className="w-full h-[150px] cursor-pointer" imgClassName="object-contain" onClick={onOpenLightbox} />
         <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 transition-colors pointer-events-none rounded-t-xl" />
         {s.score > 0 && (
           <div className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${scoreClass}`}
@@ -65,7 +62,7 @@ export default function ImageCard({
         {s.score > 0 && (
           <div className="text-[9px] text-text-muted/60 truncate mt-0.5" title={s.reason}>{s.reason}</div>
         )}
-        {s.score === 0 && !selected && <div className="text-[9px] text-text-muted/60 tabular-nums mt-0.5">{formatSize(file.size)}</div>}
+        {s.score === 0 && <div className="text-[9px] text-text-muted/60 tabular-nums mt-0.5">{formatSize(file.size)}</div>}
       </div>
     </div>
   );

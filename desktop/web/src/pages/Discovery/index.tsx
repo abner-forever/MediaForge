@@ -69,7 +69,6 @@ export default function Discovery() {
     const meta = platforms[p];
     if (meta) setMode(meta.default_fetch_mode);
     setCelebs(''); setTags(''); setSuperTopics(''); setToutiaoKeywords('');
-    // 从 settings 加载当前平台默认搜索标签
     if (p === 'xhs') {
       settingsApi.get().then(s => { if (s.xhs_search_tags) setTags(s.xhs_search_tags); });
     } else if (p === 'weibo') {
@@ -259,11 +258,21 @@ export default function Discovery() {
     setRecommending(false);
   }
 
+  const hasContent = discoveryPosts.length > 0;
+
   return (
-    <div className="space-y-6 animate-in">
+    <div className="py-6 px-4 max-w-[1280px] mx-auto space-y-5">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-text tracking-tight">图片发现</h1>
-        <p className="text-sm text-text-secondary mt-1">从平台搜寻美图，AI 智能评分筛选</p>
+        <h1 className="text-xl font-bold text-text tracking-tight flex items-center gap-2.5">
+          <svg className="w-6 h-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          </svg>
+          图片发现
+        </h1>
+        <p className="text-sm text-text-muted mt-1">
+          从各平台搜索美图，AI 智能评分筛选，一键下载并加入发布队列
+        </p>
       </div>
 
       <SearchParams
@@ -297,91 +306,130 @@ export default function Discovery() {
         }}
       />
 
-      {discoveryPosts.length > 0 && (
-        <div className="relative overflow-hidden rounded-xl border border-border p-5 stagger">
-          {/* Decorative background blobs for glass effect */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-            <div
-              className="absolute -top-24 -right-20 w-72 h-72 rounded-full"
-              style={{
-                background: 'radial-gradient(circle at center, var(--accent) 0%, transparent 70%)',
-                opacity: '0.08',
-              }}
-            />
-            <div
-              className="absolute -bottom-20 -left-20 w-56 h-56 rounded-full"
-              style={{
-                background: 'radial-gradient(circle at center, var(--accent) 0%, transparent 70%)',
-                opacity: '0.06',
-              }}
-            />
-          </div>
-          {/* Tab bar */}
-          <div className="flex items-center gap-0 mb-4 border-b border-border">
+      {/* 搜索结果区域 */}
+      {hasContent && (
+        <div className="card p-0 overflow-hidden">
+          {/* Tabs */}
+          <div className="flex items-center gap-0 border-b border-border">
             <button
-              className={`px-4 py-2.5 text-sm font-medium cursor-pointer transition-all relative ${activeTab === 'posts' ? 'text-accent' : 'text-text-muted hover:text-text'}`}
+              className={`px-5 py-3 text-sm font-medium cursor-pointer transition-all relative ${
+                activeTab === 'posts' ? 'text-accent' : 'text-text-muted hover:text-text'
+              }`}
               onClick={() => setActiveTab('posts')}
             >
               搜索结果
-              <span className="text-xs ml-1.5 font-normal opacity-70">({filteredIndices.length} 篇)</span>
+              <span className="text-xs ml-2 font-normal opacity-70">({filteredIndices.length} 篇)</span>
               {activeTab === 'posts' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />}
             </button>
             {allLocalImages.length > 0 && (
               <button
-                className={`px-4 py-2.5 text-sm font-medium cursor-pointer transition-all relative ${activeTab === 'gallery' ? 'text-accent' : 'text-text-muted hover:text-text'}`}
+                className={`px-5 py-3 text-sm font-medium cursor-pointer transition-all relative ${
+                  activeTab === 'gallery' ? 'text-accent' : 'text-text-muted hover:text-text'
+                }`}
                 onClick={() => setActiveTab('gallery')}
               >
                 图片画廊
-                <span className="text-xs ml-1.5 font-normal opacity-70">({allLocalImages.length} 张)</span>
+                <span className="text-xs ml-2 font-normal opacity-70">({allLocalImages.length} 张)</span>
                 {activeTab === 'gallery' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />}
               </button>
             )}
           </div>
 
-          {activeTab === 'posts' && (
-            <PostList
-              filteredIndices={filteredIndices}
-              discoveryPosts={discoveryPosts}
-              selectedPosts={selectedPosts}
-              allLocalImages={allLocalImages}
-              onTogglePostSelect={togglePostSelect}
-              onHandleSelectAllFiltered={handleSelectAllFiltered}
-              onDownload={doDownload}
-              onRemovePost={removePost}
-              setRemoveConfirmIndex={setRemoveConfirmIndex}
-              onOpenLightbox={openPostLightboxPreview}
-              downloading={downloading}
-              loadMore={loadMore}
-              searching={searching}
-              currentPage={currentPage}
-              minImages={minImages}
-              imgSrc={imgSrc}
-              thumbSrc={thumbSrc}
-            />
-          )}
+          {/* Content */}
+          <div className="p-4">
+            {activeTab === 'posts' && (
+              <PostList
+                filteredIndices={filteredIndices}
+                discoveryPosts={discoveryPosts}
+                selectedPosts={selectedPosts}
+                allLocalImages={allLocalImages}
+                onTogglePostSelect={togglePostSelect}
+                onHandleSelectAllFiltered={handleSelectAllFiltered}
+                onDownload={doDownload}
+                onRemovePost={removePost}
+                setRemoveConfirmIndex={setRemoveConfirmIndex}
+                onOpenLightbox={openPostLightboxPreview}
+                downloading={downloading}
+                loadMore={loadMore}
+                searching={searching}
+                currentPage={currentPage}
+                minImages={minImages}
+                imgSrc={imgSrc}
+                thumbSrc={thumbSrc}
+              />
+            )}
 
-          {activeTab === 'gallery' && allLocalImages.length > 0 && (
-            <GalleryTab
-              allLocalImages={allLocalImages}
-              galleryGroups={galleryGroups}
-              selectedImages={selectedImages}
-              onToggleImageSelect={toggleImageSelect}
-              onSelectAllImages={selectAllImages}
-              onEnqueueSelected={enqueueSelected}
-              onOpenLightbox={openLightbox}
-              enqueuing={enqueuing}
-              imgSrc={imgSrc}
-              thumbSrc={thumbSrc}
-            />
-          )}
+            {activeTab === 'gallery' && allLocalImages.length > 0 && (
+              <GalleryTab
+                allLocalImages={allLocalImages}
+                galleryGroups={galleryGroups}
+                selectedImages={selectedImages}
+                onToggleImageSelect={toggleImageSelect}
+                onSelectAllImages={selectAllImages}
+                onEnqueueSelected={enqueueSelected}
+                onOpenLightbox={openLightbox}
+                enqueuing={enqueuing}
+                imgSrc={imgSrc}
+                thumbSrc={thumbSrc}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {discoveryPosts.length === 0 && (
-        <div className="card">
-          <div className="empty-state py-16">
-            <div className="empty-state-icon">🔍</div>
-            <div className="empty-state-title">配置搜索参数后点击「开始搜索」</div>
+      {/* 空状态 */}
+      {!hasContent && (
+        <div className="card border-2 border-dashed border-border/60">
+          <div className="text-center py-14 px-8">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-accent/10 to-accent/5 flex items-center justify-center border border-accent/10">
+              <svg className="w-10 h-10 text-accent/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold text-text mb-2">开始发现内容</h3>
+            <p className="text-sm text-text-muted max-w-md mx-auto mb-8">
+              配置搜索参数后点击「开始搜索」，从各平台发现图片内容
+            </p>
+            <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto text-left">
+              {[
+                {
+                  step: '1', title: '配置参数',
+                  desc: '选择平台和搜索目标',
+                  icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+                    </svg>
+                  ),
+                },
+                {
+                  step: '2', title: '搜索与下载',
+                  desc: '抓取帖子，下载图片',
+                  icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                    </svg>
+                  ),
+                },
+                {
+                  step: '3', title: '评分与发布',
+                  desc: 'AI 评分筛选，加入发布队列',
+                  icon: (
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  ),
+                },
+              ].map((item) => (
+                <div key={item.step} className="bg-bg-secondary/50 rounded-xl p-4 border border-border/40 hover:border-accent/20 hover:bg-accent/5 transition-all duration-200">
+                  <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent mb-3">{item.icon}</div>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="w-4 h-4 rounded-full bg-accent/20 text-accent text-[10px] font-bold flex items-center justify-center">{item.step}</span>
+                    <span className="text-sm font-semibold text-text">{item.title}</span>
+                  </div>
+                  <p className="text-xs text-text-muted leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

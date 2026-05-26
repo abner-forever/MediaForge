@@ -119,7 +119,7 @@ export default function Queue() {
                   </div>
                   <div className={`flex-1 min-w-0 ${idx < sorted.length - 1 ? 'pb-7' : ''}`}>
                     <div className="text-[11px] text-text-muted/60 leading-none mb-2 mt-1.5">{formatTime(item.time)}</div>
-                    <QueueCard item={item} seq={sorted.length - idx} />
+                    <QueueCard item={item} seq={sorted.length - idx} accounts={accounts} />
                   </div>
                 </div>
               ))}
