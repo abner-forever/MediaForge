@@ -1019,3 +1019,14 @@ input[type="range"] { display: none; }
   box-shadow: none;
   border-color: transparent;
 }
+
+/* ── Windows title bar adaptation ───────────────────── */
+/* On Windows, the native title bar sits inside the app window.
+   Push sidebar content down to avoid overlapping title bar controls. */
+.win32 aside > div:first-child {
+  padding-top: 32px !important;
+}
+.win32 main {
+  border-top-left-radius: 8px;
+  overflow: hidden;
+}

@@ -6,9 +6,9 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        xl: '18px',
-        lg: '14px',
-        '2xl': '22px',
+        xl: '16px',
+        lg: '12px',
+        '2xl': '20px',
       },
       colors: {
         accent: {

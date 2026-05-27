@@ -411,6 +411,7 @@ export default function ArticlePublish() {
                 border: 'none',
                 outline: 'none',
                 background: 'transparent',
+                borderRadius: 0,
                 fontSize: 26,
                 fontWeight: 700,
                 lineHeight: 1.3,

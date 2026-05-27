@@ -139,6 +139,7 @@ export default function RichTextEditor({
   minHeight = 480,
 }: RichTextEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('split');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [plainText, setPlainText] = useState('');
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -218,6 +219,31 @@ export default function RichTextEditor({
 
   const [linkInput, setLinkInput] = useState<{ url: string } | null>(null);
 
+  // Force CodeMirror to re-layout (used after fullscreen toggle)
+  const refreshEditor = useCallback(() => {
+    const view = editorViewRef.current;
+    if (view) {
+      requestAnimationFrame(() => view.requestMeasure());
+    }
+  }, []);
+
+  // Exit fullscreen on Escape (only when link input is not open)
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !linkInput) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isFullscreen, linkInput]);
+
+  // Re-layout CodeMirror when fullscreen changes
+  useEffect(() => {
+    refreshEditor();
+  }, [isFullscreen, refreshEditor]);
+
   const run = useCallback((fn: (view: EditorView) => void) => {
     const view = editorViewRef.current;
     if (view) fn(view);
@@ -227,20 +253,22 @@ export default function RichTextEditor({
     onClick,
     active,
     title,
+    className,
     children,
   }: {
     onClick: () => void;
     active?: boolean;
     title: string;
+    className?: string;
     children: React.ReactNode;
   }) => (
-    <button type="button" onClick={onClick} title={title} className={`rte-toolbar-btn${active ? ' active' : ''}`}>
+    <button type="button" onClick={onClick} title={title} className={`rte-toolbar-btn${active ? ' active' : ''}${className ? ` ${className}` : ''}`}>
       {children}
     </button>
   );
 
   return (
-    <div className="rte-wrapper" style={{ minHeight }}>
+    <div className={`rte-wrapper${isFullscreen ? ' fullscreen' : ''}`} style={isFullscreen ? undefined : { minHeight }}>
       {/* Toolbar */}
       <div className="rte-toolbar">
         <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 4, alignSelf: 'center', flexShrink: 0 }}>Markdown</span>
@@ -279,9 +307,21 @@ export default function RichTextEditor({
         <div className="rte-divider" style={{ marginLeft: 'auto' }} />
 
         {/* View modes */}
-        <ToolbarButton onClick={() => setViewMode('edit')} active={viewMode === 'edit'} title="纯编辑">✏</ToolbarButton>
-        <ToolbarButton onClick={() => setViewMode('preview')} active={viewMode === 'preview'} title="纯预览">👁</ToolbarButton>
-        <ToolbarButton onClick={() => setViewMode('split')} active={viewMode === 'split'} title="分屏">⫿</ToolbarButton>
+        <ToolbarButton onClick={() => setViewMode('edit')} active={viewMode === 'edit'} title="纯编辑" className="rte-toolbar-icon">✏</ToolbarButton>
+        <ToolbarButton onClick={() => setViewMode('preview')} active={viewMode === 'preview'} title="纯预览" className="rte-toolbar-icon">👁</ToolbarButton>
+        <ToolbarButton onClick={() => setViewMode('split')} active={viewMode === 'split'} title="分屏" className="rte-toolbar-icon">⫿</ToolbarButton>
+
+        <div className="rte-divider" />
+
+        {/* Fullscreen toggle */}
+        <ToolbarButton
+          onClick={() => setIsFullscreen((prev) => !prev)}
+          active={isFullscreen}
+          title={isFullscreen ? '退出全屏 (Esc)' : '全屏编辑'}
+          className="rte-toolbar-icon"
+        >
+          {isFullscreen ? '⊠' : '⛶'}
+        </ToolbarButton>
       </div>
 
       {/* Link input bar */}
@@ -357,6 +397,22 @@ export default function RichTextEditor({
           border-color: var(--accent);
           box-shadow: 0 0 0 2px var(--accent-soft);
         }
+        .rte-wrapper.fullscreen {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 9999;
+          border-radius: 0;
+          border: none;
+          flex: unset;
+          width: 100vw;
+          height: 100vh;
+        }
+        .rte-wrapper.fullscreen:focus-within {
+          box-shadow: none;
+        }
         .rte-toolbar {
           display: flex;
           flex-wrap: wrap;
@@ -390,6 +446,11 @@ export default function RichTextEditor({
         .rte-toolbar-btn.active {
           background: var(--accent-soft);
           color: var(--accent);
+        }
+        .rte-toolbar-icon {
+          font-size: 16px;
+          width: 30px;
+          height: 30px;
         }
         .rte-divider {
           width: 1px;
