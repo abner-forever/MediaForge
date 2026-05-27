@@ -67,6 +67,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: 推送失败时重试 tag
+        if: steps.semantic.outcome == 'failure'
+        run: |
+          NEW_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
+          BEFORE_TAG="${{ steps.before.outputs.tag }}"
+          if [ "${NEW_TAG}" != "${BEFORE_TAG}" ] && [ -n "${NEW_TAG}" ]; then
+            echo "版本已更新为 ${NEW_TAG}，重试推送 tag"
+            git push origin "${NEW_TAG}" || echo "⚠️ tag 推送仍然失败"
+          else
+            echo "未检测到新版本，semantic-release 可能因其他原因失败"
+            exit 1
+          fi
 
       - name: 获取新版 tag
         id: check
