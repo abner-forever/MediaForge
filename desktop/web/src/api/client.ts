@@ -459,7 +459,19 @@ export const settingsApi = {
       let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 流结束时处理 buffer 中剩余的数据
+          if (buffer) {
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                onEvent(JSON.parse(line.slice(6)));
+              } catch { /* ignore */ }
+            }
+          }
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -481,7 +493,19 @@ export const settingsApi = {
       let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 流结束时处理 buffer 中剩余的数据
+          if (buffer) {
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                onEvent(JSON.parse(line.slice(6)));
+              } catch { /* ignore */ }
+            }
+          }
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -503,7 +527,19 @@ export const settingsApi = {
       let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 流结束时处理 buffer 中剩余的数据
+          if (buffer) {
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                onEvent(JSON.parse(line.slice(6)));
+              } catch { /* ignore */ }
+            }
+          }
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';

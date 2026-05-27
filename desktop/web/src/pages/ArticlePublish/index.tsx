@@ -401,6 +401,7 @@ export default function ArticlePublish() {
           {/* Title */}
           <div style={{ flexShrink: 0, marginBottom: 12 }}>
             <input
+              className="title-input"
               placeholder="输入文章标题..."
               maxLength={128}
               value={title}

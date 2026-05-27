@@ -202,6 +202,12 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+/* 标题输入框：无边框无阴影，保持简洁 */
+input.title-input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
 textarea { resize: vertical; min-height: 60px; }
 
 input[type="number"]::-webkit-inner-spin-button,

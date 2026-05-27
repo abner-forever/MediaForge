@@ -64,6 +64,7 @@ exclude_lines = [
 [tool.semantic_release.changelog]
 exclude_commit_patterns = ["chore\\(release\\)", "Merge pull request", "Merge branch"]
 changelog_file = "CHANGELOG.md"
+changelog_mode = "update"
 
 [tool.semantic_release.publish]
 dist_glob_patterns = []

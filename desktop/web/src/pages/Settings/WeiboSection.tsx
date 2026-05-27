@@ -78,10 +78,15 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
         if (evt.type === 'progress') {
           setLoginMessage(evt.message || '');
         } else if (evt.type === 'done') {
-          if (evt.cookie) setCookie(evt.cookie);
-          if (evt.uid) setUid(evt.uid);
-          if (evt.screen_name) setScreenName(evt.screen_name);
-          if (evt.avatar) setAvatar(evt.avatar);
+          // 一次性设置所有状态，确保状态一致性
+          const newCookie = evt.cookie || '';
+          const newUid = evt.uid || '';
+          const newScreenName = evt.screen_name || '';
+          const newAvatar = evt.avatar || '';
+          setCookie(newCookie);
+          setUid(newUid);
+          setScreenName(newScreenName);
+          setAvatar(newAvatar);
           setLoginState('idle');
           setLoginMessage('登录成功，Cookie 已自动填入');
           addToast('微博登录成功，请点击保存', 'success');

@@ -914,24 +914,62 @@ async def clear_toutiao():
 
 @app.get("/api/pick-folder")
 async def pick_folder():
-    """打开原生访达文件夹选择对话框，返回选中路径。"""
-    import asyncio, subprocess, json as _json
+    """打开原生文件夹选择对话框，返回选中路径。支持 macOS 和 Windows。"""
+    import asyncio, sys, os
 
     def _pick():
-        script = (
-            'set folderPath to POSIX path of '
-            '(choose folder with prompt "选择素材保存目录")\n'
-            'return folderPath'
-        )
-        try:
-            ret = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True, text=True, timeout=30,
+        if sys.platform == "darwin":
+            # macOS: 使用 AppleScript 打开 Finder 文件夹选择对话框
+            import subprocess
+            script = (
+                'set folderPath to POSIX path of '
+                '(choose folder with prompt "选择素材保存目录")\n'
+                'return folderPath'
             )
-            path = ret.stdout.strip()
-            return {"path": path if path else ""}
-        except Exception:
-            return {"path": ""}
+            try:
+                ret = subprocess.run(
+                    ["osascript", "-e", script],
+                    capture_output=True, text=True, timeout=30,
+                )
+                path = ret.stdout.strip()
+                return {"path": path if path else ""}
+            except Exception:
+                return {"path": ""}
+        elif sys.platform == "win32":
+            # Windows: 使用 tkinter.filedialog 打开文件夹选择对话框
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            try:
+                path = filedialog.askdirectory(
+                    title="选择素材保存目录",
+                    mustexist=True,
+                )
+                return {"path": path}
+            except Exception:
+                return {"path": ""}
+            finally:
+                root.destroy()
+        else:
+            # Linux 等其他平台: 使用 tkinter
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                path = filedialog.askdirectory(
+                    title="选择素材保存目录",
+                    mustexist=True,
+                )
+                return {"path": path}
+            except Exception:
+                return {"path": ""}
+            finally:
+                root.destroy()
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _pick)
