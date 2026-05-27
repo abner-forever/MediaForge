@@ -39,6 +39,7 @@ jobs:
     outputs:
       version: ${{ steps.semantic.outputs.version }}
       new_release: ${{ steps.check.outputs.new }}
+      commit_sha: ${{ steps.check.outputs.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -72,6 +73,7 @@ jobs:
         run: |
           NEW_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
           echo "tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           if [ "${NEW_TAG}" != "${{ steps.before.outputs.tag }}" ] && [ -n "${NEW_TAG}" ]; then
             echo "new=true" >> $GITHUB_OUTPUT
             VERSION="${NEW_TAG#v}"
@@ -92,6 +94,9 @@ jobs:
       APP_VERSION: ${{ needs.bump-version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump-version.outputs.commit_sha }}
+          fetch-depth: 0
 
       - name: 设置 pnpm
         uses: pnpm/action-setup@v4
@@ -181,6 +186,9 @@ jobs:
       APP_VERSION: ${{ needs.bump-version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.bump-version.outputs.commit_sha }}
+          fetch-depth: 0
 
       - name: 设置 pnpm
         uses: pnpm/action-setup@v4
