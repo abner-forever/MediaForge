@@ -1,5 +1,6 @@
 import Checkbox from '../../components/Checkbox';
 import LazyImage from './LazyImage';
+import { lightboxSrc } from './utils';
 
 export default function GalleryTab({
   allLocalImages, galleryGroups, selectedImages,
@@ -61,7 +62,7 @@ export default function GalleryTab({
                     isSel ? 'ring-1 ring-accent border-accent' : 'border-border hover:border-accent/40 hover:shadow-sm'
                   }`}>
                     <div className="relative">
-                      <LazyImage src={thumbSrc(item.path)} className="w-full h-[150px] cursor-pointer" onClick={() => { const paths = allLocalImages.map((x: any) => imgSrc(x.path)); onOpenLightbox(paths, allLocalImages.findIndex((x: any) => x.path === item.path)); }} />
+                      <LazyImage src={thumbSrc(item.path)} className="w-full h-[150px] cursor-pointer" onClick={() => { const paths = allLocalImages.map((x: any) => lightboxSrc(x.path)); onOpenLightbox(paths, allLocalImages.findIndex((x: any) => x.path === item.path)); }} />
                       <div className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[11px] font-bold ${scoreClass}`}>
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                         {s.score}

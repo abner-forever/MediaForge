@@ -9,7 +9,7 @@ import Loading from '../../components/Loading';
 import Checkbox from '../../components/Checkbox';
 import Select, { type SelectOption } from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
-import { imgSrc, formatSize } from './utils';
+import { imgSrc, lightboxSrc, formatSize } from './utils';
 import FolderTree from './FolderTree';
 import FolderCard from './FolderCard';
 import ImageCard from './ImageCard';
@@ -335,7 +335,7 @@ export default function Materials() {
   const openLightboxFor = (path: string) => {
     const all = [...currentFiles.map(f => f.path)];
     const idx = all.indexOf(path);
-    openLightbox(all.map(imgSrc), idx >= 0 ? idx : 0);
+    openLightbox(all.map(lightboxSrc), idx >= 0 ? idx : 0);
   };
 
   const handleTreeFileClick = async (path: string) => {
@@ -345,9 +345,9 @@ export default function Materials() {
     const all = files.map(f => f.path);
     const idx = all.indexOf(path);
     if (idx >= 0) {
-      openLightbox(all.map(imgSrc), idx);
+      openLightbox(all.map(lightboxSrc), idx);
     } else {
-      openLightbox([imgSrc(path)], 0);
+      openLightbox([lightboxSrc(path)], 0);
     }
   };
 

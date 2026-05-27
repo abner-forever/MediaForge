@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import socket
 import sys
 import threading
 from pathlib import Path
@@ -117,6 +118,29 @@ def _resolve_loading_html_path() -> Path:
     return Path(__file__).parent / 'loading.html'
 
 
+def _is_port_free(host: str, port: int, timeout: float = 0.1) -> bool:
+    """检查指定地址是否可用。"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+        return True
+    except OSError:
+        return False
+
+
+def _find_available_port(host: str = "127.0.0.1", preferred_port: int = 8765, max_offset: int = 16) -> int:
+    """优先使用首选端口，若被占用则查找下一个可用端口。"""
+    for port in range(preferred_port, preferred_port + max_offset + 1):
+        if _is_port_free(host, port):
+            return port
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        return sock.getsockname()[1]
+
+
 def _make_loading_html(host: str, port: int) -> str:
     """生成启动加载页面 HTML，自动轮询后端服务直至就绪后跳转。"""
     target_url = f"http://{host}:{port}"
@@ -197,7 +221,10 @@ def _start_app() -> None:
     ensure_dirs()
 
     host = "127.0.0.1"
-    port = 8765
+    preferred_port = 8765
+    port = _find_available_port(host, preferred_port)
+    if port != preferred_port:
+        print(f"端口 {preferred_port} 已被占用，改用可用端口 {port}。")
 
     # 启动 FastAPI 服务线程
     server_thread = threading.Thread(target=start_server, args=(host, port), daemon=True)
@@ -280,12 +307,8 @@ def _start_app() -> None:
         'cocoa.menu.selectAll': '全选',
     }
 
-    menus = [
-        Menu("窗口", [
-            MenuAction("最小化", lambda: webview.windows[0].minimize() if webview.windows else None),
-            MenuAction("缩放", lambda: webview.windows[0].maximize() if webview.windows else None),
-        ]),
-    ]
+    # 移除默认的 "窗口" 子菜单（最小化 / 缩放）—改为不显示任何自定义窗口菜单
+    menus = []
 
     window = webview.create_window(
         title="图文工坊",
