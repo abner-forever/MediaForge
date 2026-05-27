@@ -12,6 +12,7 @@ major_on_zero = true
 tag_format = "v{version}"
 commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 assets = ["CHANGELOG.md"]
+changelog_file = "CHANGELOG.md"
 
 [tool.semantic_release.branches.main]
 match = "(main|master)"
@@ -64,7 +65,6 @@ exclude_lines = [
 
 [tool.semantic_release.changelog]
 exclude_commit_patterns = ["chore\\(release\\)", "Merge pull request", "Merge branch"]
-changelog_file = "CHANGELOG.md"
 changelog_mode = "update"
 
 [tool.semantic_release.publish]
