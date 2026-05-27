@@ -86,20 +86,20 @@ export default function Dashboard() {
     <div style={{
       position: 'relative',
       overflow: 'hidden',
-      background: 'linear-gradient(135deg, #eef2ff, #f5f3ff)',
-      border: '1px solid #e2e8f0',
-      borderRadius: 16,
+      background: 'linear-gradient(135deg, rgba(120,104,208,0.04), rgba(160,120,208,0.03))',
+      border: '1px solid var(--border)',
+      borderRadius: 18,
       padding: '80px 0',
       textAlign: 'center',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      boxShadow: 'var(--card-shadow)',
     }}>
-      <GlowOrb color="rgba(239,68,68,0.15)" size={320} style={{ top: -80, right: -80 }} />
+      <GlowOrb color="rgba(239,68,68,0.12)" size={320} style={{ top: -80, right: -80 }} />
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div style={{ opacity: 0.4, color: '#ef4444', display: 'flex', justifyContent: 'center' }}>{I.plug(48)}</div>
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1e293b', margin: 0 }}>无法连接后端服务</h2>
-        <p style={{ fontSize: 14, color: '#64748b', maxWidth: 400, margin: '0 auto' }}>
+        <div style={{ opacity: 0.4, color: 'var(--danger)', display: 'flex', justifyContent: 'center' }}>{I.plug(48)}</div>
+        <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', margin: 0 }}>无法连接后端服务</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 400, margin: '0 auto' }}>
           请确保已启动
-          <code style={{ margin: '0 8px', padding: '4px 10px', borderRadius: 6, background: '#eef2ff', color: '#4f8cff', fontSize: 12 }}>cd desktop && python main.py</code>
+          <code style={{ margin: '0 8px', padding: '4px 10px', borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12 }}>cd desktop && python main.py</code>
         </p>
         <button
           onClick={load}
@@ -108,12 +108,12 @@ export default function Dashboard() {
             padding: '10px 28px',
             fontSize: 14,
             fontWeight: 600,
-            borderRadius: 10,
+            borderRadius: 12,
             border: 'none',
             color: '#fff',
             cursor: 'pointer',
-            background: 'linear-gradient(135deg, #4f8cff, #a855f7)',
-            boxShadow: '0 4px 14px rgba(79,140,255,0.3)',
+            background: 'linear-gradient(135deg, #7868d0, #a078d0)',
+            boxShadow: '0 4px 16px rgba(120,104,208,0.25)',
           }}
         >
           {loadingDashboard ? '连接中…' : '重试连接'}

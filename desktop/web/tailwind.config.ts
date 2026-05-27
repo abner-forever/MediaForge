@@ -6,9 +6,9 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        xl: '12px',
-        lg: '8px',
-        '2xl': '16px',
+        xl: '18px',
+        lg: '14px',
+        '2xl': '22px',
       },
       colors: {
         accent: {
@@ -17,6 +17,7 @@ export default {
           soft: 'var(--accent-soft)',
           softer: 'var(--accent-softer)',
           glow: 'var(--accent-glow)',
+          gradient: 'var(--accent-gradient)',
         },
         bg: {
           DEFAULT: 'var(--bg)',
@@ -42,6 +43,7 @@ export default {
       },
       boxShadow: {
         'glow': 'var(--shadow-glow)',
+        'card': 'var(--card-shadow)',
       },
       transitionTimingFunction: {
         'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',

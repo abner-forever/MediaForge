@@ -27,10 +27,10 @@ export const I = {
 };
 
 export const CARD_THEMES = [
-  { accent: '#06b6d4', glow: 'rgba(6,182,212,0.2)', bg: 'linear-gradient(135deg, rgba(6,182,212,0.08), transparent 70%)', border: 'rgba(6,182,212,0.2)' },
-  { accent: '#4f8cff', glow: 'rgba(79,140,255,0.2)', bg: 'linear-gradient(135deg, rgba(79,140,255,0.08), transparent 70%)', border: 'rgba(79,140,255,0.2)' },
-  { accent: '#10b981', glow: 'rgba(16,185,129,0.2)', bg: 'linear-gradient(135deg, rgba(16,185,129,0.08), transparent 70%)', border: 'rgba(16,185,129,0.2)' },
-  { accent: '#a855f7', glow: 'rgba(168,85,247,0.2)', bg: 'linear-gradient(135deg, rgba(168,85,247,0.08), transparent 70%)', border: 'rgba(168,85,247,0.2)' },
+  { accent: '#7868d0', glow: 'rgba(120,104,208,0.18)', bg: 'linear-gradient(135deg, rgba(120,104,208,0.06), transparent 70%)', border: 'rgba(120,104,208,0.15)' },
+  { accent: '#d4893a', glow: 'rgba(212,137,58,0.18)', bg: 'linear-gradient(135deg, rgba(212,137,58,0.06), transparent 70%)', border: 'rgba(212,137,58,0.15)' },
+  { accent: '#4e6fc2', glow: 'rgba(78,111,194,0.18)', bg: 'linear-gradient(135deg, rgba(78,111,194,0.06), transparent 70%)', border: 'rgba(78,111,194,0.15)' },
+  { accent: '#2e9e7a', glow: 'rgba(46,158,122,0.18)', bg: 'linear-gradient(135deg, rgba(46,158,122,0.06), transparent 70%)', border: 'rgba(46,158,122,0.15)' },
 ];
 
 export const ACTION_ICONS: Record<string, React.ReactNode> = {

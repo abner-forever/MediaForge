@@ -25,10 +25,10 @@ export default function SystemTab({ data, save, onReload }: { data: SettingsData
                 ? 'bg-accent-soft text-accent shadow-sm'
                 : 'text-text-muted hover:text-text-secondary hover:bg-bg-secondary'
             }`}>
-            <span className={`w-0.5 h-4 bg-accent rounded-full transition-all ${
+            <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-accent rounded-full transition-all ${
               subTab === t.id ? 'opacity-100' : 'opacity-0'
             }`} />
-            <span>{t.label}</span>
+            <span className="pl-2">{t.label}</span>
           </button>
         ))}
       </div>

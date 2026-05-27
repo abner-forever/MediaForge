@@ -39,22 +39,22 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
     <section style={{
       position: 'relative',
       overflow: 'hidden',
-      borderRadius: 16,
+      borderRadius: 18,
       background: [
-        'linear-gradient(135deg, rgba(6,182,212,0.06) 0%, transparent 40%)',
-        'linear-gradient(225deg, rgba(79,140,255,0.08) 0%, transparent 40%)',
-        'linear-gradient(180deg, rgba(168,85,247,0.05) 0%, transparent 50%)',
+        'linear-gradient(135deg, rgba(120,104,208,0.05) 0%, transparent 40%)',
+        'linear-gradient(225deg, rgba(160,120,208,0.04) 0%, transparent 40%)',
+        'linear-gradient(180deg, rgba(96,120,200,0.03) 0%, transparent 50%)',
         'var(--bg-card)',
       ].join(', '),
-      boxShadow: '0 4px 20px rgba(79,140,255,0.08), 0 1px 3px rgba(0,0,0,0.04)',
+      boxShadow: '0 4px 24px rgba(120,104,208,0.08), 0 1px 3px rgba(0,0,0,0.04)',
     }}>
-      {/* Gradient border layer */}
+      {/* Gradient border — purple to orange */}
       <div style={{
         position: 'absolute',
         inset: 0,
-        borderRadius: 16,
+        borderRadius: 18,
         padding: 1,
-        background: 'linear-gradient(135deg, rgba(6,182,212,0.5), rgba(79,140,255,0.5), rgba(168,85,247,0.5))',
+        background: 'linear-gradient(135deg, rgba(120,104,208,0.4), rgba(96,120,200,0.25), rgba(160,120,208,0.4))',
         WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
         WebkitMaskComposite: 'xor',
         maskComposite: 'exclude',
@@ -65,21 +65,21 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
         position: 'absolute',
         inset: 0,
         backgroundImage: [
-          'linear-gradient(rgba(79,140,255,0.05) 1px, transparent 1px)',
-          'linear-gradient(90deg, rgba(79,140,255,0.05) 1px, transparent 1px)',
+          'linear-gradient(rgba(120,104,208,0.03) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(120,104,208,0.03) 1px, transparent 1px)',
         ].join(', '),
         backgroundSize: '36px 36px',
       }} />
-      <GlowOrb color="rgba(6,182,212,0.15)" size={280} style={{ top: -80, left: -60 }} />
-      <GlowOrb color="rgba(79,140,255,0.18)" size={360} style={{ top: -100, right: -100 }} />
-      <GlowOrb color="rgba(168,85,247,0.1)" size={240} style={{ bottom: -60, left: '30%' }} />
+      <GlowOrb color="rgba(120,104,208,0.10)" size={300} style={{ top: -80, left: -60 }} />
+      <GlowOrb color="rgba(160,120,208,0.07)" size={340} style={{ top: -100, right: -100 }} />
+      <GlowOrb color="rgba(96,120,200,0.08)" size={240} style={{ bottom: -60, left: '30%' }} />
       <div style={{
         position: 'absolute',
         top: 0,
         left: '10%',
         right: '10%',
         height: 1,
-        background: 'linear-gradient(90deg, transparent, rgba(79,140,255,0.3), rgba(6,182,212,0.3), transparent)',
+        background: 'linear-gradient(90deg, transparent, rgba(120,104,208,0.2), rgba(160,120,208,0.15), transparent)',
       }} />
       <div style={{
         position: 'absolute',
@@ -87,7 +87,7 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
         left: '20%',
         right: '20%',
         height: 1,
-        background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.2), rgba(79,140,255,0.2), transparent)',
+        background: 'linear-gradient(90deg, transparent, rgba(96,120,200,0.12), rgba(120,104,208,0.12), transparent)',
       }} />
       <div style={{
         position: 'relative',
@@ -104,7 +104,7 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
               lineHeight: 1.2,
               letterSpacing: '-0.6px',
               margin: 0,
-              background: 'linear-gradient(135deg, var(--text) 0%, #4f8cff 60%, #a855f7 100%)',
+              background: 'linear-gradient(135deg, var(--text) 0%, #7868d0 50%, #a078d0 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',

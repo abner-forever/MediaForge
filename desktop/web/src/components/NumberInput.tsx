@@ -14,7 +14,7 @@ export default function NumberInput({ value, onChange, min, max, step = 1 }: Num
   }
 
   return (
-    <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)] transition-all duration-150 field-control">
+    <div className="flex items-center border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)] transition-all duration-150 field-control" style={{ borderRadius: 'var(--radius)' }}>
       <button
         type="button"
         onClick={() => onChange(clamp(value - step))}

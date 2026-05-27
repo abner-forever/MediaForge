@@ -84,7 +84,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
         onClick={() => !disabled && setOpen((v) => !v)}
         className={`
           w-full flex items-center justify-between
-          rounded-lg border text-left
+          border text-left
           transition-all duration-150
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
           ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-[8px] text-[13px]'}
@@ -96,6 +96,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
               : 'border-[var(--border)] hover:border-[var(--accent)]'
           }
         `}
+        style={{ borderRadius: 'var(--radius)' }}
         disabled={disabled}
       >
         <span className={!selected ? 'text-[var(--text-muted)]' : ''}>
@@ -112,8 +113,8 @@ export default function Select({ value, onChange, options, placeholder, disabled
       {open && createPortal(
         <div
           ref={menuRef}
-          style={menuStyle}
-          className="z-[9999] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-lg overflow-hidden"
+          style={{ ...menuStyle, borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)' }}
+          className="z-[9999] border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (

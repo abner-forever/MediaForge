@@ -21,7 +21,13 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       {sidebarWidthSynced && <Sidebar />}
-      <main style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <main style={{
+        flex: 1,
+        overflow: 'hidden',
+        background: 'linear-gradient(180deg, rgba(120,104,208,0.015) 0%, transparent 30%), var(--bg)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px', flex: 1, minHeight: 0, width: '100%', overflowY: 'auto' }}>
           <Outlet />
         </div>
@@ -34,7 +40,8 @@ export default function Layout() {
       {showPipelineIndicator && (
         <button
           onClick={() => navigate('/pipeline')}
-          className="fixed bottom-6 right-6 z-[7000] group flex items-center gap-2 bg-bg-card border border-border rounded-full pl-3 pr-4 py-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+          className="fixed bottom-6 right-6 z-[7000] group flex items-center gap-2 border border-border rounded-full pl-3 pr-4 py-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+          style={{ background: 'var(--bg-card)', boxShadow: 'var(--card-shadow)' }}
           title="点击查看流水线进度"
         >
           {/* 水波纹动画 */}

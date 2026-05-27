@@ -12,10 +12,10 @@ export interface ThemePreset {
 }
 
 export const THEME_PRESETS: ThemePreset[] = [
-  { id: 'blue', name: '默认蓝', light: '#0969DA', dark: '#58A6FF', hover: '#0550AE' },
-  { id: 'green', name: '清新绿', light: '#07C160', dark: '#2BD67B', hover: '#06A556' },
-  { id: 'purple', name: '创作紫', light: '#5645d4', dark: '#8b6ff0', hover: '#4534b3' },
-  { id: 'orange', name: '暖阳橙', light: '#dd5b00', dark: '#ff8a4a', hover: '#b84900' },
+  { id: 'blue', name: '科技蓝', light: '#4e6fc2', dark: '#7b9ad6', hover: '#3d5da8' },
+  { id: 'green', name: '清新绿', light: '#2e9e7a', dark: '#5cbe9e', hover: '#238464' },
+  { id: 'purple', name: '创作紫', light: '#7868d0', dark: '#a599e0', hover: '#6354b8' },
+  { id: 'orange', name: '暖阳橙', light: '#d4893a', dark: '#e0aa6a', hover: '#b87228' },
 ];
 
 /* ── Toast ───────────────────────────────────── */
@@ -180,7 +180,7 @@ function hexToRgb(hex: string) {
 }
 
 /** Blend a foreground hex color into a dark background at `amount` (0-1). */
-function blendIntoDark(hex: string, amount: number, bg = '#010102') {
+function blendIntoDark(hex: string, amount: number, bg = '#0c0d14') {
   const fg = hexToRgb(hex);
   const bgRgb = hexToRgb(bg);
   if (!fg || !bgRgb) return bg;
@@ -191,36 +191,45 @@ function blendIntoDark(hex: string, amount: number, bg = '#010102') {
   ].join(',')})`;
 }
 
+const ACCENT_GRADIENTS: Record<string, string> = {
+  blue: 'linear-gradient(135deg, #4e6fc2, #6078c8)',
+  green: 'linear-gradient(135deg, #2e9e7a, #48a89a)',
+  purple: 'linear-gradient(135deg, #7868d0, #a078d0)',
+  orange: 'linear-gradient(135deg, #d4893a, #c8a050)',
+};
+
 function applyAccentVars(accentId: string, theme: string) {
   const preset = THEME_PRESETS.find((p) => p.id === accentId) || THEME_PRESETS[0];
   const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const accent = isDark ? preset.dark : preset.light;
+  const gradient = ACCENT_GRADIENTS[accentId] || ACCENT_GRADIENTS.purple;
   const root = document.documentElement;
   root.style.setProperty('--accent', accent);
   root.style.setProperty('--accent-hover', preset.hover);
   root.style.setProperty('--accent-solid', accent);
-  root.style.setProperty('--accent-soft', accent + '14');
+  root.style.setProperty('--accent-soft', accent + '18');
   root.style.setProperty('--accent-softer', accent + '0a');
+  root.style.setProperty('--accent-gradient', gradient);
   if (isDark) {
-    root.style.setProperty('--bg-sidebar', '#0f1011');
-    root.style.setProperty('--sidebar-hover', '#1e1f22');
-    root.style.setProperty('--sidebar-text', '#f0f2f5');
-    root.style.setProperty('--sidebar-text-secondary', '#c5c9d0');
-    root.style.setProperty('--sidebar-text-muted', '#7e838c');
-    root.style.setProperty('--sidebar-text-logo', '#f0f2f5');
+    root.style.setProperty('--bg-sidebar', '#12131c');
+    root.style.setProperty('--sidebar-hover', '#1e2030');
+    root.style.setProperty('--sidebar-text', '#e2e8f0');
+    root.style.setProperty('--sidebar-text-secondary', '#94a3b8');
+    root.style.setProperty('--sidebar-text-muted', '#64748b');
+    root.style.setProperty('--sidebar-text-logo', '#f1f5f9');
     root.style.setProperty('--sidebar-border', 'rgba(255,255,255,0.06)');
-    root.style.setProperty('--status-ok', '#6ee7b7');
+    root.style.setProperty('--status-ok', '#34d399');
     root.style.setProperty('--status-error', '#fca5a5');
   } else {
-    root.style.setProperty('--bg-sidebar', '#eaebec');
-    root.style.setProperty('--sidebar-hover', '#d8dadd');
-    root.style.setProperty('--sidebar-text', '#1a1c20');
-    root.style.setProperty('--sidebar-text-secondary', '#5f6368');
-    root.style.setProperty('--sidebar-text-muted', '#7a7f85');
-    root.style.setProperty('--sidebar-text-logo', '#1a1c20');
+    root.style.setProperty('--bg-sidebar', '#f0f1f6');
+    root.style.setProperty('--sidebar-hover', '#e4e6ee');
+    root.style.setProperty('--sidebar-text', '#1e293b');
+    root.style.setProperty('--sidebar-text-secondary', '#64748b');
+    root.style.setProperty('--sidebar-text-muted', '#94a3b8');
+    root.style.setProperty('--sidebar-text-logo', '#0f172a');
     root.style.setProperty('--sidebar-border', 'rgba(0,0,0,0.06)');
-    root.style.setProperty('--status-ok', '#16a34a');
-    root.style.setProperty('--status-error', '#dc2626');
+    root.style.setProperty('--status-ok', '#10b981');
+    root.style.setProperty('--status-error', '#ef4444');
   }
   localStorage.setItem(ACCENT_KEY, accentId);
 }

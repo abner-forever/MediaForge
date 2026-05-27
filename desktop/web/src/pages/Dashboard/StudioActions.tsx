@@ -11,7 +11,7 @@ export default function StudioActions({ navigate }: { navigate: (path: string) =
   return (
     <section>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #4f8cff, #a855f7)' }} />
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #7868d0, #a078d0)' }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em' }}>创作工作室</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
@@ -26,32 +26,32 @@ export default function StudioActions({ navigate }: { navigate: (path: string) =
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               border: `1px solid ${a.theme.border}`,
-              borderRadius: 12,
+              borderRadius: 16,
               padding: '32px 24px',
               textAlign: 'center',
               cursor: 'pointer',
-              transition: 'all 0.3s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              transition: 'all 0.3s var(--ease-out)',
+              boxShadow: 'var(--card-shadow)',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = a.theme.accent;
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.boxShadow = `0 8px 25px ${a.theme.glow}`;
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = `0 12px 32px ${a.theme.glow}`;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = a.theme.border;
               e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+              e.currentTarget.style.boxShadow = 'var(--card-shadow)';
             }}
           >
             <div style={{
               position: 'absolute',
               top: 0,
-              left: '25%',
-              right: '25%',
-              height: 2.5,
+              left: '20%',
+              right: '20%',
+              height: 3,
               background: `linear-gradient(90deg, transparent, ${a.theme.accent}, transparent)`,
-              borderRadius: '0 0 3px 3px',
+              borderRadius: '0 0 4px 4px',
             }} />
             <div style={{ position: 'relative', zIndex: 1 }}>
               <div style={{

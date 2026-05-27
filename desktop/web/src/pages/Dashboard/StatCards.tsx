@@ -24,34 +24,34 @@ export default function StatCards({ stats, navigate }: { stats: DashboardStats |
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
               border: `1px solid ${theme.border}`,
-              borderRadius: 12,
+              borderRadius: 16,
               padding: '24px 20px',
               textAlign: 'center',
               cursor: item.path ? 'pointer' : 'default',
-              transition: 'all 0.3s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              transition: 'all 0.3s var(--ease-out)',
+              boxShadow: 'var(--card-shadow)',
             }}
             onMouseEnter={(e) => {
               if (item.path) {
                 e.currentTarget.style.borderColor = theme.accent;
-                e.currentTarget.style.transform = 'translateY(-3px)';
-                e.currentTarget.style.boxShadow = `0 8px 25px ${theme.glow}`;
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = `0 12px 32px ${theme.glow}`;
               }
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = theme.border;
               e.currentTarget.style.transform = 'none';
-              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+              e.currentTarget.style.boxShadow = 'var(--card-shadow)';
             }}
           >
             <div style={{
               position: 'absolute',
               top: 0,
-              left: '20%',
-              right: '20%',
-              height: 2.5,
+              left: '15%',
+              right: '15%',
+              height: 3,
               background: `linear-gradient(90deg, transparent, ${theme.accent}, transparent)`,
-              borderRadius: '0 0 3px 3px',
+              borderRadius: '0 0 4px 4px',
             }} />
             <div style={{ position: 'relative', zIndex: 1 }}>
               <div style={{

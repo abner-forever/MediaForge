@@ -160,9 +160,9 @@ export default function Sidebar() {
             to={item.path}
             end={item.path === '/'}
             className={({ isActive }) =>
-              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium transition-all duration-150 ${
+              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium ${
                 isActive
-                  ? 'bg-[var(--accent)] text-white'
+                  ? 'nav-active'
                   : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
               }`
             }
@@ -204,9 +204,9 @@ export default function Sidebar() {
           to="/settings"
           end
           className={({ isActive }) =>
-            `flex items-center justify-center gap-2 px-3 py-[10px] rounded-lg text-sm font-medium transition-all duration-150 ${
+            `flex items-center justify-center gap-2 px-3 py-[10px] rounded-lg text-sm font-medium ${
               isActive
-                ? 'bg-[var(--accent)] text-white'
+                ? 'nav-active'
                 : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
             }`
           }
