@@ -1,5 +1,48 @@
 # Changelog
 
+## [v1.14.2](https://github.com/abner-forever/MediaForge/releases/tag/v1.14.2) (2026-05-27)
+
+### 🔧 Other
+- chore(release): 1.14.2
+
+## [v1.14.1](https://github.com/abner-forever/MediaForge/releases/tag/v1.14.1) (2026-05-27)
+
+### 🐛 Bug Fixes
+- 优化 DMG 构建流程与卸载重试机制
+- 确保版本发布时 changelog 正确提交
+
+## [v1.14.0](https://github.com/abner-forever/MediaForge/releases/tag/v1.14.0) (2026-05-27)
+
+### ✨ Features
+- 更新构建流程与文件选择功能
+- 更新 AI 模型与超时设置
+
+### 🐛 Bug Fixes
+- 修复构建流程中的环境变量引用
+
+## [v1.13.0](https://github.com/abner-forever/MediaForge/releases/tag/v1.13.0) (2026-05-26)
+
+### ✨ Features
+- 添加 AI 账户余额查询与自定义排序功能
+
+## [v1.12.0](https://github.com/abner-forever/MediaForge/releases/tag/v1.12.0) (2026-05-25)
+
+### ✨ Features
+- 添加流水线功能与相关 API 支持
+- 增强多平台支持与日志管理功能
+- 优化静态文件路径解析和加载页面路径兼容性
+
+### 🔧 Other
+- refactor: 重构流水线相关服务与 API
+
+## [v1.11.0](https://github.com/abner-forever/MediaForge/releases/tag/v1.11.0) (2026-05-25)
+
+### ✨ Features
+- 添加加载页面和原生窗口主题支持
+
+### 🐛 Bug Fixes
+- 修复 semantic-release changelog 配置并补充 v1.10.0 变更记录
+
 ## [v1.10.0](https://github.com/aburnlee/MediaForge/releases/tag/v1.10.0) (2026-05-25)
 
 ### ✨ Features
