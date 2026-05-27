@@ -281,15 +281,6 @@ def _start_app() -> None:
     }
 
     menus = [
-        Menu("编辑", [
-            MenuAction("撤销", lambda: None),
-            MenuAction("重做", lambda: None),
-            MenuSeparator(),
-            MenuAction("剪切", lambda: None),
-            MenuAction("复制", lambda: None),
-            MenuAction("粘贴", lambda: None),
-            MenuAction("全选", lambda: None),
-        ]),
         Menu("窗口", [
             MenuAction("最小化", lambda: webview.windows[0].minimize() if webview.windows else None),
             MenuAction("缩放", lambda: webview.windows[0].maximize() if webview.windows else None),
@@ -306,6 +297,26 @@ def _start_app() -> None:
         menu=menus,
         localization=localization,
     )
+
+    # Windows 11: 启用 Mica 半透明背景效果
+    if sys.platform == "win32":
+        def _apply_mica():
+            import time
+            time.sleep(0.5)
+            try:
+                import ctypes
+                hwnd = int(window.native._winfo_id())
+                hwnd = ctypes.windll.user32.GetParent(hwnd) or hwnd
+                DWMWA_SYSTEMBACKDROP_TYPE = 38
+                DWMSBT_MAINWINDOW = 2
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, DWMWA_SYSTEMBACKDROP_TYPE,
+                    ctypes.byref(ctypes.c_int(DWMSBT_MAINWINDOW)),
+                    ctypes.sizeof(ctypes.c_int),
+                )
+            except Exception:
+                pass
+        threading.Thread(target=_apply_mica, daemon=True).start()
 
     # 注册原生窗口，使 API 路由可动态设置 title bar 的 dark/light appearance
     try:

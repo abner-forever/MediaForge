@@ -6,6 +6,8 @@ import Lightbox from './Lightbox';
 import ProgressOverlay from './ProgressOverlay';
 import { useStore } from '../stores';
 
+const isWin = typeof navigator !== 'undefined' && navigator.platform?.includes('Win');
+
 export default function Layout() {
   const syncTheme = useStore(s => s.syncTheme);
   const pipelineRunning = useStore(s => s.pipelineRunning);
@@ -19,7 +21,7 @@ export default function Layout() {
   const showPipelineIndicator = pipelineRunning && location.pathname !== '/pipeline';
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className={`flex h-screen overflow-hidden${isWin ? ' win32' : ''}`} style={{ background: 'var(--bg)' }}>
       {sidebarWidthSynced && <Sidebar />}
       <main style={{
         flex: 1,
