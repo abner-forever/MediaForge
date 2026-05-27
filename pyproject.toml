@@ -11,6 +11,7 @@ commit_parser = "conventional"
 major_on_zero = true
 tag_format = "v{version}"
 commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+assets = ["CHANGELOG.md"]
 
 [tool.semantic_release.branches.main]
 match = "(main|master)"
