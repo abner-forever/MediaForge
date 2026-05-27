@@ -307,12 +307,8 @@ def _start_app() -> None:
         'cocoa.menu.selectAll': '全选',
     }
 
-    menus = [
-        Menu("窗口", [
-            MenuAction("最小化", lambda: webview.windows[0].minimize() if webview.windows else None),
-            MenuAction("缩放", lambda: webview.windows[0].maximize() if webview.windows else None),
-        ]),
-    ]
+    # 移除默认的 "窗口" 子菜单（最小化 / 缩放）—改为不显示任何自定义窗口菜单
+    menus = []
 
     window = webview.create_window(
         title="图文工坊",
