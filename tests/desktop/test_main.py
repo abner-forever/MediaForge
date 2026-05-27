@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import socket
 import sys
 from pathlib import Path
 
 import pytest
 
-from desktop.main import _get_icon_candidates, _set_dock_icon
+from desktop.main import _find_available_port, _get_icon_candidates, _is_port_free, _set_dock_icon
 
 
 class TestGetIconCandidates:
@@ -39,3 +40,23 @@ class TestSetDockIcon:
         if sys.platform != "darwin":
             assert result is False
         # 如果运行在 macOS 上，不做断言（需要真实环境）
+
+
+def test_is_port_free_can_detect_bound_port() -> None:
+    host = "127.0.0.1"
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        busy_port = sock.getsockname()[1]
+        assert _is_port_free(host, busy_port) is False
+
+
+def test_find_available_port_skips_busy_port() -> None:
+    host = "127.0.0.1"
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        busy_port = sock.getsockname()[1]
+        sock.listen(1)
+        selected_port = _find_available_port(host, busy_port, max_offset=5)
+        assert selected_port != busy_port
+        assert selected_port >= busy_port
+        assert _is_port_free(host, selected_port)
