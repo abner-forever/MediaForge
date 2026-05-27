@@ -128,10 +128,21 @@ interface AppState {
   // Pipeline running state (global, persists across page navigation)
   pipelineRunning: boolean;
   setPipelineRunning: (running: boolean) => void;
+
+  // Article sidebar state (persisted)
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+
+  // Sidebar width (persisted)
+  sidebarWidth: number;
+  sidebarWidthSynced: boolean;
+  setSidebarWidth: (w: number) => void;
 }
 
 const THEME_KEY = 'w2w-theme';
 const ACCENT_KEY = 'w2w-accent';
+const SIDEBAR_KEY = 'w2w-sidebar-open';
+const SIDEBAR_WIDTH_KEY = 'w2w-sidebar-width';
 
 function getInitialTheme(): string {
   if (typeof window === 'undefined') return 'auto';
@@ -141,6 +152,24 @@ function getInitialTheme(): string {
 function getInitialAccent(): string {
   if (typeof window === 'undefined') return 'blue';
   return localStorage.getItem(ACCENT_KEY) || 'blue';
+}
+
+function getInitialSidebarOpen(): boolean {
+  if (typeof window === 'undefined') return true;
+  const v = localStorage.getItem(SIDEBAR_KEY);
+  return v === null ? true : v === 'true';
+}
+
+function getInitialSidebarWidth(): number {
+  if (typeof window === 'undefined') return 240;
+  try {
+    const v = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (v) {
+      const w = parseInt(v, 10);
+      if (!isNaN(w)) return w;
+    }
+  } catch {}
+  return 240;
 }
 
 function hexToRgb(hex: string) {
@@ -180,6 +209,8 @@ function applyAccentVars(accentId: string, theme: string) {
     root.style.setProperty('--sidebar-text-muted', '#7e838c');
     root.style.setProperty('--sidebar-text-logo', '#f0f2f5');
     root.style.setProperty('--sidebar-border', 'rgba(255,255,255,0.06)');
+    root.style.setProperty('--status-ok', '#6ee7b7');
+    root.style.setProperty('--status-error', '#fca5a5');
   } else {
     root.style.setProperty('--bg-sidebar', '#eaebec');
     root.style.setProperty('--sidebar-hover', '#d8dadd');
@@ -188,6 +219,8 @@ function applyAccentVars(accentId: string, theme: string) {
     root.style.setProperty('--sidebar-text-muted', '#7a7f85');
     root.style.setProperty('--sidebar-text-logo', '#1a1c20');
     root.style.setProperty('--sidebar-border', 'rgba(0,0,0,0.06)');
+    root.style.setProperty('--status-ok', '#16a34a');
+    root.style.setProperty('--status-error', '#dc2626');
   }
   localStorage.setItem(ACCENT_KEY, accentId);
 }
@@ -220,6 +253,23 @@ export const useStore = create<AppState>((set, get) => ({
       if (accent) { applyAccentVars(accent, theme || get().theme); set({ accentId: accent }); }
       settingsApi.setWindowAppearance(theme || get().theme).catch(() => {});
     } catch { /* ignore */ }
+    // Sync sidebar state from backend
+    try {
+      const settings = await settingsApi.get();
+      if (settings.sidebar_open !== undefined) {
+        const v = String(settings.sidebar_open) === 'true';
+        set({ sidebarOpen: v });
+        localStorage.setItem(SIDEBAR_KEY, String(v));
+      }
+      if (settings.sidebar_width !== undefined) {
+        const w = parseInt(settings.sidebar_width, 10);
+        if (!isNaN(w)) {
+          set({ sidebarWidth: w });
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w));
+        }
+      }
+    } catch { /* ignore */ }
+    set({ sidebarWidthSynced: true });
   },
 
   // Toast
@@ -366,6 +416,23 @@ export const useStore = create<AppState>((set, get) => ({
   // Pipeline running state
   pipelineRunning: false,
   setPipelineRunning: (running) => set({ pipelineRunning: running }),
+
+  // Article sidebar state (persisted)
+  sidebarOpen: getInitialSidebarOpen(),
+  setSidebarOpen: (open) => {
+    set({ sidebarOpen: open });
+    localStorage.setItem(SIDEBAR_KEY, String(open));
+    settingsApi.save({ SIDEBAR_OPEN: String(open) }).catch(() => {});
+  },
+
+  // Sidebar width (persisted)
+  sidebarWidth: getInitialSidebarWidth(),
+  sidebarWidthSynced: false,
+  setSidebarWidth: (w) => {
+    set({ sidebarWidth: w });
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w));
+    settingsApi.save({ SIDEBAR_WIDTH: String(w) }).catch(() => {});
+  },
 }));
 
 // Apply initial theme

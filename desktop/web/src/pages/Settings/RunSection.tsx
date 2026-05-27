@@ -11,6 +11,7 @@ export default function RunSection({ data, save }: { data: SettingsData; save: (
   const [weiboPages, setWeiboPages] = useState(data.weibo_pages);
   const [interval, setInterval_] = useState(data.publish_interval);
   const [timeout, setTimeout_] = useState(data.request_timeout);
+  const [aiTimeout, setAiTimeout] = useState(data.ai_timeout);
   const [retry, setRetry] = useState(data.retry_times);
   const [confirm, setConfirm] = useState(data.require_confirm);
 
@@ -23,6 +24,7 @@ export default function RunSection({ data, save }: { data: SettingsData; save: (
         <label>抓取页数<NumberInput value={weiboPages} onChange={setWeiboPages} min={1} max={5} /></label>
         <label>发布间隔<NumberInput value={interval} onChange={setInterval_} min={5} max={60} /></label>
         <label>请求超时<NumberInput value={timeout} onChange={setTimeout_} min={5} max={60} /></label>
+        <label>AI 超时<NumberInput value={aiTimeout} onChange={setAiTimeout} min={30} max={300} /></label>
         <label>重试次数<NumberInput value={retry} onChange={setRetry} min={1} max={5} /></label>
         <label className="toggle col-span-2">
           <input type="checkbox" checked={confirm} onChange={e => setConfirm(e.target.checked)} />
@@ -30,7 +32,7 @@ export default function RunSection({ data, save }: { data: SettingsData; save: (
           <span className="toggle-label">发布前需确认</span>
         </label>
       </div>
-      <button className="btn btn-primary" onClick={() => withSave(async () => save({ PLATFORM: platform, POST_LIMIT: String(postLimit), WEIBO_PAGES: String(weiboPages), PUBLISH_INTERVAL_SECONDS: String(interval), REQUEST_TIMEOUT: String(timeout), RETRY_TIMES: String(retry), REQUIRE_CONFIRM: confirm ? 'true' : 'false' }))} disabled={saving}>
+      <button className="btn btn-primary" onClick={() => withSave(async () => save({ PLATFORM: platform, POST_LIMIT: String(postLimit), WEIBO_PAGES: String(weiboPages), PUBLISH_INTERVAL_SECONDS: String(interval), REQUEST_TIMEOUT: String(timeout), AI_TIMEOUT: String(aiTimeout), RETRY_TIMES: String(retry), REQUIRE_CONFIRM: confirm ? 'true' : 'false' }))} disabled={saving}>
         {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存运行参数'}
       </button>
     </div>

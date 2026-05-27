@@ -20,7 +20,9 @@ function toUserError(message: string): string {
   if (low.includes('未配置') && (low.includes('api_key') || low.includes('api key'))) return '当前未配置大模型 API Key，请先在设置页配置大模型服务。';
   if (low.includes('api_key') || low.includes('api key') || low.includes('401')) return '当前 AI 服务 API Key 不可用，请检查密钥配置。';
   if (text.includes('公众号未登录') || low.includes('mp.weixin') || low.includes('login')) return '公众号账号未登录，请先到设置页完成扫码登录。';
-  if (low.includes('playwright') || low.includes('locator') || low.includes('iframe') || low.includes('timeout')) return '微信后台页面结构可能已更新或加载超时，请重试；若仍失败请保留日志排查。';
+  if (low.includes('ai 服务调用失败') || low.includes('ai 调用失败') || low.includes('read timed out')) return 'AI 服务响应超时，请检查网络连接或到设置页增大 AI 超时时间后重试。';
+  if (low.includes('playwright') || low.includes('locator') || low.includes('iframe')) return '微信后台页面结构可能已更新，请重试；若仍失败请保留日志排查。';
+  if (low.includes('timeout')) return '请求超时，请稍后重试。';
   return text || '请求失败';
 }
 
@@ -193,6 +195,7 @@ export interface SettingsData {
   weibo_pages: number;
   publish_interval: number;
   request_timeout: number;
+  ai_timeout: number;
   retry_times: number;
   require_confirm: boolean;
   watermark_filter: boolean;
@@ -204,6 +207,8 @@ export interface SettingsData {
   materials_path: string;
   download_dir: string;
   wechat_accounts: WeChatAccount[];
+  sidebar_open: string;
+  sidebar_width: string;
 }
 
 export interface OperationItem {

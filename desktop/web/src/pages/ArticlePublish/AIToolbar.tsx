@@ -14,8 +14,7 @@ export default function AIToolbar({
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', gap: 4,
-      padding: '8px 0', marginBottom: 12,
-      borderBottom: '1px solid var(--border-subtle)',
+      padding: '6px 0', marginBottom: 0,
     }}>
       <button onClick={onGenerate} disabled={genLoading} style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,

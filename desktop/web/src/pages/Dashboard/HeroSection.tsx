@@ -1,9 +1,33 @@
+import { useState, useEffect } from 'react';
 import type { HealthStatus } from '../../api/client';
 import GlowOrb from './GlowOrb';
 import StatusDot, { getGreeting } from './StatusDot';
 import { I } from './Icons';
 
+function useCurrentTime() {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
+function formatTime(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const w = weekdays[d.getDay()];
+  const h = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  const sec = pad(d.getSeconds());
+  return `${y}/${m}/${day} 周${w} ${h}:${min}:${sec}`;
+}
+
 export default function HeroSection({ health }: { health: HealthStatus | null }) {
+  const now = useCurrentTime();
   const statusItems: { label: string; ok: boolean | undefined }[] = [
     { label: '平台认证', ok: health?.platform_auth },
     { label: '微博 Cookie', ok: health?.weibo_cookie },
@@ -87,6 +111,9 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
             }}>
               {getGreeting()}，创作者
             </h1>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', margin: '4px 0 0', opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>
+              {formatTime(now)}
+            </p>
             <p style={{ fontSize: 16, fontWeight: 400, lineHeight: 1.5, color: 'var(--text-muted)', margin: '8px 0 0', maxWidth: 520 }}>
               AI 驱动的图文创作工作流 — 发现、评分、发布，一站式完成
             </p>

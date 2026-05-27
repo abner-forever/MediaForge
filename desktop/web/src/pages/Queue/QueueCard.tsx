@@ -328,7 +328,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                         <button key={i} type="button"
                           className={`relative shrink-0 w-[88px] aspect-[3/4] rounded-lg border-2 overflow-hidden transition-all focus:outline-none ${
                             isActive
-                              ? 'border-accent ring-1 ring-accent/30 shadow-sm'
+                              ? 'border-accent shadow-sm'
                               : 'border-border hover:border-accent/50 hover:shadow-xs'
                           } ${isPublished ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                           onClick={() => { setCover(img); updateField('cover', img); }}

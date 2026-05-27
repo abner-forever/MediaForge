@@ -9,6 +9,7 @@ import { useStore } from '../stores';
 export default function Layout() {
   const syncTheme = useStore(s => s.syncTheme);
   const pipelineRunning = useStore(s => s.pipelineRunning);
+  const sidebarWidthSynced = useStore(s => s.sidebarWidthSynced);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,7 +20,7 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
-      <Sidebar />
+      {sidebarWidthSynced && <Sidebar />}
       <main style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px', flex: 1, minHeight: 0, width: '100%', overflowY: 'auto' }}>
           <Outlet />

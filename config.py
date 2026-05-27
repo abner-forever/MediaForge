@@ -106,7 +106,7 @@ class Settings:
     weibo_scene_extra_tags: Tuple[str, ...] = field(default_factory=lambda: _csv_tuple(os.getenv("WEIBO_SCENE_EXTRA_TAGS", "")))
     weibo_super_topics: Tuple[str, ...] = field(default_factory=lambda: _csv_tuple(os.getenv("WEIBO_SUPER_TOPICS", "")))
     ai_provider: str = field(default_factory=lambda: os.getenv("AI_PROVIDER", "mimo").lower())
-    ai_model: str = field(default_factory=lambda: os.getenv("AI_MODEL", "mimo-chat"))
+    ai_model: str = field(default_factory=lambda: os.getenv("AI_MODEL", "mimo-v2.5-pro"))
     ai_api_key: str = field(default_factory=lambda: (
         os.getenv("AI_API_KEY", "")
         or _resolve_api_key_from_store(os.getenv("AI_PROVIDER", "mimo").lower())
@@ -121,6 +121,7 @@ class Settings:
     post_limit: int = field(default_factory=lambda: int(os.getenv("POST_LIMIT", "3")))
     weibo_pages: int = field(default_factory=lambda: int(os.getenv("WEIBO_PAGES", "2")))
     request_timeout: int = field(default_factory=lambda: int(os.getenv("REQUEST_TIMEOUT", "120")))
+    ai_timeout: int = field(default_factory=lambda: int(os.getenv("AI_TIMEOUT", "120")))
     retry_times: int = field(default_factory=lambda: int(os.getenv("RETRY_TIMES", "3")))
     min_publish_interval: int = field(default_factory=lambda: int(os.getenv("PUBLISH_INTERVAL_SECONDS", "10")))
     no_publish_without_confirm: bool = field(default_factory=lambda: os.getenv("REQUIRE_CONFIRM", "true").lower() == "true")

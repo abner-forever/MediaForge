@@ -11,12 +11,12 @@ export interface ProviderInfo {
 export const PROVIDERS: Record<string, ProviderInfo> = {
   mimo: {
     name: '小米 MiMo',
-    models: ['mimo-chat', 'mimo-v2.5-pro'],
-    baseUrl: 'https://api.xiaomimimo.com/v1',
+    models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2.5-tts-voiceclone', 'mimo-v2.5-tts-voicedesign', 'mimo-v2.5-tts', 'mimo-v2-tts'],
+    baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
     keyName: 'MIMO_API_KEY',
-    urlHint: '小米 Mimo OpenAI 兼容地址，格式：https://api.xiaomimimo.com/v1',
+    urlHint: '小米 Mimo OpenAI 兼容地址，Token Plan：https://token-plan-cn.xiaomimimo.com/v1',
     guideUrl: 'https://xiaomimimo.com/',
-    guide: '登录小米 MiMo 官网 → 控制台 → API 密钥 → 创建 API Key',
+    guide: '登录小米 MiMo 官网 → 控制台 → API 密钥 → 创建 API Key（Token Plan 需使用 tp- 前缀的密钥）',
   },
   deepseek: {
     name: 'DeepSeek',

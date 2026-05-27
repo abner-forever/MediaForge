@@ -21,21 +21,21 @@ export default function CoverSection({
   onAddCover?: () => void;
 }) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 0 }}>
       {cover ? (
         <div style={{ position: 'relative', marginBottom: 8 }}>
           <img
             key={cover}
             src={onCoverImageUrl(cover)}
-            style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', display: coverLoading ? 'none' : 'block' }}
+            style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', display: coverLoading ? 'none' : 'block' }}
             onClick={() => onOpenLightbox([onCoverImageUrl(cover)], 0)}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; onCoverLoad?.(); }}
             onLoad={() => onCoverLoad?.()}
           />
           {coverLoading && (
-            <div style={{ width: '100%', height: 160, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div style={{ width: '100%', height: 120, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               <Loading size="sm" />
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>正在加载封面…</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>正在加载封面...</span>
             </div>
           )}
           <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 4 }}>
@@ -112,7 +112,7 @@ export default function CoverSection({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>本地素材 ({local.length})</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                         {local.map((img, i) => (
                           <div key={`local-${i}`} onClick={() => onSelectCoverImage(img)} style={{ position: 'relative', cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '1/1', background: 'var(--bg-inset)', transition: 'border-color 0.15s' }}
                             onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}>
@@ -128,7 +128,7 @@ export default function CoverSection({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                         <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>网络图片 ({web.length})</span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                         {web.map((img, i) => (
                           <div key={`web-${i}`} onClick={() => onSelectCoverImage(img)} style={{ position: 'relative', cursor: 'pointer', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', aspectRatio: '1/1', background: 'var(--bg-inset)', transition: 'border-color 0.15s' }}
                             onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}>

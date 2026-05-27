@@ -56,7 +56,7 @@ def generate_content(text: str) -> Tuple[str, str]:
                         url,
                         headers=headers,
                         json=payload,
-                        timeout=settings.request_timeout,
+                        timeout=settings.ai_timeout,
                     )
                     if resp.status_code >= 400:
                         logger.error("AI 接口返回 %s，url=%s，body=%s", resp.status_code, url, resp.text[:300])
@@ -115,7 +115,7 @@ def generate_article(
         )
     else:
         prompt = ARTICLE_GENERATE_TEMPLATE.format(topic=topic, title=title or topic)
-    return _call_ai(prompt, f"关于{topic}的一点分享")
+    return _call_ai(prompt, f"关于{topic}的一点分享", raise_on_fail=True)
 
 
 def polish_article(content: str) -> str:

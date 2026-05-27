@@ -22,7 +22,7 @@ from services.ai import (
 
 class TestNormalizeModelName:
     def test_mimo_unchanged(self):
-        assert _normalize_model_name("mimo-chat") == "mimo-chat"
+        assert _normalize_model_name("mimo-v2.5-pro") == "mimo-v2.5-pro"
 
     def test_deepseek_chat(self):
         assert _normalize_model_name("deepseek-chat") == "deepseek-v4-flash"
@@ -31,10 +31,10 @@ class TestNormalizeModelName:
         assert _normalize_model_name("deepseek-reasoner") == "deepseek-v4-pro"
 
     def test_empty_default(self):
-        assert _normalize_model_name("") == "mimo-chat"
+        assert _normalize_model_name("") == "mimo-v2.5-pro"
 
     def test_none_default(self):
-        assert _normalize_model_name(None) == "mimo-chat"  # type: ignore[arg-type]
+        assert _normalize_model_name(None) == "mimo-v2.5-pro"  # type: ignore[arg-type]
 
 
 class TestResolveChatUrlCandidates:

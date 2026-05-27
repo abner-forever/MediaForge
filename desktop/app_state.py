@@ -208,6 +208,8 @@ class AppState:
         celebrities: set = set()
         scenes: set = set()
         for path, data in meta.items():
+            if not isinstance(data, dict):
+                continue
             for t in data.get("tags", []):
                 tags.add(t)
             if data.get("celebrity"):

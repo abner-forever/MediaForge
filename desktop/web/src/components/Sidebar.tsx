@@ -8,7 +8,6 @@ const COLLAPSE_THRESHOLD = 140;
 const NARROW_WIDTH = 60;
 const MIN_EXPANDED = 180;
 const MAX_WIDTH = 400;
-const STORAGE_KEY = 'w2w-sidebar-width';
 
 /* ── Icons ────────────────────────────────────────── */
 function Icon({ children, className = 'w-5 h-5' }: { children: React.ReactNode; className?: string }) {
@@ -38,21 +37,11 @@ const NAV_ITEMS = [
   { path: '/materials', icon: ICONS.image, label: '本地素材' },
 ] as const;
 
-function getInitialWidth(): number {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const w = parseInt(saved, 10);
-      if (!isNaN(w)) return w;
-    }
-  } catch {}
-  return 240;
-}
-
 export default function Sidebar() {
   const [account, setAccount] = useState<WeChatAccount | null>(null);
   const wechatRefreshKey = useStore(s => s.wechatRefreshKey);
-  const [width, setWidth] = useState(getInitialWidth);
+  const width = useStore(s => s.sidebarWidth);
+  const setWidth = useStore(s => s.setSidebarWidth);
   const [isDragging, setIsDragging] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
@@ -73,10 +62,6 @@ export default function Sidebar() {
     if (w < COLLAPSE_THRESHOLD) return NARROW_WIDTH;
     if (w < MIN_EXPANDED) return MIN_EXPANDED;
     return Math.min(w, MAX_WIDTH);
-  }, []);
-
-  const persistWidth = useCallback((w: number) => {
-    try { localStorage.setItem(STORAGE_KEY, String(w)); } catch {}
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -103,11 +88,8 @@ export default function Sidebar() {
     const handleMouseUp = () => {
       setIsDragging(false);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      setWidth(w => {
-        const final = snapWidth(w);
-        persistWidth(final);
-        return final;
-      });
+      const final = snapWidth(useStore.getState().sidebarWidth);
+      setWidth(final);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -121,15 +103,12 @@ export default function Sidebar() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging, snapWidth, persistWidth]);
+  }, [isDragging, snapWidth, setWidth]);
 
   const toggleCollapse = useCallback(() => {
-    setWidth(w => {
-      const next = w <= NARROW_WIDTH + 10 ? MIN_EXPANDED : NARROW_WIDTH;
-      persistWidth(next);
-      return next;
-    });
-  }, [persistWidth]);
+    const current = useStore.getState().sidebarWidth;
+    setWidth(current <= NARROW_WIDTH + 10 ? MIN_EXPANDED : NARROW_WIDTH);
+  }, [setWidth]);
 
   return (
     <aside
@@ -209,12 +188,12 @@ export default function Sidebar() {
             title="进入公众号账号设置"
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: account?.logged_in ? '#22c55e' : '#ef4444', flexShrink: 0 }} />
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: account?.logged_in ? 'var(--status-ok)' : 'var(--status-error)', flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, color: 'var(--sidebar-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {account?.name || '未设置公众号'}
                 </div>
-                <div style={{ fontSize: 11, color: account?.logged_in ? '#6ee7b7' : '#fca5a5' }}>
+                <div style={{ fontSize: 11, color: account?.logged_in ? 'var(--status-ok)' : 'var(--status-error)' }}>
                   {account?.logged_in ? '默认账号已登录' : '需要扫码登录'}
                 </div>
               </div>

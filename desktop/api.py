@@ -361,7 +361,7 @@ async def get_settings():
     return {
         "platform": cfg.get("PLATFORM", "weibo"),
         "ai_provider": provider,
-        "ai_model": cfg.get("AI_MODEL", "mimo-chat"),
+        "ai_model": cfg.get("AI_MODEL", "mimo-v2.5-pro"),
         "ai_base_url": cfg.get("AI_BASE_URL", ""),
         "ai_api_key_set": bool(current_key),
         "ai_api_key_masked": _mask_key(current_key) if current_key else "",
@@ -397,6 +397,7 @@ async def get_settings():
         "weibo_pages": int(cfg.get("WEIBO_PAGES", "2")),
         "publish_interval": int(cfg.get("PUBLISH_INTERVAL_SECONDS", "10")),
         "request_timeout": int(cfg.get("REQUEST_TIMEOUT", "20")),
+        "ai_timeout": int(cfg.get("AI_TIMEOUT", "120")),
         "retry_times": int(cfg.get("RETRY_TIMES", "3")),
         "require_confirm": cfg.get("REQUIRE_CONFIRM", "true").lower() == "true",
         "watermark_filter": cfg.get("WATERMARK_FILTER", "true").lower() == "true",
@@ -411,6 +412,8 @@ async def get_settings():
         # ── 主题设置 ──
         "theme": store.get("APP_THEME", ""),
         "accent": store.get("APP_ACCENT", ""),
+        "sidebar_open": store.get("SIDEBAR_OPEN", "true"),
+        "sidebar_width": store.get("SIDEBAR_WIDTH", "240"),
         # ── 微信多账号 ──
         "wechat_accounts": _get_wechat_accounts_list(),
     }
@@ -532,7 +535,7 @@ async def test_ai_connection(data: dict):
 
     cfg = _read_settings()
     provider = (data.get("provider") or cfg.get("AI_PROVIDER") or "mimo").lower()
-    model = data.get("model") or cfg.get("AI_MODEL") or "mimo-chat"
+    model = data.get("model") or cfg.get("AI_MODEL") or "mimo-v2.5-pro"
     base_url = data.get("base_url") or cfg.get("AI_BASE_URL") or ""
     api_key = data.get("api_key") or _get_provider_key(cfg, provider)
 
@@ -565,7 +568,7 @@ async def test_ai_connection(data: dict):
         "messages": [{"role": "user", "content": "ping"}],
         "max_tokens": 5,
     }
-    timeout = int(cfg.get("REQUEST_TIMEOUT", 30))
+    timeout = int(cfg.get("AI_TIMEOUT") or cfg.get("REQUEST_TIMEOUT", 30))
 
     # 打印 curl 命令方便调试
     curl_cmd = f"curl -s -w '\\n%{{http_code}}' '{url_candidates[0]}' -H 'Authorization: Bearer {api_key[:8]}...' -H 'Content-Type: application/json' -d '{json.dumps(payload)}'"
@@ -1919,7 +1922,7 @@ async def publish_from_queue(item_id: str, req: PublishRequest):
     publish_session_id = item.get("id", "")
     app_state.clear_publish_logs(session_id=publish_session_id)
     if publish_session_id:
-        app_state.update_queue_item_by_id(publish_session_id, {"publish_logs": []})
+        app_state.update_queue_item_by_id(publish_session_id, {"publish_logs": [], "status": "publishing"})
 
     # Playwright 需要绝对路径，相对路径转为绝对
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]
@@ -2890,16 +2893,19 @@ async def generate_article_content(article_id: str, req: ArticleGenerateRequest)
     if not topic:
         raise HTTPException(400, "缺少话题或标题")
 
-    content = generate_article(
-        topic,
-        title,
-        article_type=req.article_type,
-        tone=req.tone,
-        word_count=req.word_count,
-        with_subtitles=req.with_subtitles,
-        gallery_friendly=req.gallery_friendly,
-        template_prompt=req.template_prompt,
-    )
+    try:
+        content = generate_article(
+            topic,
+            title,
+            article_type=req.article_type,
+            tone=req.tone,
+            word_count=req.word_count,
+            with_subtitles=req.with_subtitles,
+            gallery_friendly=req.gallery_friendly,
+            template_prompt=req.template_prompt,
+        )
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
     app_state.update_article(article_id, {"content": content, "ai_generated": True})
     app_state.add_operation("AI 生成", f"为「{title or topic}」生成正文")
     return {"success": True, "content": content}

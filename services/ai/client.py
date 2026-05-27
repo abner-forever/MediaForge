@@ -46,7 +46,7 @@ def _normalize_model_name(model: str) -> str:
         return "deepseek-v4-flash"
     if m == "deepseek-reasoner":
         return "deepseek-v4-pro"
-    return m or "mimo-chat"
+    return m or "mimo-v2.5-pro"
 
 
 def _resolve_chat_url_candidates() -> List[str]:
@@ -80,15 +80,19 @@ def _resolve_chat_url_candidates() -> List[str]:
     return [f"{base}/chat/completions", f"{base}/v1/chat/completions"]
 
 
-def _call_ai(prompt: str, fallback: str) -> str:
-    """通用 AI 调用：发 prompt 返回文本内容。"""
+def _call_ai(prompt: str, fallback: str, *, raise_on_fail: bool = False) -> str:
+    """通用 AI 调用：发 prompt 返回文本内容。raise_on_fail=True 时失败抛异常。"""
     if not settings.ai_api_key:
         logger.error("未配置 AI_API_KEY")
+        if raise_on_fail:
+            raise RuntimeError("未配置 AI API Key，请先在设置页配置")
         return fallback
 
     url_candidates = _resolve_chat_url_candidates()
     if not url_candidates:
         logger.error("当前 AI_PROVIDER=%s 但未配置 AI_BASE_URL", settings.ai_provider)
+        if raise_on_fail:
+            raise RuntimeError("未配置 AI Base URL，请先在设置页配置")
         return fallback
 
     headers = {
@@ -108,7 +112,7 @@ def _call_ai(prompt: str, fallback: str) -> str:
                 try:
                     resp = requests.post(
                         url, headers=headers, json=payload,
-                        timeout=settings.request_timeout,
+                        timeout=settings.ai_timeout,
                     )
                     if resp.status_code >= 400:
                         logger.error("AI 接口返回 %s，url=%s，body=%s", resp.status_code, url, resp.text[:300])
@@ -130,4 +134,6 @@ def _call_ai(prompt: str, fallback: str) -> str:
             last_err = err
             logger.error("AI 调用失败，第 %s 次重试: %s", i + 1, err)
             time.sleep(1.2 * (i + 1))
+    if raise_on_fail:
+        raise RuntimeError(f"AI 服务调用失败（已重试 {settings.retry_times} 次）：{last_err}")
     return fallback

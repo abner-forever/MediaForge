@@ -72,7 +72,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch, temp_data_dir: Path) -> Gener
     monkeypatch.setenv("WATERMARK_BOTTOM_RATIO", "1.48")
     monkeypatch.setenv("WATERMARK_STRICT_MODE", "true")
     monkeypatch.setenv("AI_PROVIDER", "mimo")
-    monkeypatch.setenv("AI_MODEL", "mimo-chat")
+    monkeypatch.setenv("AI_MODEL", "mimo-v2.5-pro")
     monkeypatch.setenv("RETRY_TIMES", "2")
     monkeypatch.setenv("POST_LIMIT", "3")
 

@@ -27,7 +27,7 @@ const ARTICLE_TEMPLATES = [
 export default function ArticlePublish() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox } = useStore();
+  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox, sidebarOpen, setSidebarOpen } = useStore();
 
   /* ── 编辑器状态 ────────────────────────────── */
   const [title, setTitle] = useState('');
@@ -58,7 +58,7 @@ export default function ArticlePublish() {
   const [confirm, setConfirm] = useState<{ msg: string; onOk: () => void } | null>(null);
   const [inspirationKeyword, setInspirationKeyword] = useState('');
   const [inspirationExpanded, setInspirationExpanded] = useState(false);
-  const [articleListExpanded, setArticleListExpanded] = useState(true);
+  const [listExpanded, setListExpanded] = useState(false);
   const [showCoverSearch, setShowCoverSearch] = useState(false);
   const [coverKeyword, setCoverKeyword] = useState('');
   const [coverResults, setCoverResults] = useState<CoverImage[]>([]);
@@ -198,7 +198,6 @@ export default function ArticlePublish() {
       const res = await articleApi.publish(editingId, { save_draft: saveDraft, account_id: selectedAccountId || undefined });
       if (res.started) {
         addToast('发布任务已启动，正在等待后台处理...', 'info');
-        // 轮询最多 5 分钟等待后台完成
         const action = saveDraft ? '保存草稿' : '发布';
         for (let i = 0; i < 150; i++) {
           await new Promise(r => setTimeout(r, 2000));
@@ -335,42 +334,330 @@ export default function ArticlePublish() {
 
   const switchFilter = (tab: TabKey) => { setArticleFilter(tab); loadArticles(tab); };
 
+  const tpl = ARTICLE_TEMPLATES.find(t => t.id === templateId) || ARTICLE_TEMPLATES[0];
+
   /* ── Render ────────────────────────────────── */
   return (
-    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, paddingBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.3, letterSpacing: '-0.3px', color: 'var(--text)', margin: 0 }}>
-          新建文章
+          文章发布
         </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {editingId && (
+            <button onClick={resetEditor} style={{
+              fontSize: 12, fontWeight: 500, color: 'var(--text-muted)',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6,
+              transition: 'all 0.15s',
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-softer)'; e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              + 新建文章
+            </button>
+          )}
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 30, height: 30, borderRadius: 'var(--radius)',
+                background: 'none', border: '1px solid var(--border)',
+                color: 'var(--text-muted)', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-softer)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+              title="展开侧栏"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M15 3v18"/>
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 70/30 Grid */}
-      <div className="grid grid-cols-1 gap-6" style={{
-        gridTemplateColumns: `1fr ${articleListExpanded ? '320px' : '0px'}`,
-        transition: 'grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+      {/* Two-column layout: editor + sidebar */}
+      <div style={{
+        display: 'flex',
+        gap: 16,
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden',
       }}>
 
-        {/* ── 左栏：编辑器 ─────────────────────── */}
-        <div>
-          <div style={{ paddingBottom: 40 }}>
-            {/* 新建按钮 */}
-            {editingId && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <button onClick={resetEditor} style={{
-                  fontSize: 12, fontWeight: 500, color: 'var(--text-muted)',
-                  background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 6,
-                  transition: 'background 0.15s',
-                }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-softer)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  ＋ 新建文章
-                </button>
-              </div>
-            )}
+        {/* ── Left: Editor ────────────────────────── */}
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0,
+          overflow: 'hidden',
+        }}>
+          {/* Title */}
+          <div style={{ flexShrink: 0, marginBottom: 12 }}>
+            <input
+              placeholder="输入文章标题..."
+              maxLength={128}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={{
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: 26,
+                fontWeight: 700,
+                lineHeight: 1.3,
+                letterSpacing: '-0.01em',
+                color: 'var(--text)',
+                padding: 0,
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
 
-            {/* 灵感探索 */}
+          {/* AI Toolbar — sticky */}
+          <div style={{
+            flexShrink: 0,
+            position: 'sticky',
+            top: 0,
+            zIndex: 5,
+            background: 'var(--bg)',
+            paddingBottom: 8,
+          }}>
+            <AIToolbar
+              onGenerate={doGenerate} onPolish={doPolish} onDeAi={doDeAi}
+              onGenerateTitle={doGenerateTitle} onOptimizeLayout={doOptimizeLayout}
+              genLoading={genLoading} polishLoading={polishLoading}
+              deAiLoading={deAiLoading} titleLoading={titleLoading} layoutLoading={layoutLoading}
+              content={content}
+            />
+          </div>
+
+          {/* Editor — fills remaining space */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <RichTextEditor
+              value={contentDoc}
+              onChange={(doc) => {
+                setContentDoc(doc);
+                setContent(tiptapToPlain(doc));
+              }}
+              placeholder="开始写作..."
+              minHeight={400}
+            />
+          </div>
+        </div>
+
+        {/* ── Right: Sidebar ──────────────────────── */}
+        <div style={{
+          width: sidebarOpen ? 340 : 0,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0,
+          overflow: 'hidden',
+          transition: 'width 0.3s var(--ease-out)',
+        }}>
+        {/* Sidebar inner — scrollable content */}
+        <div style={{
+          width: 340,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          paddingRight: 4,
+          scrollbarGutter: 'stable',
+          flex: 1,
+          minHeight: 0,
+          opacity: sidebarOpen ? 1 : 0,
+          transition: 'opacity 0.2s ease',
+          pointerEvents: sidebarOpen ? 'auto' : 'none',
+        }}>
+
+          {/* Sidebar close button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, borderRadius: 'var(--radius-sm)',
+                background: 'none', border: 'none',
+                color: 'var(--text-muted)', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              title="收起侧栏"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 19l-7-7 7-7"/>
+                <path d="M18 19l-7-7 7-7" opacity=".4"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Article List */}
+          <ArticleList
+            articles={articles}
+            articleFilter={articleFilter}
+            editingId={editingId}
+            loading={loading}
+            onSelectArticle={selectArticle}
+            onSwitchFilter={switchFilter}
+            onDelete={doDelete}
+            expanded={listExpanded}
+            onToggleExpanded={() => setListExpanded(!listExpanded)}
+          />
+
+          {/* ── Article Settings ── */}
+          <div style={{ marginTop: 16 }}>
+            <div className="section-header" style={{ marginBottom: 12 }}>
+              <span style={{ letterSpacing: '0.06em', fontSize: 11 }}>文章设置</span>
+            </div>
+
+            {/* Template */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                文章模板
+              </label>
+              <Select
+                value={templateId}
+                onChange={(v) => setTemplateId(v as typeof templateId)}
+                options={ARTICLE_TEMPLATES.map(t => ({ label: t.name, value: t.id }))}
+              />
+              {/* Compact template info */}
+              <div style={{
+                marginTop: 6,
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--bg-secondary)',
+                fontSize: 11,
+                lineHeight: 1.5,
+                color: 'var(--text-secondary)',
+              }}>
+                <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{tpl.type}</span>
+                <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>·</span>
+                <span>{tpl.tone}</span>
+                <span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>·</span>
+                <span>{tpl.wordCount}</span>
+              </div>
+            </div>
+
+            {/* Cover */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                封面图片
+              </label>
+              <CoverSection
+                cover={cover}
+                coverKeyword={coverKeyword}
+                coverResults={coverResults}
+                coverLoading={coverLoading}
+                coverSearchLoading={coverSearchLoading}
+                showCoverSearch={showCoverSearch}
+                onCoverImageUrl={coverImageUrl}
+                onCoverSearch={doCoverSearch}
+                onSelectCoverImage={selectCoverImage}
+                onRemoveCover={() => { setCover(''); setShowCoverSearch(false); }}
+                onToggleCoverSearch={() => setShowCoverSearch(true)}
+                onCoverKeywordChange={(v) => setCoverKeyword(v)}
+                onOpenLightbox={openLightbox}
+                onCoverLoad={() => setCoverLoading(false)}
+                onAddCover={handleAddCover}
+              />
+            </div>
+
+            {/* Tags */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                标签
+              </label>
+              <input
+                placeholder="时尚, 穿搭, 街拍"
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                style={{ fontSize: 13 }}
+              />
+            </div>
+
+            {/* Source */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
+                话题来源
+              </label>
+              <input
+                placeholder="可选，用于 AI 生成参考"
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                style={{ fontSize: 13 }}
+              />
+            </div>
+          </div>
+
+          {/* ── AI Assistant ── */}
+          <div style={{ marginBottom: 16 }}>
+            <div className="section-header" style={{ marginBottom: 12 }}>
+              <span style={{ letterSpacing: '0.06em', fontSize: 11 }}>AI 助手</span>
+            </div>
+
+            {/* Title candidates */}
+            <div style={{ marginBottom: 12 }}>
+              <button
+                className="btn btn-sm"
+                onClick={doGenerateTitleCandidates}
+                disabled={titleCandidateLoading || !content}
+                style={{ width: '100%', justifyContent: 'center', marginBottom: titleCandidates.length ? 8 : 0 }}
+              >
+                {titleCandidateLoading ? <Loading size="sm" /> : null} 标题多候选
+              </button>
+              {titleCandidates.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {titleCandidates.map((candidate) => (
+                    <button
+                      key={`${candidate.type}-${candidate.title}`}
+                      onClick={() => { setTitle(candidate.title); addToast(`已使用${candidate.type}`, 'success'); }}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+                        padding: '8px 10px', fontSize: 12, borderRadius: 'var(--radius)',
+                        border: '1px solid var(--border)', background: 'var(--bg-card)', cursor: 'pointer',
+                        transition: 'all 0.15s', textAlign: 'left', fontFamily: 'inherit', width: '100%',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-softer)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
+                    >
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>{candidate.type}</span>
+                      <span style={{ color: 'var(--text)', lineHeight: 1.4 }}>{candidate.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Chat input */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                placeholder="输入指令修改正文..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
+                style={{ flex: 1, fontSize: 13 }}
+              />
+              <button
+                className="btn btn-sm"
+                onClick={doChat}
+                disabled={chatLoading || !chatInput.trim()}
+                style={{ flexShrink: 0 }}
+              >
+                {chatLoading ? <Loading size="sm" /> : '发送'}
+              </button>
+            </div>
+          </div>
+
+          {/* Inspiration Panel */}
+          <div style={{ marginBottom: 16 }}>
             <InspirationPanel
               inspirationExpanded={inspirationExpanded}
               inspirationKeyword={inspirationKeyword}
@@ -381,228 +668,29 @@ export default function ArticlePublish() {
               onSearch={doInspiration}
               onPickTopic={pickInspiration}
             />
-
-            {/* 标题 */}
-            <div style={{ marginBottom: 16 }}>
-              <input
-                placeholder="无标题"
-                maxLength={128}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                style={{
-                  width: '100%',
-                  border: 'none',
-                  outline: 'none',
-                  background: 'transparent',
-                  fontSize: 26,
-                  fontWeight: 700,
-                  lineHeight: 1.3,
-                  letterSpacing: '-0.01em',
-                  color: 'var(--text)',
-                  padding: 0,
-                  fontFamily: 'inherit',
-                }}
-              />
-            </div>
-
-            {/* 封面 */}
-            <CoverSection
-              cover={cover}
-              coverKeyword={coverKeyword}
-              coverResults={coverResults}
-              coverLoading={coverLoading}
-              coverSearchLoading={coverSearchLoading}
-              showCoverSearch={showCoverSearch}
-              onCoverImageUrl={coverImageUrl}
-              onCoverSearch={doCoverSearch}
-              onSelectCoverImage={selectCoverImage}
-              onRemoveCover={() => { setCover(''); setShowCoverSearch(false); }}
-              onToggleCoverSearch={() => setShowCoverSearch(true)}
-              onCoverKeywordChange={(v) => setCoverKeyword(v)}
-              onOpenLightbox={openLightbox}
-              onCoverLoad={() => setCoverLoading(false)}
-              onAddCover={handleAddCover}
-            />
-
-            {/* 标签 + 来源 — 并排 */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
-                  标签
-                </label>
-                <input
-                  placeholder="时尚, 穿搭, 街拍"
-                  value={tagsText}
-                  onChange={(e) => setTagsText(e.target.value)}
-                  style={{ fontSize: 14 }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
-                  话题来源
-                </label>
-                <input
-                  placeholder="可选，用于 AI 生成参考"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  style={{ fontSize: 14 }}
-                />
-              </div>
-            </div>
-
-            {/* 文章模板 */}
-            <div className="rounded-xl border border-border bg-bg-card p-3" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ width: 200 }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
-                    文章模板
-                  </label>
-                  <Select
-                    value={templateId}
-                    onChange={(v) => setTemplateId(v as typeof templateId)}
-                    options={ARTICLE_TEMPLATES.map(t => ({ label: t.name, value: t.id }))}
-                  />
-                </div>
-                <div className="flex-1 min-w-[200px] flex items-start gap-2 rounded-lg bg-bg-secondary border border-border/50 px-3 py-2">
-                  <svg className="w-4 h-4 mt-0.5 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
-                  </svg>
-                  <div>
-                    <div className="text-[11px] font-medium text-text-muted mb-0.5">
-                      {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.type} · {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.tone}
-                    </div>
-                    <div className="text-xs text-text-secondary leading-relaxed">
-                      {ARTICLE_TEMPLATES.find(t => t.id === templateId)?.prompt}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* AI 工具栏 */}
-            <AIToolbar
-              onGenerate={doGenerate} onPolish={doPolish} onDeAi={doDeAi}
-              onGenerateTitle={doGenerateTitle} onOptimizeLayout={doOptimizeLayout}
-              genLoading={genLoading} polishLoading={polishLoading}
-              deAiLoading={deAiLoading} titleLoading={titleLoading} layoutLoading={layoutLoading}
-              content={content}
-            />
-
-            <div className="flex gap-2 flex-wrap" style={{ marginBottom: titleCandidates.length ? 10 : 16 }}>
-              <button className="btn btn-sm" onClick={doGenerateTitleCandidates} disabled={titleCandidateLoading || !content}>
-                {titleCandidateLoading ? <Loading size="sm" /> : null} 标题多候选
-              </button>
-              {titleCandidates.map((candidate) => (
-                <button
-                  key={`${candidate.type}-${candidate.title}`}
-                  className="btn btn-sm"
-                  title={candidate.type}
-                  onClick={() => { setTitle(candidate.title); addToast(`已使用${candidate.type}`, 'success'); }}
-                >
-                  <span className="text-text-muted">{candidate.type}</span>
-                  {candidate.title}
-                </button>
-              ))}
-            </div>
-
-            {/* 对话输入 */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <input
-                placeholder="输入指令修改正文，如「缩短到300字」「改成正式风格」…"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
-                style={{ flex: 1, fontSize: 14 }}
-              />
-              <button className="btn btn-sm" onClick={doChat} disabled={chatLoading || !chatInput.trim()}
-                style={{ flexShrink: 0 }}>
-                {chatLoading ? <Loading size="sm" /> : '发送'}
-              </button>
-            </div>
-
-            {/* 正文 — 富文本编辑器 */}
-            <div style={{ marginBottom: 8 }}>
-              <RichTextEditor
-                value={contentDoc}
-                onChange={(doc) => {
-                  setContentDoc(doc);
-                  setContent(tiptapToPlain(doc));
-                }}
-                placeholder="开始写作…"
-                minHeight={480}
-              />
-            </div>
           </div>
-        </div>
 
-        {/* ── 右栏：文章列表 ── */}
-        <div style={{ overflow: 'hidden', minWidth: 0 }}>
-          <ArticleList
-            articles={articles}
-            articleFilter={articleFilter}
-            editingId={editingId}
-            loading={loading}
-            onSelectArticle={selectArticle}
-            onSwitchFilter={switchFilter}
-            onDelete={doDelete}
-            articleListExpanded={articleListExpanded}
-            onToggleExpanded={() => setArticleListExpanded(!articleListExpanded)}
-          />
+          {/* Spacer for sticky bar clearance */}
+          <div style={{ height: 80, flexShrink: 0 }} />
+        </div>
         </div>
       </div>
 
-      {/* 折叠状态下的展开按钮 */}
-      <button
-        onClick={() => setArticleListExpanded(true)}
-        style={{
-          position: 'fixed',
-          right: 0,
-          top: '50%',
-          zIndex: 50,
-          width: 28,
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--accent)',
-          border: 'none',
-          borderRadius: '8px 0 0 8px',
-          color: '#fff',
-          cursor: 'pointer',
-          opacity: articleListExpanded ? 0 : 0.9,
-          boxShadow: articleListExpanded ? 'none' : '-2px 0 8px rgba(0,0,0,0.12)',
-          transform: `translateY(-50%) translateX(${articleListExpanded ? '16px' : '0'})`,
-          pointerEvents: articleListExpanded ? 'none' : 'auto',
-          transition: 'opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease',
-        }}
-        onMouseEnter={(e) => {
-          if (articleListExpanded) return;
-          e.currentTarget.style.opacity = '1';
-          e.currentTarget.style.boxShadow = '-2px 0 12px rgba(0,0,0,0.2)';
-        }}
-        onMouseLeave={(e) => {
-          if (articleListExpanded) return;
-          e.currentTarget.style.opacity = '0.9';
-          e.currentTarget.style.boxShadow = '-2px 0 8px rgba(0,0,0,0.12)';
-        }}
-        title="展开文章列表"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
-      </button>
-
-      {/* 操作栏 — 底部固定 */}
+      {/* Action bar — sticky bottom */}
       <div style={{
-        display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
-        padding: '12px 0',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        alignItems: 'center',
+        padding: '12px 0 4px',
         borderTop: '1px solid var(--border-subtle)',
-        position: 'sticky', bottom: 0,
+        flexShrink: 0,
         background: 'var(--bg)',
+        position: 'relative',
         zIndex: 10,
       }}>
         {wechatAccounts.length > 0 && (
-          <div style={{ width: 190 }}>
+          <div style={{ width: 190, flexShrink: 0 }}>
             <Select
               value={selectedAccountId}
               onChange={setSelectedAccountId}
