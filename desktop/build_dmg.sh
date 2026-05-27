@@ -85,6 +85,7 @@ rm -f "$BG_FILE"
 cleanup() {
     hdiutil detach "/Volumes/$VOLNAME" -quiet -force 2>/dev/null || true
     rm -f "$DMG_TEMP"
+    rm -f "$BG_FILE"
 }
 
 trap cleanup EXIT
@@ -345,17 +346,21 @@ fi
 
 echo "      → 同步磁盘..."
 
-sync
-
-sleep 2
+# 等待所有文件操作完成
+sleep 3
 
 # ============================================================
-# 5. 生成最终 DMG
+# 5. 卸载 + 生成最终 DMG
 # ============================================================
 
 echo "  5/5 压缩 DMG..."
 
-hdiutil detach "$MOUNT" -quiet >/dev/null
+# 重试卸载，CI 环境下可能需要多次尝试
+for i in 1 2 3 4 5; do
+    hdiutil detach "$MOUNT" -quiet -force 2>/dev/null && break
+    echo "      → 卸载重试 ($i/5)..."
+    sleep 2
+done
 
 sleep 1
 
