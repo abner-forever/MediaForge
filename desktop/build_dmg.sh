@@ -361,19 +361,28 @@ sleep 3
 
 echo "  5/5 压缩 DMG..."
 
+# 先查找挂载设备号（如 /dev/disk6），detach 需要它
+DISK_DEV=$(hdiutil info | grep -B2 "$MOUNT" | grep "/dev/disk" | awk '{print $1}' | head -1)
+
 # 杀掉可能持有卷引用的进程
 killall Finder 2>/dev/null || true
 killall mdworker 2>/dev/null || true
 killall mds 2>/dev/null || true
 sleep 1
 
-# 重试卸载，CI 环境下 Spotlight/Finder 可能持有引用
-for i in 1 2 3 4 5; do
-    diskutil unmountDisk force "$MOUNT" 2>/dev/null && break
-    hdiutil detach "$MOUNT" -force 2>/dev/null && break
-    echo "      → 卸载重试 ($i/5)..."
-    sleep 3
-done
+# 先强制卸载文件系统，再 detach 磁盘设备（两者缺一不可）
+diskutil unmount force "$MOUNT" 2>/dev/null || true
+hdiutil detach "$MOUNT" -force 2>/dev/null || true
+sleep 1
+
+# 兜底：如果设备路径还在，用设备号 detach
+if [ -n "$DISK_DEV" ]; then
+    for i in 1 2 3 4 5; do
+        hdiutil detach "$DISK_DEV" -force 2>/dev/null && break
+        echo "      → 设备卸载重试 ($i/5)..."
+        sleep 3
+    done
+fi
 
 sleep 2
 
