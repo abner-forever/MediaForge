@@ -32,14 +32,14 @@ jobs:
             echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
 
-  bump-version:
+  calculate-version:
     needs: [check-commit]
     if: needs.check-commit.outputs.is_release == 'false'
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.semantic.outputs.version }}
-      new_release: ${{ steps.check.outputs.new }}
-      commit_sha: ${{ steps.check.outputs.sha }}
+      version: ${{ steps.detect.outputs.version }}
+      new_release: ${{ steps.detect.outputs.new }}
+      candidate_tag: ${{ steps.detect.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -49,64 +49,38 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 配置 git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: 安装 python-semantic-release
         run: pip install python-semantic-release
 
-      - name: 记录当前最新 tag
-        id: before
-        run: echo "tag=$(git tag --sort=-creatordate | head -1 || echo '')" >> $GITHUB_OUTPUT
-
-      - name: Semantic Release — 更新版本号 + CHANGELOG
-        id: semantic
-        run: semantic-release version --skip-build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-
-      - name: 推送失败时重试 tag
-        if: steps.semantic.outcome == 'failure'
+      - name: 预计算下一版本（不修改任何文件）
+        id: detect
         run: |
-          NEW_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
-          BEFORE_TAG="${{ steps.before.outputs.tag }}"
-          if [ "${NEW_TAG}" != "${BEFORE_TAG}" ] && [ -n "${NEW_TAG}" ]; then
-            echo "版本已更新为 ${NEW_TAG}，重试推送 tag"
-            git push origin "${NEW_TAG}" || echo "⚠️ tag 推送仍然失败"
-          else
-            echo "未检测到新版本，semantic-release 可能因其他原因失败"
-            exit 1
-          fi
+          BEFORE_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
+          echo "before_tag=${BEFORE_TAG}" >> $GITHUB_OUTPUT
 
-      - name: 获取新版 tag
-        id: check
-        run: |
-          NEW_TAG=$(git tag --sort=-creatordate | head -1 || echo '')
-          echo "tag=${NEW_TAG}" >> $GITHUB_OUTPUT
-          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          if [ "${NEW_TAG}" != "${{ steps.before.outputs.tag }}" ] && [ -n "${NEW_TAG}" ]; then
+          # --print 仅输出版本号到 stdout，不修改文件、不创建 commit/tag
+          NEXT_VERSION=$(semantic-release version --print 2>/dev/null | tail -1 | tr -d '[:space:]')
+          NEXT_TAG="v${NEXT_VERSION}"
+          echo "candidate_version=${NEXT_VERSION}"
+          echo "candidate_tag=${NEXT_TAG}"
+
+          if [ "${NEXT_TAG}" != "${BEFORE_TAG}" ] && [ -n "${NEXT_VERSION}" ]; then
             echo "new=true" >> $GITHUB_OUTPUT
-            VERSION="${NEW_TAG#v}"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "检测到新版本: ${VERSION}"
+            echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag=${NEXT_TAG}" >> $GITHUB_OUTPUT
+            echo "检测到新版本: ${NEXT_VERSION}"
           else
             echo "new=false" >> $GITHUB_OUTPUT
-            VERSION=$(grep '^version\s*=\s*"' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "无新版本，当前版本: ${VERSION}"
+            echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag=${BEFORE_TAG}" >> $GITHUB_OUTPUT
+            echo "无新版本，当前版本: ${NEXT_VERSION}"
           fi
 
   test:
-    needs: [bump-version]
+    needs: [calculate-version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.bump-version.outputs.commit_sha }}
 
       - uses: actions/setup-python@v6
         with:
@@ -148,15 +122,14 @@ jobs:
           npx vitest run
 
   build-macos:
-    needs: [test]
+    needs: [test, calculate-version]
     runs-on: macos-latest
     env:
       PYTHON_VERSION: '3.11.9'
-      APP_VERSION: ${{ needs.bump-version.outputs.version }}
+      APP_VERSION: ${{ needs.calculate-version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.bump-version.outputs.commit_sha }}
           fetch-depth: 0
 
       - name: 设置 pnpm
@@ -241,14 +214,13 @@ jobs:
           path: MediaForge-macOS-*.dmg
 
   build-windows:
-    needs: [test]
+    needs: [test, calculate-version]
     runs-on: windows-latest
     env:
-      APP_VERSION: ${{ needs.bump-version.outputs.version }}
+      APP_VERSION: ${{ needs.calculate-version.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.bump-version.outputs.commit_sha }}
           fetch-depth: 0
 
       - name: 设置 pnpm
@@ -328,9 +300,9 @@ jobs:
           path: dist/MediaForge-Windows-Setup-*.exe
 
   create-release:
-    needs: [bump-version, build-macos, build-windows]
+    needs: [calculate-version, build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: needs.bump-version.outputs.new_release == 'true'
+    if: needs.calculate-version.outputs.new_release == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -342,10 +314,30 @@ jobs:
           pattern: MediaForge-*
           merge-multiple: true
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: 安装 python-semantic-release
+        run: pip install python-semantic-release
+
+      - name: 配置 git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Semantic Release — 创建版本 commit、tag、更新 CHANGELOG
+        run: |
+          semantic-release version --no-push
+          git push --follow-tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: 上传构件到 Release
         shell: bash
         run: |
-          gh release upload "v${{ needs.bump-version.outputs.version }}" \
+          gh release upload "${{ needs.calculate-version.outputs.candidate_tag }}" \
             MediaForge-macOS-*.dmg \
             MediaForge-Windows-Setup-*.exe
         env:

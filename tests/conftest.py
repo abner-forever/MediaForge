@@ -31,9 +31,9 @@ def temp_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(config_module, "LOG_DIR", data_dir / "logs")
 
     # 同步更新 desktop 模块中已导入的路径常量
-    import desktop.api as desktop_api
+    import desktop.api_helpers as api_helpers_module
     import desktop.app_state as app_state_module
-    monkeypatch.setattr(desktop_api, "DOWNLOAD_DIR", images_dir)
+    monkeypatch.setattr(api_helpers_module, "DOWNLOAD_DIR", images_dir)
     monkeypatch.setattr(app_state_module, "QUEUE_CACHE_PATH", data_dir / "queue.json")
     monkeypatch.setattr(app_state_module, "OPLOG_CACHE_PATH", data_dir / "state" / "operations.json")
 

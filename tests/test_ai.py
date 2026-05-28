@@ -12,12 +12,11 @@ from unittest.mock import patch, Mock
 import pytest
 
 from services.ai import (
-    _normalize_model_name,
-    _resolve_chat_url_candidates,
     generate_article,
     generate_article_title_candidates,
     generate_content,
 )
+from services.ai.client import _normalize_model_name, _resolve_chat_url_candidates
 
 
 class TestNormalizeModelName:
@@ -192,7 +191,7 @@ class TestGenerateContent:
 
 class TestArticlePhaseTwoAI:
     def test_generate_article_with_template_prompt(self, mock_settings):
-        with patch("services.ai._call_ai", return_value="模板文章") as call:
+        with patch("services.ai.content._call_ai", return_value="模板文章") as call:
             content = generate_article(
                 "街拍",
                 "今日街拍",
@@ -216,7 +215,7 @@ class TestArticlePhaseTwoAI:
                 {"type": "点击率版", "title": "这组街拍太会穿"},
             ]
         }, ensure_ascii=False)
-        with patch("services.ai._call_ai", return_value=raw):
+        with patch("services.ai.content._call_ai", return_value=raw):
             candidates = generate_article_title_candidates("正文内容")
         assert candidates == [
             {"type": "稳妥版", "title": "春日街拍精选"},
@@ -224,6 +223,6 @@ class TestArticlePhaseTwoAI:
         ]
 
     def test_title_candidates_fallback_lines(self, mock_settings):
-        with patch("services.ai._call_ai", return_value="1. 第一条标题\n2. 第二条标题"):
+        with patch("services.ai.content._call_ai", return_value="1. 第一条标题\n2. 第二条标题"):
             candidates = generate_article_title_candidates("正文内容")
         assert [c["title"] for c in candidates] == ["第一条标题", "第二条标题"]

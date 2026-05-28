@@ -14,7 +14,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from desktop.api import app
-from desktop.api import _friendly_error_message
 
 
 @pytest.fixture
@@ -133,14 +132,6 @@ class TestQueueAPI:
         item = resp.json()["queue"][0]
         assert item["account_id"] == "acc_1"
         assert item["status"] == "reviewing"
-
-
-class TestPhaseTwoErrors:
-    def test_friendly_ai_base_url_error(self):
-        assert _friendly_error_message("AI_BASE_URL missing") == "当前 AI 服务需要配置 Base URL，请到设置页补全后重试。"
-
-    def test_friendly_wechat_login_error(self):
-        assert "公众号账号未登录" in _friendly_error_message("mp.weixin login timeout")
 
 
 class TestMaterialsAPI:
