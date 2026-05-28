@@ -78,9 +78,9 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
     return () => clearTimeout(descTimerRef.current);
   }, [desc, item.desc, autoSave]);
 
-  async function deleteItem() {
+  async function deleteItem(deleteLocal: boolean) {
     try {
-      await queueApi.remove(itemId);
+      await queueApi.remove(itemId, deleteLocal);
       setQueue((await queueApi.get()).queue);
       addToast('已删除', 'info');
     } catch (err: any) {
@@ -376,8 +376,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                   )}
                 </button>
                 <button className="btn btn-ghost text-danger" onClick={async () => {
-                  const ok = await showConfirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true });
-                  if (ok) deleteItem();
+                  const { confirmed, checkboxChecked } = await showConfirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+                  if (confirmed) deleteItem(checkboxChecked);
                 }} disabled={!!publishingAction}>删除</button>
               </>
             ) : (

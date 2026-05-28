@@ -1,3 +1,8 @@
+---
+name: frontend-dev-mediaforge
+description: MediaForge 前端项目开发规范。当在 desktop/web 目录下进行 React/TypeScript 开发时自动应用，约束 API 层、状态管理、组件、路由、Hooks 等最佳实践。
+---
+
 # MediaForge 前端开发规范
 
 本规范适用于 `desktop/web/src/` 下的 React/TypeScript 前端项目。所有 AI 辅助开发必须遵循以下约束。

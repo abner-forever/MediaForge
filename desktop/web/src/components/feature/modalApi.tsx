@@ -9,21 +9,23 @@ interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  checkboxLabel?: string;
+  defaultChecked?: boolean;
 }
 
-export function showConfirm(options: ConfirmOptions): Promise<boolean> {
+export function showConfirm(options: ConfirmOptions): Promise<{ confirmed: boolean; checkboxChecked: boolean }> {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const root = createRoot(el);
     let done = false;
 
-    function cleanup(value: boolean) {
+    function cleanup(confirmed: boolean, checkboxChecked: boolean) {
       if (done) return;
       done = true;
       root.unmount();
       if (el.parentNode) el.parentNode.removeChild(el);
-      resolve(value);
+      resolve({ confirmed, checkboxChecked });
     }
 
     root.render(
@@ -34,9 +36,11 @@ export function showConfirm(options: ConfirmOptions): Promise<boolean> {
         confirmText={options.confirmText}
         cancelText={options.cancelText}
         danger={options.danger}
+        checkboxLabel={options.checkboxLabel}
+        defaultChecked={options.defaultChecked}
         noLoading
-        onConfirm={() => cleanup(true)}
-        onCancel={() => cleanup(false)}
+        onConfirm={(checked) => cleanup(true, checked)}
+        onCancel={() => cleanup(false, false)}
       />
     );
   });

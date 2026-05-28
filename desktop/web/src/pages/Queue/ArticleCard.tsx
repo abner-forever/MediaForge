@@ -14,9 +14,9 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const tags = item.tags || [];
 
-  async function deleteItem() {
+  async function deleteItem(deleteLocal: boolean) {
     try {
-      await queueApi.remove(itemId);
+      await queueApi.remove(itemId, deleteLocal);
       setQueue((await queueApi.get()).queue);
       addToast('已删除', 'info');
     } catch (err: any) {
@@ -166,8 +166,8 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
                   if (ok) publish({ save_draft: false });
                 }}>直接发布</button>
                 <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
-                  const ok = await showConfirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true });
-                  if (ok) deleteItem();
+                  const { confirmed, checkboxChecked } = await showConfirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+                  if (confirmed) deleteItem(checkboxChecked);
                 }}>删除</button>
               </>
             ) : (

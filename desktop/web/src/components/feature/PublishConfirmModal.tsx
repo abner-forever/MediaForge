@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
+import Checkbox from '../ui/Checkbox';
 import { checkSensitiveWords, checkClickbaitRisk } from '../../utils/compliance';
 import { complianceApi } from '../../api/client';
 import type { WeChatAccount, DuplicateCheckResult } from '../../api/client';
@@ -163,10 +164,7 @@ export default function PublishConfirmModal({
             )}
           </div>
           {highRisk && (
-            <label className="flex items-center gap-2 text-sm text-text-secondary">
-              <input type="checkbox" checked={ackHighRisk} onChange={e => setAckHighRisk(e.target.checked)} />
-              我已确认以上高风险项，仍要继续
-            </label>
+            <Checkbox checked={ackHighRisk} onChange={setAckHighRisk}>我已确认以上高风险项，仍要继续</Checkbox>
           )}
         </div>
       </div>

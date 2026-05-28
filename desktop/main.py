@@ -10,7 +10,6 @@ import sys
 import threading
 from pathlib import Path
 
-
 # 注意：uvicorn 在 start_server 中按需导入，避免模块级加载拖慢启动
 
 # 确保项目根目录在 sys.path 中
@@ -18,67 +17,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from desktop.dock_utils import APP_NAME, get_icon_candidates, set_dock_icon, setup_dock_identity
 
-def _get_icon_candidates() -> list[Path]:
-    """返回应用图标候选路径列表，按优先级排列。"""
-    _root = Path(__file__).parent.parent  # 项目根目录
-    _desktop = Path(__file__).parent      # desktop/
-    return [
-        _desktop / "web" / "public" / "logo-icon.png",   # dev 模式：web/public
-        _desktop / "static" / "logo-icon.png",            # build 后：static/
-        _root / "build" / "app.icns",                     # 打包用 ICNS
-    ]
-
-
-def _set_dock_icon() -> bool:
-    """遍历候选路径设置 NSApplication 图标，成功返回 True。"""
-    if sys.platform != "darwin":
-        return False
-    from AppKit import NSImage, NSApplication
-    NSApplication.sharedApplication()
-    for p in _get_icon_candidates():
-        if p.exists():
-            img = NSImage.alloc().initWithContentsOfFile_(str(p))
-            if img:
-                NSApplication.sharedApplication().setApplicationIconImage_(img)
-                return True
-    return False
-
-
-# macOS: 尽早设置 Dock 图标、进程名称和应用激活策略，在 uvicorn/webview 等加载前执行
-# 注意：setActivationPolicy_ 必须在设置进程名称和 Bundle 信息之后调用，
-# 否则 Dock 会以 "python" 注册应用，之后无法更新悬停名称
+# macOS: 尽早设置 Dock 标识
 try:
-    from AppKit import NSProcessInfo, NSApplication, NSString, NSImage, NSBundle
-    import ctypes, ctypes.util
-
-    # 1. 更新 NSBundle 信息（影响 About 面板和 Dock 中的应用名）
-    _bundle = NSBundle.mainBundle()
-    _info = _bundle.infoDictionary()
-    if _info:
-        _info["CFBundleName"] = "图文工坊"
-        _info["CFBundleDisplayName"] = "图文工坊"
-
-    # 2. 设置进程名称（影响 Activity Monitor 等系统工具）
-    NSProcessInfo.processInfo().setProcessName_("图文工坊")
-
-    # 3. Carbon CPSSetProcessName 兜底
-    carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
-
-    class _PSN(ctypes.Structure):
-        _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
-
-    _psn = _PSN(0, 0)
-    carbon.GetCurrentProcess(ctypes.byref(_psn))
-    _process_name_str = NSString.stringWithString_("图文工坊")
-    carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_process_name_str)))
-
-    # 4. 设置激活策略为 Regular（前台应用），此操作将应用注册到 Dock
-    #    必须在进程名和 Bundle 信息设置之后调用，确保 Dock 读取到正确名称
-    NSApplication.sharedApplication().setActivationPolicy_(0)
-
-    # 5. 设置 Dock 图标
-    _set_dock_icon()
+    setup_dock_identity()
 except Exception:
     pass
 
@@ -88,11 +31,8 @@ from config import ensure_dirs
 def _resolve_loading_html_path() -> Path:
     """返回一个存在的 loading.html 路径，兼容开发与 PyInstaller 打包后的多种位置。"""
     candidates = []
-
-    # 默认：与本模块同目录
     candidates.append(Path(__file__).parent / "loading.html")
 
-    # PyInstaller single-folder / onefile 解包目录（常见 sys._MEIPASS）
     meipass = getattr(sys, '_MEIPASS', None)
     if meipass:
         meipass = Path(meipass)
@@ -103,7 +43,6 @@ def _resolve_loading_html_path() -> Path:
             meipass / '_internal' / 'desktop' / 'loading.html',
         ])
 
-    # 打包为 one-folder 时，PyInstaller 可能将 datas 放在 dist/<app>/_internal/desktop
     project_root = Path(__file__).resolve().parent.parent
     candidates.append(project_root / 'desktop' / 'loading.html')
 
@@ -114,7 +53,6 @@ def _resolve_loading_html_path() -> Path:
         except Exception:
             continue
 
-    # 回退到模块目录（会在不存在时抛出更明确的 FileNotFoundError）
     return Path(__file__).parent / 'loading.html'
 
 
@@ -149,7 +87,6 @@ def _make_loading_html(host: str, port: int) -> str:
     html = path.read_text(encoding="utf-8")
     html = html.replace("__TARGET_URL__", target_url)
 
-    # 将 logo.png 转为 base64 data URL，确保 PyWebView 的 html 模式下能正常显示
     logo_candidates = [
         path.parent / "assets" / "logo.png",
         path.parent / "static" / "logo.png",
@@ -205,30 +142,7 @@ def _start_app() -> None:
     # macOS Dock 标识设置（非 frozen 模式的兜底，frozen 模式由 runtime_hook 处理）
     if sys.platform == "darwin":
         try:
-            from AppKit import NSImage, NSApplication, NSBundle, NSProcessInfo, NSString
-            import ctypes, ctypes.util
-
-            NSApplication.sharedApplication()
-            NSProcessInfo.processInfo().setProcessName_("图文工坊")
-
-            # Carbon CPSSetProcessName 兜底
-            carbon = ctypes.cdll.LoadLibrary(ctypes.util.find_library('Carbon'))
-            class _PSN(ctypes.Structure):
-                _fields_ = [('highLongOfPSN', ctypes.c_uint32), ('lowLongOfPSN', ctypes.c_uint32)]
-            _psn = _PSN(0, 0)
-            carbon.GetCurrentProcess(ctypes.byref(_psn))
-            _ps_name = NSString.stringWithString_("图文工坊")
-            carbon.CPSSetProcessName(ctypes.byref(_psn), ctypes.c_void_p(id(_ps_name)))
-
-            # 设置 Dock 图标
-            _set_dock_icon()
-
-            # 更新 bundle info 显示名称
-            bundle = NSBundle.mainBundle()
-            info = bundle.infoDictionary()
-            if info is not None:
-                info["CFBundleName"] = "图文工坊"
-                info["CFBundleDisplayName"] = "图文工坊"
+            setup_dock_identity()
         except Exception:
             pass
 
@@ -240,19 +154,15 @@ def _start_app() -> None:
     if port != preferred_port:
         print(f"端口 {preferred_port} 已被占用，改用可用端口 {port}。")
 
-    # 启动 FastAPI 服务线程
     server_thread = threading.Thread(target=start_server, args=(host, port), daemon=True)
     server_thread.start()
 
-    # 生成启动加载页 HTML，自动轮询后端；不再阻塞等待，窗口立即展示
     loading_html = _make_loading_html(host, port)
 
     # 启动 PyWebView 窗口
     try:
         import webview
     except ModuleNotFoundError:
-        # 打包运行时常见问题：PyWebView 可能未随运行时加载或被剥离。
-        # 为保证“页面可访问”，在无法导入 PyWebView 时回退到在默认浏览器打开后端地址。
         import webbrowser
         import time
 
@@ -265,16 +175,13 @@ def _start_app() -> None:
 
         print("后端服务已在子线程启动。按 Ctrl+C 可退出程序。")
         try:
-            # 等待服务器线程结束，保持主进程存活
             while server_thread.is_alive():
                 time.sleep(1)
         except KeyboardInterrupt:
             pass
         return
 
-    # 有些 pywebview 发行版或类型提示器无法解析子模块 'webview.menu'
-    # 为避免编辑器/静态分析报错并兼容不同实现，优先尝试导入子模块，
-    # 失败时从主模块取属性或提供轻量级的兜底类。
+    # 导入 webview.menu 子模块（兼容不同版本）
     try:
         from webview.menu import Menu, MenuAction, MenuSeparator
     except Exception:
@@ -283,7 +190,7 @@ def _start_app() -> None:
         MenuSeparator = getattr(webview, "MenuSeparator", None)
 
         if Menu is None:
-            class Menu:  # 轻量级兼容实现，仅满足 create_window 的 menu 参数结构
+            class Menu:
                 def __init__(self, title, items):
                     self.title = title
                     self.items = items
@@ -321,11 +228,10 @@ def _start_app() -> None:
         'cocoa.menu.selectAll': '全选',
     }
 
-    # 移除默认的 "窗口" 子菜单（最小化 / 缩放）—改为不显示任何自定义窗口菜单
     menus = []
 
     window = webview.create_window(
-        title="图文工坊",
+        title=APP_NAME,
         html=loading_html,
         width=1280,
         height=900,
@@ -355,25 +261,26 @@ def _start_app() -> None:
                 pass
         threading.Thread(target=_apply_mica, daemon=True).start()
 
-    # 注册原生窗口，使 API 路由可动态设置 title bar 的 dark/light appearance
+    # 注册原生窗口
     try:
         from desktop.native_theme import register as _register_native
         _register_native(window)
     except Exception:
         pass
 
-    # PyWebView create_window 内部可能重置 Dock 图标与名称，在此重新设置
-    _set_dock_icon()
-    try:
-        from AppKit import NSProcessInfo
-        NSProcessInfo.processInfo().setProcessName_("图文工坊")
-    except Exception:
-        pass
+    # PyWebView create_window 可能重置 Dock 图标，在此重新设置
+    set_dock_icon()
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSProcessInfo
+            NSProcessInfo.processInfo().setProcessName_(APP_NAME)
+        except Exception:
+            pass
 
-    # 设置窗口缩略图图标（最小化时右下角显示）
+    # 设置窗口缩略图图标
     try:
         from AppKit import NSImage
-        for _p in _get_icon_candidates():
+        for _p in get_icon_candidates():
             if _p.exists():
                 _minimg = NSImage.alloc().initWithContentsOfFile_(str(_p))
                 if _minimg:
@@ -383,10 +290,9 @@ def _start_app() -> None:
         pass
 
     def _load_app_icon_nsimage() -> object | None:
-        """加载应用图标为 NSImage 对象，供 NSAlert.setIcon_ 使用。"""
         try:
             from AppKit import NSImage
-            for p in _get_icon_candidates():
+            for p in get_icon_candidates():
                 if p.exists():
                     img = NSImage.alloc().initWithContentsOfFile_(str(p))
                     if img:
@@ -408,10 +314,10 @@ def _start_app() -> None:
                 alert.addButtonWithTitle_("退出")
                 alert.addButtonWithTitle_("取消")
                 alert.setMessageText_("正在发布公众号文章，确定要退出吗？")
-                alert.setAlertStyle_(0)  # NSWarningAlertStyle
+                alert.setAlertStyle_(0)
                 if _app_icon_nsimage is not None:
                     alert.setIcon_(_app_icon_nsimage)
-                return alert.runModal() == 1000  # NSAlertFirstButtonReturn
+                return alert.runModal() == 1000
             except Exception:
                 return True
         return True
@@ -419,10 +325,9 @@ def _start_app() -> None:
     window.events.closing += _before_close
 
     def _set_main_thread_icon():
-        """在主线程设置应用图标。"""
         try:
             from AppKit import NSImage, NSApplication
-            for _p in _get_icon_candidates():
+            for _p in get_icon_candidates():
                 if _p.exists():
                     _img = NSImage.alloc().initWithContentsOfFile_(str(_p))
                     if _img:
@@ -431,7 +336,7 @@ def _start_app() -> None:
         except Exception:
             pass
 
-    # ── macOS: 自定义 About 面板，使用应用自有图标、名称和版本号 ──
+    # ── macOS: 自定义 About 面板 ──
     _about_handler = None
     try:
         from AppKit import NSObject, NSApplication, NSImage
@@ -447,10 +352,10 @@ def _start_app() -> None:
         class _AboutHandler(NSObject):
             def handleAbout_(self, sender):
                 opts = {
-                    "ApplicationName": "图文工坊",
+                    "ApplicationName": APP_NAME,
                     "ApplicationVersion": _app_version,
                 }
-                for _p in _get_icon_candidates():
+                for _p in get_icon_candidates():
                     if _p.exists():
                         _img = NSImage.alloc().initWithContentsOfFile_(str(_p))
                         if _img:
@@ -463,7 +368,6 @@ def _start_app() -> None:
         pass
 
     def _patch_about_menu():
-        """替换 About 菜单项，使用自定义图标和名称。"""
         if _about_handler is None:
             return
         try:
@@ -486,7 +390,6 @@ def _start_app() -> None:
             pass
 
     def _set_icon_after_start():
-        """PyWebView 启动后通过主线程 runloop 设置图标和 About 面板。"""
         import time as _time
         _time.sleep(1)
         try:
