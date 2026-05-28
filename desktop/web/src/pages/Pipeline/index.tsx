@@ -16,46 +16,34 @@ const PIPELINE_STEPS = [
 ];
 
 export default function PipelinePage() {
-  const { addToast, setPipelineRunning } = useStore();
+  const {
+    addToast,
+    pipelineRunning,
+    setPipelineRunning,
+    pipelineEvents: events,
+    pipelineCurrentStep: currentStep,
+    pipelineStepProgress: stepProgress,
+    pipelineSummary: summary,
+    pipelineError: error,
+    pipelineCheckpoint: checkpoint,
+    pipelineDecisionReq: decisionReq,
+    pipelineAbortController,
+    setPipelineEvents,
+    addPipelineEvent,
+    setPipelineCurrentStep,
+    setPipelineStepProgress,
+    setPipelineSummary,
+    setPipelineError,
+    setPipelineCheckpoint,
+    setPipelineDecisionReq,
+    setPipelineAbortController,
+    resetPipelineState,
+  } = useStore();
 
-  // Pipeline state
-  const [running, setRunning] = useState(false);
-  const [events, setEvents] = useState<PipelineEvent[]>([]);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
-  const [stepProgress, setStepProgress] = useState<{ current: number; total: number } | null>(null);
-  const [summary, setSummary] = useState<PipelineSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const running = pipelineRunning;
 
-  // Checkpoint state
-  const [checkpoint, setCheckpoint] = useState<{
-    message: string;
-    runId: string;
-    items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }>;
-  } | null>(null);
-
-  // Decision request state
-  const [decisionReq, setDecisionReq] = useState<{
-    message: string;
-    runId: string;
-    options: Array<{ id: string; label: string }>;
-    context?: Record<string, unknown>;
-  } | null>(null);
-  const [deciding, setDeciding] = useState(false);
-
-  // Abort controller
-  const abortRef = useRef<AbortController | null>(null);
   const eventsRef = useRef<PipelineEvent[]>([]);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (abortRef.current) {
-        abortRef.current.abort();
-        abortRef.current = null;
-      }
-    };
-  }, []);
+  const [deciding, setDeciding] = useState(false);
 
   // ── 运行历史 ──
   const [history, setHistory] = useState<RunInfo[]>([]);
@@ -79,39 +67,37 @@ export default function PipelinePage() {
   }, [loadHistory]);
 
   const handleRun = useCallback(async (config: PipelineConfig) => {
-    setRunning(true);
     setPipelineRunning(true);
-    setEvents([]);
-    setCurrentStep(null);
-    setStepProgress(null);
-    setSummary(null);
-    setError(null);
-    setCheckpoint(null);
+    setPipelineEvents([]);
+    setPipelineCurrentStep(null);
+    setPipelineStepProgress(null);
+    setPipelineSummary(null);
+    setPipelineError(null);
+    setPipelineCheckpoint(null);
     eventsRef.current = [];
 
     const abort = new AbortController();
-    abortRef.current = abort;
+    setPipelineAbortController(abort);
 
     try {
       const result = await pipelineApi.run(config, (evt) => {
-        if (!mountedRef.current) return;
         eventsRef.current = [...eventsRef.current, evt];
-        setEvents(prev => [...prev, evt]);
-        if (evt.type === 'step_start' && evt.step) setCurrentStep(evt.step);
-        if (evt.type === 'step_error') setCurrentStep(evt.step);
+        addPipelineEvent(evt);
+        if (evt.type === 'step_start' && evt.step) setPipelineCurrentStep(evt.step);
+        if (evt.type === 'step_error') setPipelineCurrentStep(evt.step);
         if (evt.type === 'step_progress' && evt.current !== undefined && evt.total !== undefined) {
-          setStepProgress({ current: evt.current as number, total: evt.total as number });
+          setPipelineStepProgress({ current: evt.current as number, total: evt.total as number });
         }
         if (evt.type === 'checkpoint_required') {
-          setCheckpoint({
+          setPipelineCheckpoint({
             message: (evt.message as string) || '确认发布？',
             runId: (evt.pipeline_run_id as string) || '',
             items: evt.items as Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }> | undefined,
           });
         }
-        if (evt.type === 'step_error' && !evt.step) setError((evt.error as string) || '运行出错');
+        if (evt.type === 'step_error' && !evt.step) setPipelineError((evt.error as string) || '运行出错');
         if (evt.type === 'decision_required') {
-          setDecisionReq({
+          setPipelineDecisionReq({
             message: (evt.message as string) || '请做出选择',
             runId: (evt.pipeline_run_id as string) || '',
             options: (evt.options as Array<{ id: string; label: string }>) || [],
@@ -120,86 +106,84 @@ export default function PipelinePage() {
         }
       }, abort.signal);
 
-      if (result) setSummary(result);
+      if (result) setPipelineSummary(result);
       addToast('流水线执行完成', 'success');
     } catch (err: any) {
       if (err.name === 'AbortError') {
         addToast('流水线已取消', 'info');
+        // 重置进度状态
+        setPipelineCurrentStep(null);
+        setPipelineStepProgress(null);
       } else {
-        setError(err.message || '流水线执行失败');
+        setPipelineError(err.message || '流水线执行失败');
         addToast(err.message || '流水线执行失败', 'error');
       }
     } finally {
-      setRunning(false);
       setPipelineRunning(false);
-      abortRef.current = null;
+      setPipelineAbortController(null);
       loadHistory();
     }
-  }, [addToast, loadHistory]);
+  }, [addToast, loadHistory, setPipelineRunning, setPipelineEvents, setPipelineCurrentStep, setPipelineStepProgress, setPipelineSummary, setPipelineError, setPipelineCheckpoint, setPipelineDecisionReq, setPipelineAbortController, addPipelineEvent]);
 
   const handleCancel = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
+    if (pipelineAbortController) {
+      pipelineAbortController.abort();
     }
-  }, []);
+  }, [pipelineAbortController]);
 
   const handleCheckpointConfirm = useCallback(async () => {
     if (!checkpoint) return;
     try {
       await pipelineApi.confirm(checkpoint.runId);
-      setCheckpoint(null);
+      setPipelineCheckpoint(null);
       addToast('已确认，继续发布', 'success');
     } catch (err: any) {
       addToast(err.message || '确认失败', 'error');
     }
-  }, [checkpoint, addToast]);
+  }, [checkpoint, addToast, setPipelineCheckpoint]);
 
   const handleCheckpointDeny = useCallback(async () => {
     if (!checkpoint) return;
     try {
       await pipelineApi.cancel(checkpoint.runId);
-      setCheckpoint(null);
+      setPipelineCheckpoint(null);
       addToast('已取消发布', 'info');
     } catch (err: any) {
       addToast(err.message || '取消失败', 'error');
     }
-  }, [checkpoint, addToast]);
+  }, [checkpoint, addToast, setPipelineCheckpoint]);
 
   const handleDecision = useCallback(async (optionId: string) => {
     if (!decisionReq || deciding) return;
     setDeciding(true);
     try {
       await pipelineApi.decide(decisionReq.runId, optionId);
-      setDecisionReq(null);
+      setPipelineDecisionReq(null);
       addToast(`已选择: ${optionId}`, 'success');
     } catch (err: any) {
       addToast(err.message || '提交决策失败', 'error');
     } finally {
       setDeciding(false);
     }
-  }, [decisionReq, deciding, addToast]);
+  }, [decisionReq, deciding, addToast, setPipelineDecisionReq]);
 
   const handleDecisionCancel = useCallback(async () => {
     if (!decisionReq || deciding) return;
     setDeciding(true);
     try {
       await pipelineApi.decide(decisionReq.runId, '');
-      setDecisionReq(null);
+      setPipelineDecisionReq(null);
       addToast('已跳过决策', 'info');
     } catch (err: any) {
       addToast(err.message || '跳过决策失败', 'error');
     } finally {
       setDeciding(false);
     }
-  }, [decisionReq, deciding, addToast]);
+  }, [decisionReq, deciding, addToast, setPipelineDecisionReq]);
 
   const handleRunAgain = useCallback(() => {
-    setSummary(null);
-    setError(null);
-    setEvents([]);
-    setCurrentStep(null);
-    setStepProgress(null);
-  }, []);
+    resetPipelineState();
+  }, [resetPipelineState]);
 
   // ── 历史详情弹窗 ──
   const [detailRun, setDetailRun] = useState<RunInfo | null>(null);

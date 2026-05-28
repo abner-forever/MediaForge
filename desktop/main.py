@@ -143,10 +143,24 @@ def _find_available_port(host: str = "127.0.0.1", preferred_port: int = 8765, ma
 
 def _make_loading_html(host: str, port: int) -> str:
     """生成启动加载页面 HTML，自动轮询后端服务直至就绪后跳转。"""
+    import base64
     target_url = f"http://{host}:{port}"
     path = _resolve_loading_html_path()
     html = path.read_text(encoding="utf-8")
-    return html.replace("__TARGET_URL__", target_url)
+    html = html.replace("__TARGET_URL__", target_url)
+
+    # 将 logo.png 转为 base64 data URL，确保 PyWebView 的 html 模式下能正常显示
+    logo_candidates = [
+        path.parent / "assets" / "logo.png",
+        path.parent / "static" / "logo.png",
+    ]
+    for logo_path in logo_candidates:
+        if logo_path.exists():
+            logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
+            html = html.replace("./assets/logo.png", f"data:image/png;base64,{logo_b64}")
+            break
+
+    return html
 
 
 def start_server(host: str = "127.0.0.1", port: int = 8765) -> None:

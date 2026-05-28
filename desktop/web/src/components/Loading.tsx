@@ -5,20 +5,86 @@ interface LoadingProps {
   inline?: boolean;
 }
 
-const variants = {
-  sm: { v: 16, s: 2, r: 6, arc: 'M8 2a6 6 0 0 1 6 6' },
-  md: { v: 24, s: 3, r: 10, arc: 'M12 2a10 10 0 0 1 10 10' },
-  lg: { v: 36, s: 4, r: 15, arc: 'M18 3a15 15 0 0 1 15 15' },
+const sizeConfig = {
+  sm: { wrapper: 32, ring: 24, ring2: 28 },
+  md: { wrapper: 48, ring: 36, ring2: 42 },
+  lg: { wrapper: 64, ring: 48, ring2: 56 },
 };
 
 export default function Loading({ text, size = 'md', className = '', inline }: LoadingProps) {
-  const { v, s, r, arc } = variants[size];
+  const config = sizeConfig[size];
 
   const spinner = (
-    <svg className="animate-spin text-accent" viewBox={`0 0 ${v} ${v}`} width={v} height={v} fill="none">
-      <circle cx={v/2} cy={v/2} r={r} stroke="currentColor" strokeWidth={s} strokeLinecap="round" opacity="0.2" />
-      <path d={arc} stroke="currentColor" strokeWidth={s} strokeLinecap="round" />
-    </svg>
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: config.wrapper, height: config.wrapper }}
+    >
+      {/* 外环 - 逆时针 */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: config.ring2,
+          height: config.ring2,
+          animation: 'loading-outer 3s linear infinite',
+        }}
+      >
+        <svg className="w-full h-full" viewBox="0 0 42 42">
+          <circle
+            cx="21" cy="21" r="18"
+            fill="none"
+            stroke="rgba(59, 130, 246, 0.2)"
+            strokeWidth="2.5"
+          />
+          <circle
+            cx="21" cy="21" r="18"
+            fill="none"
+            stroke="url(#loadOuter)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray="80 113"
+          />
+          <defs>
+            <linearGradient id="loadOuter" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
+      {/* 内环 - 顺时针 */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: config.ring,
+          height: config.ring,
+          animation: 'loading-inner 2s linear infinite',
+        }}
+      >
+        <svg className="w-full h-full" viewBox="0 0 36 36">
+          <circle
+            cx="18" cy="18" r="15"
+            fill="none"
+            stroke="rgba(139, 92, 246, 0.15)"
+            strokeWidth="3"
+          />
+          <circle
+            cx="18" cy="18" r="15"
+            fill="none"
+            stroke="url(#loadInner)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray="50 94"
+          />
+          <defs>
+            <linearGradient id="loadInner" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#8b5cf6" />
+              <stop offset="100%" stopColor="#ec4899" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    </div>
   );
 
   if (inline) {
@@ -31,9 +97,21 @@ export default function Loading({ text, size = 'md', className = '', inline }: L
   }
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-3 ${className}`}>
-      <div className="animate-scale">{spinner}</div>
-      {text && <span className="text-sm text-text-muted animate-in">{text}</span>}
-    </div>
+    <>
+      <style>{`
+        @keyframes loading-inner {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes loading-outer {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
+        }
+      `}</style>
+      <div className={`flex flex-col items-center justify-center gap-3 ${className}`}>
+        {spinner}
+        {text && <span className="text-sm text-text-muted">{text}</span>}
+      </div>
+    </>
   );
 }

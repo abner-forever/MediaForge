@@ -750,6 +750,11 @@ input[type="range"] { display: none; }
   to { opacity: 0; }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .animate-in { animation: fadeIn 0.25s var(--ease-out) both; }
 .animate-out { animation: fadeOut 0.2s var(--ease-out) both; }
 .animate-up { animation: slideUp 0.35s var(--ease-out) both; }

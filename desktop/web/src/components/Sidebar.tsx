@@ -42,6 +42,7 @@ export default function Sidebar() {
   const wechatRefreshKey = useStore(s => s.wechatRefreshKey);
   const width = useStore(s => s.sidebarWidth);
   const setWidth = useStore(s => s.setSidebarWidth);
+  const pipelineRunning = useStore(s => s.pipelineRunning);
   const [isDragging, setIsDragging] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
@@ -154,25 +155,54 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav style={{ flex: 1, padding: collapsed ? '0 6px' : '0 10px' }}>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/'}
-            className={({ isActive }) =>
-              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium ${
-                isActive
-                  ? 'nav-active'
-                  : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
-              }`
-            }
-            style={{ marginBottom: 2, textDecoration: 'none' }}
-            title={collapsed ? item.label : undefined}
-          >
-            {item.icon}
-            {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const isPipelineRunning = item.path === '/pipeline' && pipelineRunning;
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/'}
+              className={({ isActive }) =>
+                `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium ${
+                  isActive
+                    ? 'nav-active'
+                    : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
+                }`
+              }
+              style={{ marginBottom: 2, textDecoration: 'none', position: 'relative' }}
+              title={collapsed ? item.label : undefined}
+            >
+              <div style={{ position: 'relative' }}>
+                {item.icon}
+                {isPipelineRunning && (
+                  <div style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -2,
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    border: '2px solid var(--bg-sidebar)',
+                    animation: 'pulse 2s infinite',
+                  }} />
+                )}
+              </div>
+              {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
+              {isPipelineRunning && !collapsed && (
+                <span style={{
+                  marginLeft: 'auto',
+                  fontSize: 10,
+                  color: 'var(--accent)',
+                  fontWeight: 600,
+                  letterSpacing: '0.05em',
+                }}>
+                  运行中
+                </span>
+              )}
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Bottom */}

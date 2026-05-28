@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Post, ScoreInfo, QueueItem, ArticleItem, InspirationTopic, MaterialsData, TreeNode, BrowseFolder, BrowseFile } from '../api/client';
+import type { Post, ScoreInfo, QueueItem, ArticleItem, InspirationTopic, MaterialsData, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary } from '../api/client';
 import { settingsApi, logsApi } from '../api/client';
 
 /* ── Theme Presets ──────────────────────────── */
@@ -128,6 +128,36 @@ interface AppState {
   // Pipeline running state (global, persists across page navigation)
   pipelineRunning: boolean;
   setPipelineRunning: (running: boolean) => void;
+
+  // Pipeline SSE state (persists across page navigation)
+  pipelineEvents: PipelineEvent[];
+  pipelineCurrentStep: string | null;
+  pipelineStepProgress: { current: number; total: number } | null;
+  pipelineSummary: PipelineSummary | null;
+  pipelineError: string | null;
+  pipelineCheckpoint: {
+    message: string;
+    runId: string;
+    items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }>;
+  } | null;
+  pipelineDecisionReq: {
+    message: string;
+    runId: string;
+    options: Array<{ id: string; label: string }>;
+    context?: Record<string, unknown>;
+  } | null;
+  // AbortController stored globally so cancel works across page navigations
+  pipelineAbortController: AbortController | null;
+  setPipelineAbortController: (controller: AbortController | null) => void;
+  setPipelineEvents: (events: PipelineEvent[]) => void;
+  addPipelineEvent: (evt: PipelineEvent) => void;
+  setPipelineCurrentStep: (step: string | null) => void;
+  setPipelineStepProgress: (progress: { current: number; total: number } | null) => void;
+  setPipelineSummary: (summary: PipelineSummary | null) => void;
+  setPipelineError: (error: string | null) => void;
+  setPipelineCheckpoint: (checkpoint: { message: string; runId: string; items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }> } | null) => void;
+  setPipelineDecisionReq: (req: { message: string; runId: string; options: Array<{ id: string; label: string }>; context?: Record<string, unknown> } | null) => void;
+  resetPipelineState: () => void;
 
   // Article sidebar state (persisted)
   sidebarOpen: boolean;
@@ -425,6 +455,42 @@ export const useStore = create<AppState>((set, get) => ({
   // Pipeline running state
   pipelineRunning: false,
   setPipelineRunning: (running) => set({ pipelineRunning: running }),
+
+  // Pipeline SSE state
+  pipelineEvents: [],
+  pipelineCurrentStep: null,
+  pipelineStepProgress: null,
+  pipelineSummary: null,
+  pipelineError: null,
+  pipelineCheckpoint: null,
+  pipelineDecisionReq: null,
+  pipelineAbortController: null,
+  setPipelineAbortController: (controller) => set({ pipelineAbortController: controller }),
+  setPipelineEvents: (events) => set({ pipelineEvents: events }),
+  addPipelineEvent: (evt) => set((s) => ({ pipelineEvents: [...s.pipelineEvents, evt] })),
+  setPipelineCurrentStep: (step) => set({ pipelineCurrentStep: step }),
+  setPipelineStepProgress: (progress) => set({ pipelineStepProgress: progress }),
+  setPipelineSummary: (summary) => set({ pipelineSummary: summary }),
+  setPipelineError: (error) => set({ pipelineError: error }),
+  setPipelineCheckpoint: (checkpoint) => set({ pipelineCheckpoint: checkpoint }),
+  setPipelineDecisionReq: (req) => set({ pipelineDecisionReq: req }),
+  resetPipelineState: () => {
+    const controller = get().pipelineAbortController;
+    if (controller) {
+      controller.abort();
+    }
+    set({
+      pipelineRunning: false,
+      pipelineEvents: [],
+      pipelineCurrentStep: null,
+      pipelineStepProgress: null,
+      pipelineSummary: null,
+      pipelineError: null,
+      pipelineCheckpoint: null,
+      pipelineDecisionReq: null,
+      pipelineAbortController: null,
+    });
+  },
 
   // Article sidebar state (persisted)
   sidebarOpen: getInitialSidebarOpen(),
