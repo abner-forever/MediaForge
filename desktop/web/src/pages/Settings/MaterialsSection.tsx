@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { SettingsData } from '../../api/client';
+import { settingsApi, type SettingsData } from '../../api/client';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 
@@ -16,8 +16,7 @@ export default function MaterialsSection({ data, save }: { data: SettingsData; s
   async function handleBrowse() {
     setBrowsing(true);
     try {
-      const res = await fetch('/api/pick-folder');
-      const { path } = await res.json();
+      const { path } = await settingsApi.pickFolder();
       if (path) setMaterialsPath(path);
     } catch (err: any) {
       addToast(err.message || '选择文件夹失败', 'error');

@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useStore } from '../../stores';
 import { discoveryApi, downloadStream, queueApi, settingsApi, searchStream, platformApi, PlatformMeta } from '../../api/client';
 import Select from '../../components/Select';
 import NumberInput from '../../components/NumberInput';
 import SearchLoadingOverlay from '../../components/SearchLoadingOverlay';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import HelpGuide from '../../components/ui/HelpGuide';
 import { useLoading } from '../../hooks/useLoading';
 import { fmtTime, imgSrc, thumbSrc, lightboxSrc } from './utils';
 import SearchParams from './SearchParams';
@@ -19,11 +20,17 @@ export default function Discovery() {
     setImageScores, toggleImageSelect, selectAllImages, clearSelectedImages,
     openLightbox, addToast, setProgress,
     recommendedCelebs, setRecommendedCelebs,
-    discoveryCelebs: celebs, setDiscoveryCelebs: setCelebs,
-    discoveryTags: tags, setDiscoveryTags: setTags,
-    discoverySuperTopics: superTopics, setDiscoverySuperTopics: setSuperTopics,
-    discoveryToutiaoKeywords: toutiaoKeywords, setDiscoveryToutiaoKeywords: setToutiaoKeywords,
+    discoveryCelebs: celebs, setDiscoveryCelebs: _setCelebs,
+    discoveryTags: tags, setDiscoveryTags: _setTags,
+    discoverySuperTopics: superTopics, setDiscoverySuperTopics: _setSuperTopics,
+    discoveryToutiaoKeywords: toutiaoKeywords, setDiscoveryToutiaoKeywords: _setToutiaoKeywords,
   } = store;
+
+  const markEdited = useCallback(() => { userEditedRef.current = true; }, []);
+  const setCelebs = useCallback((v: string) => { markEdited(); _setCelebs(v); }, [markEdited, _setCelebs]);
+  const setTags = useCallback((v: string) => { markEdited(); _setTags(v); }, [markEdited, _setTags]);
+  const setSuperTopics = useCallback((v: string) => { markEdited(); _setSuperTopics(v); }, [markEdited, _setSuperTopics]);
+  const setToutiaoKeywords = useCallback((v: string) => { markEdited(); _setToutiaoKeywords(v); }, [markEdited, _setToutiaoKeywords]);
 
   const [platform, setPlatform] = useState('weibo');
   const [platforms, setPlatforms] = useState<Record<string, PlatformMeta>>({});
@@ -40,6 +47,7 @@ export default function Discovery() {
   const [activeTab, setActiveTab] = useState<'posts' | 'gallery'>('posts');
   const [recommending, setRecommending] = useState(false);
   const searchAbortRef = useRef<AbortController | null>(null);
+  const userEditedRef = useRef(false);
 
   const { loading: scoring, withLoading: withScoring } = useLoading();
   const { loading: downloading, withLoading: withDownloading } = useLoading();
@@ -55,11 +63,13 @@ export default function Discovery() {
       setPlatforms(p.platforms);
       const def = p.default || 'weibo';
       if (p.platforms[def]) { setPlatform(def); setMode(p.platforms[def].default_fetch_mode); }
-      if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
-      if (s.weibo_search_tags) setTags(s.weibo_search_tags);
-      if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
-      if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
-      if (s.xhs_search_tags && def === 'xhs') setTags(s.xhs_search_tags);
+      if (!userEditedRef.current) {
+        if (s.weibo_celebrities) setCelebs(s.weibo_celebrities);
+        if (s.weibo_search_tags) setTags(s.weibo_search_tags);
+        if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
+        if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
+        if (s.xhs_search_tags && def === 'xhs') setTags(s.xhs_search_tags);
+      }
       if (s.post_limit) setLimit(s.post_limit);
     }).catch(() => {});
   }, []);
@@ -263,16 +273,26 @@ export default function Discovery() {
   return (
     <div className="py-6 px-4 max-w-[1280px] mx-auto space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-text tracking-tight flex items-center gap-2.5">
-          <svg className="w-6 h-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-          </svg>
-          图片发现
-        </h1>
-        <p className="text-sm text-text-muted mt-1">
-          从各平台搜索美图，AI 智能评分筛选，一键下载并加入发布队列
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-text tracking-tight flex items-center gap-2.5">
+            <svg className="w-6 h-6 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+            </svg>
+            图片发现
+          </h1>
+          <p className="text-sm text-text-muted mt-1">
+            从各平台搜索美图，AI 智能评分筛选，一键下载并加入发布队列
+          </p>
+        </div>
+        <HelpGuide title="图片发现 — 使用说明">
+          <p><b>1. 选择平台与模式</b>：顶部选择内容来源（微博/头条/小红书等），以及搜索模式（按艺人、标签、关键词等）。</p>
+          <p><b>2. 设置筛选条件</b>：输入艺人名或关键词，可设置页数和每页数量。开启「过滤水印」可自动跳过带水印的图片。</p>
+          <p><b>3. 搜索与浏览</b>：点击「搜索」后结果以帖子卡片展示，可切换「帖子」和「图片墙」两种视图。</p>
+          <p><b>4. 选择图片</b>：勾选帖子或单张图片，底部操作栏可一键「AI 评分」「下载到本地」「加入发布队列」。</p>
+          <p><b>5. AI 评分</b>：对选中图片调用 Vision API 打分（0-100），按分数排序帮助筛选高质量图片。</p>
+          <p><b>6. 快捷操作</b>：点击图片可放大预览，支持左右键翻页；长按帖子卡片可快速全选该帖所有图片。</p>
+        </HelpGuide>
       </div>
 
       <SearchParams
@@ -435,6 +455,7 @@ export default function Discovery() {
       )}
 
       {searching && <SearchLoadingOverlay message={searchMessage} platformName={activePlatform?.name} onCancel={cancelSearch} />}
+      {enqueuing && <SearchLoadingOverlay title="正在加入发布队列" message={`已选 ${selectedImages.length} 张图片，正在处理…`} />}
 
       <ConfirmDialog open={removeConfirmIndex !== null} title="删除帖子" message={`确认删除第 ${removeConfirmIndex !== null ? removeConfirmIndex + 1 : ''} 条帖子？`} confirmText="删除" danger onConfirm={() => { if (removeConfirmIndex !== null) removePost(removeConfirmIndex); setRemoveConfirmIndex(null); }} onCancel={() => setRemoveConfirmIndex(null)} />
       <ConfirmDialog open={clearConfirm} title="清除搜索结果" message="确认清除所有搜索结果？" confirmText="清除" danger noLoading onConfirm={() => { setClearConfirm(false); clearDiscovery(); }} onCancel={() => setClearConfirm(false)} />
