@@ -177,6 +177,7 @@ async def pipeline_run_detail(run_id: str):
     try:
         lines = path.read_text(encoding="utf-8").strip().splitlines()
         events = [json.loads(line) for line in lines if line.strip()]
-    except Exception:
+    except Exception as e:
+        _req_logger.error("读取运行记录失败 %s: %s", run_id, e)
         raise HTTPException(500, "读取运行记录失败")
     return {"run_id": run_id, "events": events}

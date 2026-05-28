@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ from desktop.app_state import app_state
 from desktop.sse_helpers import create_sse_response
 
 router = APIRouter(tags=["wechat"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/wechat/accounts")
@@ -107,6 +109,22 @@ async def wechat_account_login(account_id: str):
     return create_sse_response(_task)
 
 
+@router.get("/api/wechat/accounts/{account_id}/sync-effects")
+async def sync_effects(account_id: str, pages: int = 1):
+    """从公众号后台抓取已发布文章的真实阅读数据，同步到本地效果记录。通过 SSE 流式返回进度。"""
+    from utils.wechat_auth_store import get_account
+    pages = max(1, min(50, int(pages)))
+    account = get_account(account_id)
+    if not account:
+        raise HTTPException(404, "账号不存在")
+
+    def _task(msg_queue):
+        from services.wechat.fetcher import fetch_published_articles
+        fetch_published_articles(account_id, msg_queue, pages=pages)
+
+    return create_sse_response(_task)
+
+
 @router.post("/api/wechat/accounts/{account_id}/logout")
 async def wechat_account_logout(account_id: str):
     """清除指定公众号的登录态。"""
@@ -128,8 +146,8 @@ async def wechat_account_logout(account_id: str):
                 )
                 context.clear_cookies()
                 context.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("清除浏览器状态失败: %s", e)
 
     if profile_dir.exists():
         await asyncio.to_thread(_clear_browser_state)

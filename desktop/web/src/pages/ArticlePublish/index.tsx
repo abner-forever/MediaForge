@@ -15,6 +15,7 @@ import CoverSection from './CoverSection';
 import InspirationPanel from './InspirationPanel';
 import { coverImageUrl, fmtTime } from './utils';
 import type { TabKey } from './utils';
+import HelpGuide from '../../components/ui/HelpGuide';
 
 const ARTICLE_TEMPLATES = [
   { id: 'gallery', name: '图片合集模板', type: '图片合集', tone: '轻松、有画面感', wordCount: '300-500 字', subtitles: true, gallery: true, prompt: '开头点明主题，中段用 3-5 个小标题串联图片亮点，结尾引导读者收藏或留言。' },
@@ -345,6 +346,15 @@ export default function ArticlePublish() {
           文章发布
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <HelpGuide title="文章发布 — 使用说明">
+            <p><b>1. 创建文章</b>：点击「新建文章」从空白开始，或选择右侧模板快速生成（图片合集、明星动态、穿搭解析等）。</p>
+            <p><b>2. AI 辅助写作</b>：使用工具栏的 AI 功能 —「生成文章」自动创作、「润色」优化表达、「去 AI 味」让文字更自然、「排版优化」美化格式。</p>
+            <p><b>3. 标题生成</b>：点击「生成标题」获取多个候选标题，可选择安全型、吸引点击型、温和型等不同风格。</p>
+            <p><b>4. 封面与配图</b>：在「封面」区域选择或上传封面图，拖拽调整文章中的图片顺序。</p>
+            <p><b>5. 保存与发布</b>：「保存草稿」存为本地草稿可继续编辑；「加入队列」进入发布队列等待发布；「直接发布」立即推送到公众号。</p>
+            <p><b>6. 效果追踪</b>：已发布的文章可录入阅读量、点赞等数据，后续在「效果分析」页面查看趋势。</p>
+            <p><b>7. 灵感面板</b>：右侧灵感面板可搜索热门话题，一键将素材图片导入文章。</p>
+          </HelpGuide>
           {editingId && (
             <button onClick={resetEditor} style={{
               fontSize: 12, fontWeight: 500, color: 'var(--text-muted)',

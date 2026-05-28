@@ -315,7 +315,7 @@ def run_xhs_login(msg_queue: Queue) -> None:
 
             if screen_name:
                 msg_queue.put(("progress", f"小红书用户：{screen_name}"))
-            msg_queue.put(("done", cookie_str, uid, screen_name, avatar))
+            msg_queue.put(("done", {"cookie": cookie_str, "uid": uid, "screen_name": screen_name, "avatar": avatar}))
 
     except Exception as exc:
         logger.exception("小红书登录流程异常")

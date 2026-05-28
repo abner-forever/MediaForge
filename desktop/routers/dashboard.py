@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from desktop.app_state import app_state
 from services.platforms import get_platform
 
 router = APIRouter(tags=["dashboard"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/dashboard/health")
@@ -69,7 +71,8 @@ async def recent_runs():
         try:
             lines = run_file.read_text(encoding="utf-8").strip().splitlines()
             events = [json.loads(line) for line in lines if line.strip()]
-        except Exception:
+        except Exception as e:
+            logger.debug("解析运行记录失败 %s: %s", run_file.name, e)
             continue
         start = next((e for e in events if e.get("event") == "run_started"), None)
         finish = next((e for e in events if e.get("event") == "run_finished"), None)

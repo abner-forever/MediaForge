@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from pathlib import Path
@@ -28,6 +29,7 @@ from services.ai import generate_content, strip_emoji
 from services.extensions import select_cover
 
 router = APIRouter(tags=["queue"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/queue")
@@ -79,19 +81,42 @@ async def remove_from_queue(item_id: str, delete_local: bool = Query(False)):
                 full_path = Path(img_path) if Path(img_path).is_absolute() else DOWNLOAD_DIR / img_path
                 if full_path.exists():
                     full_path.unlink()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("删除图片文件失败: %s", e)
         if images:
             try:
                 first = Path(images[0]) if Path(images[0]).is_absolute() else DOWNLOAD_DIR / images[0]
                 post_dir = first.parent
                 if post_dir.exists() and post_dir != DOWNLOAD_DIR and not any(post_dir.iterdir()):
                     post_dir.rmdir()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("删除空目录失败: %s", e)
     if app_state.remove_from_queue_by_id(item_id):
         return {"success": True, "queue": app_state.get_queue()}
     raise HTTPException(404, "队列项不存在")
+
+
+@router.delete("/api/queue/{item_id}/image")
+async def remove_image_from_queue(item_id: str, image_path: str = Query(...), delete_local: bool = Query(False)):
+    item = app_state.get_queue_item_by_id(item_id)
+    if not item:
+        raise HTTPException(404, "队列项不存在")
+    images = list(item.get("images", []))
+    if image_path not in images:
+        raise HTTPException(404, "图片不存在")
+    images.remove(image_path)
+    updates: dict = {"images": images}
+    if item.get("cover") == image_path:
+        updates["cover"] = images[0] if images else ""
+    if delete_local:
+        try:
+            full_path = Path(image_path) if Path(image_path).is_absolute() else DOWNLOAD_DIR / image_path
+            if full_path.exists():
+                full_path.unlink()
+        except Exception as e:
+            logger.debug("删除图片文件失败: %s", e)
+    app_state.update_queue_item_by_id(item_id, updates)
+    return {"success": True, "queue": app_state.get_queue()}
 
 
 @router.post("/api/queue/{item_id}/generate")

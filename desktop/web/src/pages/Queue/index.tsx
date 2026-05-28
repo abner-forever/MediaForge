@@ -5,10 +5,15 @@ import type { WeChatAccount } from '../../api/client';
 import { formatTime } from './utils';
 import QueueCard from './QueueCard';
 import Select from '../../components/Select';
+import HelpGuide from '../../components/ui/HelpGuide';
 
 const STATUS_LABELS: Record<string, string> = {
+  draft: '草稿',
+  reviewing: '审核中',
+  queued: '排队中',
   saved: '保存成功',
   saved_to_wechat: '公众号草稿',
+  publishing: '发布中',
   published: '已发布',
   failed: '发布失败',
 };
@@ -52,9 +57,19 @@ export default function Queue() {
 
   return (
     <div className="space-y-6 animate-in">
-      <div>
-        <h1 className="text-2xl font-bold text-text tracking-tight">发布队列{queue.length > 0 && <span className="text-text-muted font-normal text-base ml-2">共 {queue.length} 项</span>}</h1>
-        <p className="text-sm text-text-secondary mt-1">预览和发布图文内容到公众号</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-text tracking-tight">发布队列{queue.length > 0 && <span className="text-text-muted font-normal text-base ml-2">共 {queue.length} 项</span>}</h1>
+          <p className="text-sm text-text-secondary mt-1">预览和发布图文内容到公众号</p>
+        </div>
+        <HelpGuide title="发布队列 — 使用说明">
+          <p><b>1. 队列概览</b>：所有待发布内容按时间排列，每张卡片显示标题、封面图、图片数量和当前状态。</p>
+          <p><b>2. 筛选与排序</b>：顶部可按公众号账号、内容类型（图文/文章）、状态（待发布/已发布/失败）筛选。</p>
+          <p><b>3. 预览内容</b>：展开卡片可预览完整标题、图片列表和文章摘要，确认无误后再发布。</p>
+          <p><b>4. 发布操作</b>：点击卡片上的「发布」按钮将内容推送到绑定的公众号。发布过程中请勿关闭程序。</p>
+          <p><b>5. 效果录入</b>：已发布的项目可录入阅读量、点赞、评论等数据，用于后续效果分析。</p>
+          <p><b>6. 编辑与删除</b>：可编辑队列项的标题和图片顺序，或将其从队列中移除。</p>
+        </HelpGuide>
       </div>
 
       {accounts.length > 0 && (

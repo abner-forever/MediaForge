@@ -15,7 +15,7 @@ export type {
   WeChatAccount, WeChatLoginEvent, PublishHistoryItem,
   PipelineConfig, PipelineEvent, PipelineSummary,
   DuplicateCheckResult,
-  PublishEffect,
+  PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareItem, EffectCompareData, MpArticlesResponse,
   WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult,
   XHSLoginEvent, XHSVerifyResult,
 } from '../types';

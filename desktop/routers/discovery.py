@@ -269,7 +269,8 @@ async def get_trending_celebrities():
         loop = asyncio.get_event_loop()
         celebs = await loop.run_in_executor(None, recommend_celebrities)
         return {"celebrities": celebs}
-    except Exception:
+    except Exception as e:
+        _req_logger.warning("AI 推荐热门明星失败，使用兜底列表: %s", e)
         fallback = ["迪丽热巴", "杨幂", "赵丽颖", "刘亦菲", "杨紫", "白鹿", "虞书欣", "赵露思", "关晓彤", "周也"]
         return {"celebrities": fallback}
 
@@ -360,8 +361,8 @@ async def check_watermark(paths: List[str]):
             corner_ratio, bottom_ratio = watermark_metrics(str(full))
             if corner_ratio >= cfg.watermark_corner_ratio or bottom_ratio >= cfg.watermark_bottom_ratio:
                 watermarked.append(p)
-        except Exception:
-            pass
+        except Exception as e:
+            _req_logger.debug("水印检测失败 %s: %s", p, e)
     return {"watermarked": watermarked}
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ from services.weibo_login import run_weibo_login
 from services.xhs_login import run_xhs_login
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 # ── 登录 SSE 流 ─────────────────────────────────────
@@ -36,14 +38,20 @@ async def weibo_login_stream():
         run_weibo_login(msg_queue)
 
     def _on_done(msg):
-        _, cookie, uid, screen_name, avatar = msg if len(msg) >= 5 else (*msg, "", "", "")
+        data = msg[1] if len(msg) > 1 and isinstance(msg[1], dict) else {}
+        cookie = data.get("cookie", "")
         if cookie:
             from utils.weibo_auth_store import write_weibo_auth
-            write_weibo_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
+            write_weibo_auth(
+                cookie=cookie,
+                uid=data.get("uid", ""),
+                screen_name=data.get("screen_name", ""),
+                avatar=data.get("avatar", ""),
+            )
             from config import reload_settings
             reload_settings()
 
-    return create_sse_response(_task)
+    return create_sse_response(_task, on_done=_on_done)
 
 
 @router.get("/api/settings/toutiao-login-stream")
@@ -53,7 +61,21 @@ async def toutiao_login_stream():
     def _task(msg_queue):
         run_toutiao_login(msg_queue)
 
-    return create_sse_response(_task)
+    def _on_done(msg):
+        data = msg[1] if len(msg) > 1 and isinstance(msg[1], dict) else {}
+        cookie = data.get("cookie", "")
+        if cookie:
+            from utils.toutiao_auth_store import write_toutiao_auth
+            write_toutiao_auth(
+                cookie=cookie,
+                uid=data.get("uid", ""),
+                screen_name=data.get("screen_name", ""),
+                avatar=data.get("avatar", ""),
+            )
+            from config import reload_settings
+            reload_settings()
+
+    return create_sse_response(_task, on_done=_on_done)
 
 
 @router.get("/api/settings/xhs-login-stream")
@@ -63,7 +85,21 @@ async def xhs_login_stream():
     def _task(msg_queue):
         run_xhs_login(msg_queue)
 
-    return create_sse_response(_task)
+    def _on_done(msg):
+        data = msg[1] if len(msg) > 1 and isinstance(msg[1], dict) else {}
+        cookie = data.get("cookie", "")
+        if cookie:
+            from utils.xhs_auth_store import write_xhs_auth
+            write_xhs_auth(
+                cookie=cookie,
+                uid=data.get("uid", ""),
+                screen_name=data.get("screen_name", ""),
+                avatar=data.get("avatar", ""),
+            )
+            from config import reload_settings
+            reload_settings()
+
+    return create_sse_response(_task, on_done=_on_done)
 
 
 # ── Cookie 验证 ─────────────────────────────────────
@@ -152,8 +188,6 @@ async def toutiao_verify(body: Dict[str, Any] | None = None):
 
     def _verify():
         try:
-            from utils.logger import get_logger
-            logger = get_logger(__name__)
             headers = {
                 "User-Agent": (
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -182,8 +216,8 @@ async def toutiao_verify(body: Dict[str, Any] | None = None):
                         screen_name = user_data.get("name", "") or user_data.get("screen_name", "")
                         avatar = user_data.get("avatar_url", "") or user_data.get("avatar", "")
                         uid = user_data.get("user_id", "") or str(user_data.get("id", ""))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("头条 pgc API 获取用户信息失败: %s", e)
 
             # 尝试 mp.toutiao.com 创作者中心 API
             if not screen_name:
@@ -205,8 +239,8 @@ async def toutiao_verify(body: Dict[str, Any] | None = None):
                             avatar = data.get("avatar_url", "") or avatar
                             uid = str(data.get("user_id", "")) or str(data.get("media_id", "")) or uid
                             logger.info("创作者中心 API 获取到用户信息: %s", screen_name)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("头条创作者中心 API 失败: %s", e)
 
             # 兜底：从页面内容提取用户信息
             if not screen_name:
@@ -232,8 +266,8 @@ async def toutiao_verify(body: Dict[str, Any] | None = None):
                             if m:
                                 avatar = m.group(1)
                                 break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("头条首页 HTML 提取用户信息失败: %s", e)
 
             if screen_name:
                 from utils.toutiao_auth_store import write_toutiao_auth
@@ -249,8 +283,8 @@ async def toutiao_verify(body: Dict[str, Any] | None = None):
                 )
                 if resp.status_code == 200:
                     return {"valid": True, "uid": uid, "screen_name": "", "avatar": "", "message": "Cookie 有效，但无法获取用户信息"}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("头条连通性检查失败: %s", e)
 
             return {"valid": False, "message": "Cookie 无效或已过期", "uid": uid or "", "screen_name": "", "avatar": ""}
         except Exception as exc:
@@ -316,8 +350,8 @@ async def xhs_verify(body: Dict[str, Any] | None = None):
                         screen_name = user_data.get("nickname", "") or user_data.get("name", "")
                         avatar = user_data.get("avatar", "") or user_data.get("image", "") or ""
                         uid = user_data.get("user_id", "") or str(user_data.get("id", "")) or uid
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("小红书用户信息 API 失败: %s", e)
 
             # 2) 从首页 SSR 提取用户信息
             html = ""
@@ -354,10 +388,10 @@ async def xhs_verify(body: Dict[str, Any] | None = None):
                                         screen_name = sn
                                         avatar = user_data.get("avatar") or user_data.get("image") or ""
                                         uid = user_data.get("userId") or str(user_data.get("id", "")) or uid
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
+                            except Exception as e:
+                                logger.debug("小红书 SSR JSON 解析失败: %s", e)
+                except Exception as e:
+                    logger.debug("小红书首页 SSR 提取失败: %s", e)
 
             # 若缺头像，从首页 HTML 提取
             if not avatar:
@@ -372,8 +406,8 @@ async def xhs_verify(body: Dict[str, Any] | None = None):
                         av_match = re.search(r'"avatar"\s*:\s*"(https?://[^"]+)"', html)
                         if av_match:
                             avatar = av_match.group(1)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("小红书头像提取失败: %s", e)
 
             # 3) 判断关键会话 cookie 是否存在
             has_web_session = "web_session" in cookie

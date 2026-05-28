@@ -10,4 +10,6 @@ export const queueApi = {
   publish: (id: string, opts: { dry_run?: boolean; save_draft?: boolean; account_id?: string }) =>
     post<{ success: boolean; started?: boolean; message: string }>(`/api/queue/${id}/publish`, opts),
   enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
+  removeImage: (id: string, imagePath: string, deleteLocal?: boolean) =>
+    del<{ success: boolean; queue: QueueItem[] }>(`/api/queue/${id}/image?image_path=${encodeURIComponent(imagePath)}${deleteLocal ? '&delete_local=true' : ''}`),
 };

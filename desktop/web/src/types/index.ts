@@ -4,8 +4,8 @@ export type { MaterialsGroup, MaterialsData, TreeNode, BrowseFolder, BrowseFile,
 export type { QueueItem, PublishLogsResponse } from './queue';
 export type { ArticleItem, InspirationTopic, ArticleListResponse, ArticleResponse, ArticleContentResponse, TitleCandidate, InspirationResponse } from './articles';
 export type { SettingsData, PlatformMeta, LogFileInfo, LogContentResponse } from './settings';
-export type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem } from './wechat';
+export type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem, EffectsSyncEvent } from './wechat';
 export type { PipelineConfig, PipelineEvent, PipelineSummary } from './pipeline';
 export type { DuplicateCheckResult } from './compliance';
-export type { PublishEffect } from './effects';
+export type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareItem, EffectCompareData, MpArticlesResponse } from './effects';
 export type { WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult, XHSLoginEvent, XHSVerifyResult } from './auth';

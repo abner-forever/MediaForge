@@ -1,6 +1,6 @@
 import { get, post, del } from './base';
 import { sseGet } from './sse';
-import type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem } from '../types';
+import type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem, EffectsSyncEvent } from '../types';
 
 export const wechatAccountApi = {
   list: () => get<{ accounts: WeChatAccount[] }>('/api/wechat/accounts'),
@@ -15,5 +15,8 @@ export const wechatAccountApi = {
   history: (accountId?: string) => {
     const path = accountId ? `/api/wechat/accounts/${accountId}/history` : '/api/wechat/accounts/history';
     return get<{ items: PublishHistoryItem[]; total: number }>(path);
+  },
+  syncEffects: (accountId: string, onEvent: (evt: EffectsSyncEvent) => void, pages: number = 1): Promise<void> => {
+    return sseGet<EffectsSyncEvent>(`/api/wechat/accounts/${accountId}/sync-effects?pages=${pages}`, onEvent, { flushBuffer: false });
   },
 };

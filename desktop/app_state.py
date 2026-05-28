@@ -257,17 +257,40 @@ class AppState:
         effects = self._ensure_publish_effects()
         if item_id:
             return effects.get(item_id)
+        # 回填缺少 publish_time 的记录（兼容旧数据）
+        dirty = False
+        for eid, eff in effects.items():
+            if not eff.get("publish_time"):
+                queue_item = self.get_queue_item_by_id(eid)
+                eff["publish_time"] = (queue_item or {}).get("time") or eff.get("updated_at") or datetime.now().isoformat(timespec="seconds")
+                dirty = True
+        if dirty:
+            self._save_publish_effects()
         return dict(effects)
 
     def update_publish_effect(self, item_id: str, data: Dict[str, Any]) -> None:
         effects = self._ensure_publish_effects()
         data["updated_at"] = datetime.now().isoformat()
+        # 自动补全 publish_time：优先用入参，否则取队列项的 time，最后兜底当前时间
+        if "publish_time" not in data or not data["publish_time"]:
+            queue_item = self.get_queue_item_by_id(item_id)
+            data["publish_time"] = (queue_item or {}).get("time") or datetime.now().isoformat(timespec="seconds")
         if item_id in effects:
             effects[item_id].update(data)
         else:
             data["item_id"] = item_id
             effects[item_id] = data
         self._save_publish_effects()
+
+    def delete_publish_effects_by_prefix(self, prefix: str) -> int:
+        """删除 key 以指定前缀开头的 effect 记录，返回删除数量。"""
+        effects = self._ensure_publish_effects()
+        keys_to_delete = [k for k in effects if k.startswith(prefix)]
+        for k in keys_to_delete:
+            del effects[k]
+        if keys_to_delete:
+            self._save_publish_effects()
+        return len(keys_to_delete)
 
     # ── 操作记录 ──────────────────────────────────────
     @staticmethod

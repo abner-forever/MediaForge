@@ -331,8 +331,8 @@ async def get_ai_balance(data: dict):
             resp = http_requests.get(f"{base}/dashboard/billing/credit_grants", headers=headers, timeout=timeout)
             if resp.status_code == 200:
                 return {"success": True, "balance": resp.json()}
-        except Exception:
-            pass
+        except Exception as e:
+            _req_logger.debug("OpenAI 余额查询失败: %s", e)
         return {"success": False, "balance": None, "message": "请前往 OpenAI 控制台查看余额"}
 
     guide_urls = {
@@ -365,7 +365,8 @@ async def pick_folder():
                 )
                 path = ret.stdout.strip()
                 return {"path": path if path else ""}
-            except Exception:
+            except Exception as e:
+                _req_logger.debug("macOS 文件夹选择失败: %s", e)
                 return {"path": ""}
         elif sys.platform == "win32":
             import tkinter as tk
@@ -377,7 +378,8 @@ async def pick_folder():
             try:
                 path = filedialog.askdirectory(title="选择素材保存目录", mustexist=True)
                 return {"path": path}
-            except Exception:
+            except Exception as e:
+                _req_logger.debug("Windows 文件夹选择失败: %s", e)
                 return {"path": ""}
             finally:
                 root.destroy()
@@ -390,7 +392,8 @@ async def pick_folder():
             try:
                 path = filedialog.askdirectory(title="选择素材保存目录", mustexist=True)
                 return {"path": path}
-            except Exception:
+            except Exception as e:
+                _req_logger.debug("Linux 文件夹选择失败: %s", e)
                 return {"path": ""}
             finally:
                 root.destroy()

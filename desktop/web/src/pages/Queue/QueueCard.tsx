@@ -19,6 +19,11 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
   const [cover, setCover] = useState(item.cover);
   const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
   const [publishingAction, setPublishingAction] = useState<'draft' | 'publish' | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(() => {
+    const hasLogs = (item.publish_logs || []).length > 0;
+    const isActive = ['publishing'].includes(item.status || '');
+    return isActive || !hasLogs;
+  });
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const isPublished = item.status === 'published';
   const { loading: generating, withLoading: withGenerating } = useLoading();
@@ -152,7 +157,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
-    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); publishRef.current = true; pollReceivedRef.current = false;
+    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); setLogsExpanded(true); publishRef.current = true; pollReceivedRef.current = false;
     const pubPromise = queueApi.publish(itemId, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
@@ -215,7 +220,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
     >
       <div className="flex flex-col md:flex-row">
-        <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 relative">
+        <div className="md:w-48 p-4 bg-accent-softer border-b md:border-b-0 md:border-r border-border-subtle shrink-0 relative md:rounded-bl-xl">
           {seq !== undefined && (
             <div className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center shadow-sm ring-2 ring-bg-card">
               {seq}
@@ -325,22 +330,51 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                     {images.map((img, i) => {
                       const isActive = img === cover;
                       return (
-                        <button key={i} type="button"
-                          className={`relative shrink-0 w-[88px] aspect-[3/4] rounded-lg border-2 overflow-hidden transition-all focus:outline-none ${
-                            isActive
-                              ? 'border-accent shadow-sm'
-                              : 'border-border hover:border-accent/50 hover:shadow-xs'
-                          } ${isPublished ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
-                          onClick={() => { setCover(img); updateField('cover', img); }}
-                          disabled={isPublished}
-                          title={img.split('/').pop() || img}>
-                          <LazyImage src={thumbSrc(img)} alt="" className="w-full h-full object-cover" />
-                          {isActive && (
-                            <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
-                              <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                            </div>
+                        <div key={i} className="relative shrink-0 w-[88px] aspect-[3/4] group/img">
+                          <button type="button"
+                            className={`w-full h-full rounded-lg border-2 overflow-hidden transition-all focus:outline-none ${
+                              isActive
+                                ? 'border-accent shadow-sm'
+                                : 'border-border hover:border-accent/50 hover:shadow-xs'
+                            } ${isPublished ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                            onClick={() => { setCover(img); updateField('cover', img); }}
+                            disabled={isPublished}
+                            title={img.split('/').pop() || img}>
+                            <LazyImage src={thumbSrc(img)} alt="" className="w-full h-full object-cover" />
+                            {isActive && (
+                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
+                                <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              </div>
+                            )}
+                          </button>
+                          {!isPublished && (
+                            <button type="button"
+                              className="absolute top-1 left-1 z-10 w-5 h-5 rounded-full bg-danger/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-danger shadow-sm"
+                              title="删除此图片"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const filename = img.split('/').pop() || img;
+                                const { confirmed, checkboxChecked } = await showConfirm({
+                                  title: '删除图片',
+                                  message: `确认从队列中移除此图片？\n${filename}`,
+                                  confirmText: '删除',
+                                  danger: true,
+                                  checkboxLabel: '同时删除本地资源',
+                                  defaultChecked: true,
+                                });
+                                if (!confirmed) return;
+                                try {
+                                  const r = await queueApi.removeImage(itemId, img, checkboxChecked);
+                                  setQueue(r.queue);
+                                  addToast('已删除图片', 'info');
+                                } catch (err: any) {
+                                  addToast(err.message || '删除失败', 'error');
+                                }
+                              }}>
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -386,20 +420,36 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
           </div>
 
           {(logs.length > 0 || publishingAction) && (
-            <div ref={logContainerRef} className="bg-bg-secondary border border-border rounded-xl p-3 max-h-44 overflow-y-auto">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="bg-bg-secondary border border-border rounded-lg overflow-hidden">
+              <button type="button"
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-muted hover:text-text transition-colors cursor-pointer"
+                onClick={() => setLogsExpanded(v => !v)}>
                 {publishingAction && <span className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse" />}
-                <span className="text-xs font-medium text-text-muted">{publishingAction ? '发布中...' : '发布日志'}</span>
-                {!publishingAction && logs.length > 0 && (
-                  <button className="ml-auto text-xs text-text-muted hover:text-accent transition-colors shrink-0"
-                    onClick={() => { navigator.clipboard.writeText(logs.join('\n')); addToast('日志已复制', 'info'); }}>
-                    复制日志
-                  </button>
-                )}
-              </div>
-              <div className="space-y-0.5 select-text">
-                {logs.map((msg, i) => <div key={i} className="text-xs text-text-secondary font-mono leading-relaxed">{msg}</div>)}
-                <div ref={logEndRef} />
+                <span>{publishingAction ? '发布中...' : '发布日志'}</span>
+                <span className="text-text-muted/50">({logs.length})</span>
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  {!publishingAction && logs.length > 0 && (
+                    <span className="text-text-muted hover:text-accent transition-colors"
+                      onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(logs.join('\n')); addToast('日志已复制', 'info'); }}>
+                      复制
+                    </span>
+                  )}
+                  <svg className={`w-3 h-3 transition-transform duration-200 ${logsExpanded ? 'rotate-0' : '-rotate-90'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </div>
+              </button>
+              <div
+                ref={logContainerRef}
+                className="overflow-y-auto transition-all duration-300 ease-in-out"
+                style={{ maxHeight: logsExpanded ? '11rem' : '0px', opacity: logsExpanded ? 1 : 0, paddingBlock: logsExpanded ? undefined : 0, paddingInline: logsExpanded ? '0.75rem' : '0.75rem' }}
+              >
+                <div className="pb-3">
+                  <div className="space-y-0.5 select-text">
+                    {logs.map((msg, i) => <div key={i} className="text-xs text-text-secondary font-mono leading-relaxed">{msg}</div>)}
+                    <div ref={logEndRef} />
+                  </div>
+                </div>
               </div>
             </div>
           )}

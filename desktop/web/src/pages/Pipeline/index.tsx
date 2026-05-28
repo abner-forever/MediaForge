@@ -4,6 +4,7 @@ import { useStore } from '../../stores';
 import ConfigPanel from './ConfigPanel';
 import ProgressView from './ProgressView';
 import SummaryPanel from './SummaryPanel';
+import HelpGuide from '../../components/ui/HelpGuide';
 
 const PIPELINE_STEPS = [
   { id: 'health_check', label: '健康检查', desc: '验证各项配置与登录状态' },
@@ -305,6 +306,14 @@ export default function PipelinePage() {
                 配置一次即可一键运行，AI 自动完成从内容发现到公众号发布的完整流程
               </p>
             </div>
+            <HelpGuide title="智能流水线 — 使用说明">
+              <p><b>1. 配置参数</b>：左侧面板设置平台、搜索模式、艺人/关键词等参数，与「图片发现」页面类似。</p>
+              <p><b>2. 运行流水线</b>：点击「开始运行」后，系统自动执行 7 个步骤：健康检查 → 抓取帖子 → 下载图片 → AI 评分 → 生成内容 → 加入队列 → 发布。</p>
+              <p><b>3. 实时进度</b>：运行过程中可查看当前步骤、进度百分比和详细日志。每个步骤完成后自动进入下一步。</p>
+              <p><b>4. 决策节点</b>：流水线可能在关键节点暂停等待确认（如选择封面图），请留意黄色提示并做出选择。</p>
+              <p><b>5. 查看结果</b>：运行完成后展示摘要（下载数、评分、生成文章数），可直接跳转到队列页查看结果。</p>
+              <p><b>6. 运行历史</b>：下方「运行历史」记录每次流水线的执行情况，方便回溯和对比。</p>
+            </HelpGuide>
           </div>
 
           {/* 可视化流程概览 */}

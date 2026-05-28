@@ -21,3 +21,10 @@ export interface PublishHistoryItem {
   images_count: number;
   account_id: string;
 }
+
+export interface EffectsSyncEvent {
+  type: 'progress' | 'done' | 'error';
+  message?: string;
+  synced?: number;
+  total?: number;
+}

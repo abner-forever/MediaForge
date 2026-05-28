@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 from typing import Dict, Tuple
@@ -17,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from config import DATA_DIR, DOWNLOAD_DIR, settings
 
 router = APIRouter(tags=["images"])
+logger = logging.getLogger(__name__)
 
 # ── 代理缓存 ──────────────────────────────────────────
 
@@ -49,7 +51,8 @@ def _resize_image(content: bytes, size: int = 320) -> bytes:
         img.save(buf, "JPEG", quality=70)
         buf.seek(0)
         return buf.read()
-    except Exception:
+    except Exception as e:
+        logger.debug("图片压缩失败: %s", e)
         return content
 
 
@@ -70,7 +73,8 @@ async def serve_thumbnail(path: str, size: int = Query(320, alias="size")):
         img.save(buf, "JPEG", quality=70)
         buf.seek(0)
         return Response(content=buf.read(), media_type="image/jpeg")
-    except Exception:
+    except Exception as e:
+        logger.debug("缩略图生成失败: %s", e)
         return FileResponse(str(file_path))
 
 
@@ -90,9 +94,10 @@ _PLATFORM_REFERERS = {
     "weibo": "https://weibo.com/",
     "toutiao": "https://www.toutiao.com/",
     "xhs": "https://www.xiaohongshu.com/",
+    "wechat": "https://mp.weixin.qq.com/",
 }
 
-_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10, "xhs": 10}
+_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10, "xhs": 10, "wechat": 15}
 
 
 @router.get("/proxy")

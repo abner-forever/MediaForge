@@ -1,12 +1,13 @@
 import { createPortal } from 'react-dom';
 
 interface Props {
+  title?: string;
   message?: string;
   platformName?: string;
   onCancel?: () => void;
 }
 
-export default function SearchLoadingOverlay({ message, platformName, onCancel }: Props) {
+export default function SearchLoadingOverlay({ title, message, platformName, onCancel }: Props) {
   return createPortal(
     <div className="fixed inset-0 z-[8000] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in">
       <div className="bg-bg-card border border-border rounded-2xl p-8 text-center min-w-[320px] shadow-xl animate-scale">
@@ -94,7 +95,7 @@ export default function SearchLoadingOverlay({ message, platformName, onCancel }
         </div>
 
         <div className="mt-5 text-sm font-semibold text-text">
-          正在搜索{platformName || ''}内容
+          {title || `正在搜索${platformName || ''}内容`}
         </div>
         {message ? (
           <div className="mt-2 text-xs text-text-muted leading-relaxed max-w-[260px]">

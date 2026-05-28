@@ -14,6 +14,7 @@ const Materials = lazy(() => import('./pages/Materials'));
 const Settings = lazy(() => import('./pages/Settings'));
 const ArticlePublish = lazy(() => import('./pages/ArticlePublish'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
+const Effects = lazy(() => import('./pages/Effects'));
 
 export const appRoutes: AppRoute[] = [
   { path: '/', element: Dashboard },
@@ -21,6 +22,7 @@ export const appRoutes: AppRoute[] = [
   { path: '/pipeline', element: Pipeline },
   { path: '/articles', element: ArticlePublish },
   { path: '/queue', element: Queue, errorBoundary: true },
+  { path: '/effects', element: Effects },
   { path: '/materials', element: Materials },
   { path: '/settings', element: Settings },
 ];

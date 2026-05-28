@@ -203,7 +203,8 @@ async def article_cover_download(req: _CoverDownloadRequest):
                 img = img.resize(new_size, PILImage.LANCZOS)
             img.save(local_path, "JPEG", quality=85, optimize=True)
             img.close()
-        except Exception:
+        except Exception as e:
+            _req_logger.debug("缓存图片处理失败，使用原始数据: %s", e)
             local_path.write_bytes(cached_data)
         rel = local_path.relative_to(DOWNLOAD_DIR).as_posix()
         return {"success": True, "path": rel}
@@ -252,7 +253,8 @@ async def article_cover_download(req: _CoverDownloadRequest):
             img.close()
             temp_path.unlink(missing_ok=True)
             _proxy_cache_set(url, local_path.read_bytes(), "image/jpeg")
-        except Exception:
+        except Exception as e:
+            _req_logger.debug("封面图片优化失败，使用原始文件: %s", e)
             temp_path.rename(local_path)
 
         rel = local_path.relative_to(DOWNLOAD_DIR).as_posix()
@@ -571,21 +573,4 @@ async def check_duplicate_title(title: str = Query("")):
     return {"duplicates": unique[:5]}
 
 
-# ── 发布效果 API ──────────────────────────────────────
-
-
-@router.get("/api/effects/{item_id}")
-async def get_effect(item_id: str):
-    effect = app_state.get_publish_effects(item_id)
-    return {"effect": effect or {}}
-
-
-@router.post("/api/effects/{item_id}")
-async def save_effect(item_id: str, req: dict):
-    app_state.update_publish_effect(item_id, req)
-    return {"success": True, "effect": app_state.get_publish_effects(item_id)}
-
-
-@router.get("/api/effects")
-async def list_effects():
-    return {"effects": app_state.get_publish_effects()}
+# ── 发布效果 API 已迁移至 desktop/routers/effects.py ──
