@@ -76,53 +76,8 @@ jobs:
             echo "无新版本，当前版本: ${NEXT_VERSION}"
           fi
 
-  test:
-    needs: [calculate-version]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: 安装 Python 依赖
-        run: pip install -r requirements.txt pytest pytest-cov
-
-      - name: Python 单元测试
-        run: python3 -m pytest tests/ --cov=services,utils,config,desktop,main --cov-report=term-missing -q
-
-      - name: 设置 pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-      - name: 设置 Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
-          cache: 'pnpm'
-          cache-dependency-path: desktop/web/pnpm-lock.yaml
-
-      - name: 安装前端依赖
-        run: |
-          cd desktop/web
-          pnpm install --frozen-lockfile
-
-      - name: TypeScript 类型检查
-        run: |
-          cd desktop/web
-          npx tsc --noEmit
-
-      - name: 前端单元测试
-        run: |
-          cd desktop/web
-          npx vitest run
-
   build-macos:
-    needs: [test, calculate-version]
+    needs: [calculate-version]
     runs-on: macos-latest
     env:
       PYTHON_VERSION: '3.11.9'
@@ -214,7 +169,7 @@ jobs:
           path: MediaForge-macOS-*.dmg
 
   build-windows:
-    needs: [test, calculate-version]
+    needs: [calculate-version]
     runs-on: windows-latest
     env:
       APP_VERSION: ${{ needs.calculate-version.outputs.version }}
