@@ -83,7 +83,8 @@ rm -f "$DMG_NAME"
 rm -f "$BG_FILE"
 
 cleanup() {
-    hdiutil detach "/Volumes/$VOLNAME" -quiet -force 2>/dev/null || true
+    diskutil unmountDisk force "/Volumes/$VOLNAME" 2>/dev/null || true
+    hdiutil detach "/Volumes/$VOLNAME" -force 2>/dev/null || true
     rm -f "$DMG_TEMP"
     rm -f "$BG_FILE"
 }
@@ -242,7 +243,11 @@ MOUNT="/Volumes/$VOLNAME"
 hdiutil attach \
     "$DMG_TEMP" \
     -noverify \
-    -noautoopen >/dev/null
+    -noautoopen \
+    -nobrowse >/dev/null
+
+# 禁用 Spotlight 索引，防止 CI 环境下 Spotlight 持有卷引用
+mdutil -i off "$MOUNT" 2>/dev/null || true
 
 # ============================================================
 # 拷贝 APP
@@ -346,6 +351,7 @@ fi
 
 echo "      → 同步磁盘..."
 
+sync
 # 等待所有文件操作完成
 sleep 3
 
@@ -355,14 +361,21 @@ sleep 3
 
 echo "  5/5 压缩 DMG..."
 
-# 重试卸载，CI 环境下可能需要多次尝试
+# 杀掉可能持有卷引用的进程
+killall Finder 2>/dev/null || true
+killall mdworker 2>/dev/null || true
+killall mds 2>/dev/null || true
+sleep 1
+
+# 重试卸载，CI 环境下 Spotlight/Finder 可能持有引用
 for i in 1 2 3 4 5; do
-    hdiutil detach "$MOUNT" -quiet -force 2>/dev/null && break
+    diskutil unmountDisk force "$MOUNT" 2>/dev/null && break
+    hdiutil detach "$MOUNT" -force 2>/dev/null && break
     echo "      → 卸载重试 ($i/5)..."
-    sleep 2
+    sleep 3
 done
 
-sleep 1
+sleep 2
 
 hdiutil convert \
     "$DMG_TEMP" \
