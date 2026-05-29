@@ -78,15 +78,7 @@ jobs:
 
   build-macos:
     needs: [calculate-version]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13
-            arch: x86_64
-          - runner: macos-latest
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     env:
       PYTHON_VERSION: '3.11.9'
       APP_VERSION: ${{ needs.calculate-version.outputs.version }}
@@ -114,7 +106,7 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: 安装 Python ${{ matrix.arch }}
+      - name: 安装 Python
         run: |
           curl -L -o python.pkg "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos11.pkg"
           sudo installer -pkg python.pkg -target /
@@ -125,9 +117,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/pip
-          key: ${{ runner.os }}-pip-${{ matrix.arch }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-arm64-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.arch }}-
+            ${{ runner.os }}-pip-arm64-
 
       - name: 安装 Python 依赖
         run: |
@@ -164,17 +156,17 @@ jobs:
           print('icon created: build/app.icns')
           "
 
-      - name: PyInstaller 构建 ${{ matrix.arch }} 应用
+      - name: PyInstaller 构建应用
         run: pyinstaller desktop/build.spec --clean
 
       - name: 创建 DMG（拖拽安装）
         run: |
-          bash desktop/build_dmg.sh "${{ matrix.arch }}" "${APP_VERSION}"
+          bash desktop/build_dmg.sh "arm64" "${APP_VERSION}"
 
       - name: 上传 DMG 构建产物
         uses: actions/upload-artifact@v7
         with:
-          name: MediaForge-macOS-${{ matrix.arch }}
+          name: MediaForge-macOS-arm64
           path: MediaForge-macOS-*.dmg
 
   build-windows:
