@@ -120,16 +120,22 @@ if _env_pw_path:
     _playwright_cache = Path(_env_pw_path)
 
 if _playwright_cache and _playwright_cache.exists():
-    _found_any = False
+    # 只打包最新版本的 chromium（跳过 headless_shell，微信发布不需要）
+    _chromium_dirs = []
     for _entry in sorted(_playwright_cache.iterdir()):
-        if _entry.is_dir():
-            # 只打包 chromium（firefox/webkit 不需要）
-            if 'chromium' in _entry.name:
-                _target = 'ms-playwright/' + _entry.name
-                _all_datas.append((str(_entry), _target))
-                _found_any = True
-                print(f"[build.spec] [OK] Bundling Playwright: {_entry.name}")
-    if not _found_any:
+        if _entry.is_dir() and 'chromium' in _entry.name and 'headless' not in _entry.name:
+            _chromium_dirs.append(_entry)
+
+    if _chromium_dirs:
+        # 只保留最新版本（列表已排序，最后一个版本号最大）
+        _latest = _chromium_dirs[-1]
+        _target = 'ms-playwright/' + _latest.name
+        _all_datas.append((str(_latest), _target))
+        print(f"[build.spec] [OK] Bundling Playwright (latest only): {_latest.name}")
+        if len(_chromium_dirs) > 1:
+            _skipped = [d.name for d in _chromium_dirs[:-1]]
+            print(f"[build.spec] [INFO] Skipping older versions: {', '.join(_skipped)}")
+    else:
         print("[build.spec] [WARN] Playwright Chromium not found, skipping (run 'playwright install chromium' for WeChat publishing)")
 else:
     print("[build.spec] [WARN] Playwright browser cache not found, skipping (run 'playwright install chromium' for WeChat publishing)")
@@ -236,6 +242,33 @@ a = Analysis(
         'torch',
         'numpy',
         'pyarrow',
+        # 不需要的 IDE/交互模块
+        'jedi',
+        'IPython',
+        'ipykernel',
+        'ipywidgets',
+        # 不需要的消息队列/网络模块
+        'zmq',
+        'pyzmq',
+        # 不需要的 GUI 工具包（已有 pywebview）
+        'tkinter',
+        '_tkinter',
+        'tcl',
+        '_tcl_data',
+        '_tk_data',
+        'ttk',
+        # 不需要的测试/调试模块
+        'unittest',
+        'doctest',
+        'pdb',
+        'pydoc',
+        # 其他不需要的模块
+        'xmlrpc',
+        'cgi',
+        'cProfile',
+        'profile',
+        'pty',
+        'pipes',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -255,7 +288,7 @@ if system == 'Darwin':
         name='MediaForge',
         debug=False,
         bootloader_ignore_signals=False,
-        strip=False,
+        strip=True,
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
@@ -299,7 +332,7 @@ elif system == 'Windows':
         name='MediaForge',
         debug=False,
         bootloader_ignore_signals=False,
-        strip=False,
+        strip=True,
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,

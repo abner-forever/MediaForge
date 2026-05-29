@@ -124,6 +124,7 @@ def run_xhs_login(msg_queue: Queue) -> None:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
                 headless=False,
+                channel="chromium",
                 args=["--window-size=1024,768"],
             )
             context = browser.new_context(

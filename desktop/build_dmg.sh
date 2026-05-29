@@ -78,6 +78,18 @@ echo ""
 # 清理
 # ============================================================
 
+# 先卸载可能残留的旧挂载（上次构建中断时可能遗留）
+for _mount in "/Volumes/$VOLNAME" "/Volumes/${VOLNAME} 1"; do
+    if [ -d "$_mount" ]; then
+        hdiutil detach "$_mount" -force 2>/dev/null || true
+    fi
+done
+# 兜底：按卷名查找所有挂载的 disk 并卸载
+_disk_ids=$(hdiutil info 2>/dev/null | grep -B2 "$VOLNAME" | grep "/dev/disk" | awk '{print $1}' | sort -u || true)
+for _disk in $_disk_ids; do
+    hdiutil detach "$_disk" -force 2>/dev/null || true
+done
+
 rm -f "$DMG_TEMP"
 rm -f "$DMG_NAME"
 rm -f "$BG_FILE"

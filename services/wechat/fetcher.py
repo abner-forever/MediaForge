@@ -62,6 +62,7 @@ def fetch_published_articles(
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(profile_dir),
                 headless=True,
+                channel="chromium",
             )
             browser_pages = context.pages
             page = browser_pages[0] if browser_pages else context.new_page()

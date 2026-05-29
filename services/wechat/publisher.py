@@ -78,6 +78,7 @@ def publish_article(
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
                 headless=headless,
+                channel="chromium",
             )
             # 使用浏览器默认打开的页面，避免创建新页面导致出现空白窗口
             pages = context.pages

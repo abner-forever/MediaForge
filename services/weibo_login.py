@@ -82,6 +82,7 @@ def run_weibo_login(msg_queue: Queue) -> None:
             try:
                 browser = pw.chromium.launch(
                     headless=False,
+                    channel="chromium",
                     args=["--window-size=680,820"],
                 )
             except PwError as e:

@@ -48,6 +48,28 @@ ok "Python 依赖已安装"
 # 安装 Playwright 浏览器（用于打包到安装包）
 python3 -m playwright install chromium 2>/dev/null && ok "Playwright Chromium 已就绪" || warn "Playwright Chromium 安装失败，跳过（微信发布功能不可用）"
 
+# 清理旧版 Playwright 浏览器（只保留最新版本，减少打包体积）
+if [ -d "$HOME/Library/Caches/ms-playwright" ]; then
+  PW_CACHE="$HOME/Library/Caches/ms-playwright"
+elif [ -d "$HOME/AppData/Local/ms-playwright" ]; then
+  PW_CACHE="$HOME/AppData/Local/ms-playwright"
+elif [ -d "$HOME/.cache/ms-playwright" ]; then
+  PW_CACHE="$HOME/.cache/ms-playwright"
+fi
+if [ -n "${PW_CACHE:-}" ]; then
+  LATEST_CHROMIUM=$(ls -d "$PW_CACHE"/chromium-[0-9]* 2>/dev/null | sort -t- -k2 -n | tail -1)
+  if [ -n "$LATEST_CHROMIUM" ]; then
+    for dir in "$PW_CACHE"/chromium-[0-9]*; do
+      if [ "$dir" != "$LATEST_CHROMIUM" ]; then
+        rm -rf "$dir" && ok "已清理旧版 Playwright: $(basename "$dir")"
+      fi
+    done
+    for dir in "$PW_CACHE"/chromium_headless_shell-*; do
+      [ -d "$dir" ] && rm -rf "$dir" && ok "已清理 headless_shell: $(basename "$dir")"
+    done
+  fi
+fi
+
 # ── 2. 构建前端 ──────────────────────────────────────
 log "${YELLOW}[3/5]${NC} 构建前端..."
 cd "$PROJECT_ROOT/desktop/web"

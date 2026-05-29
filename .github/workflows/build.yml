@@ -78,7 +78,15 @@ jobs:
 
   build-macos:
     needs: [calculate-version]
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x86_64
+          - runner: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     env:
       PYTHON_VERSION: '3.11.9'
       APP_VERSION: ${{ needs.calculate-version.outputs.version }}
@@ -106,7 +114,7 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: 安装 universal2 Python（支持 Intel + Apple Silicon）
+      - name: 安装 Python ${{ matrix.arch }}
         run: |
           curl -L -o python.pkg "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos11.pkg"
           sudo installer -pkg python.pkg -target /
@@ -117,9 +125,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/pip
-          key: ${{ runner.os }}-pip-universal2-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ matrix.arch }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-universal2-
+            ${{ runner.os }}-pip-${{ matrix.arch }}-
 
       - name: 安装 Python 依赖
         run: |
@@ -128,6 +136,8 @@ jobs:
       - name: 安装 Playwright Chromium 浏览器（打包到安装包中）
         run: |
           python3 -m playwright install chromium
+          # 清理 headless_shell（微信发布不需要，减少打包体积）
+          rm -rf ~/Library/Caches/ms-playwright/chromium_headless_shell-*
 
       - name: 生成应用图标（icns）
         run: |
@@ -154,18 +164,17 @@ jobs:
           print('icon created: build/app.icns')
           "
 
-      - name: PyInstaller 构建 macOS 通用应用（universal2）
+      - name: PyInstaller 构建 ${{ matrix.arch }} 应用
         run: pyinstaller desktop/build.spec --clean
 
       - name: 创建 DMG（拖拽安装）
         run: |
-          ARCH="$(uname -m)"
-          bash desktop/build_dmg.sh "${ARCH}" "${APP_VERSION}"
+          bash desktop/build_dmg.sh "${{ matrix.arch }}" "${APP_VERSION}"
 
       - name: 上传 DMG 构建产物
         uses: actions/upload-artifact@v7
         with:
-          name: MediaForge-macOS-${{ runner.arch }}
+          name: MediaForge-macOS-${{ matrix.arch }}
           path: MediaForge-macOS-*.dmg
 
   build-windows:
@@ -213,6 +222,8 @@ jobs:
         shell: bash
         run: |
           python -m playwright install chromium
+          # 清理 headless_shell（微信发布不需要，减少打包体积）
+          rm -rf "$LOCALAPPDATA/ms-playwright/chromium_headless_shell-"*
 
       - name: 生成应用图标（ico）
         shell: bash

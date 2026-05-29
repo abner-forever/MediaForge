@@ -164,6 +164,7 @@ def _search_with_playwright(keyword: str, page_num: int = 1) -> List[Dict]:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
                 headless=True,
+                channel="chromium",
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
             )
             # 优先使用完整浏览器状态（含 localStorage/IndexedDB/cookie 属性），

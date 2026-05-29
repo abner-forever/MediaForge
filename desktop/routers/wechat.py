@@ -84,6 +84,7 @@ async def wechat_account_login(account_id: str):
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(profile_dir),
                     headless=False,
+                    channel="chromium",
                 )
                 page = context.new_page()
                 page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
@@ -143,6 +144,7 @@ async def wechat_account_logout(account_id: str):
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(profile_dir),
                     headless=True,
+                    channel="chromium",
                 )
                 context.clear_cookies()
                 context.close()
