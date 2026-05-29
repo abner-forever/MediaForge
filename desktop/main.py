@@ -230,6 +230,23 @@ def _start_app() -> None:
 
     menus = []
 
+    class JsApi:
+        """暴露给前端 JS 调用的原生 API。"""
+
+        def save_file(self, filename: str, content: str, mime_type: str = "text/csv") -> bool:
+            """弹出原生文件保存对话框，将内容写入用户选择的路径。"""
+            import base64
+            result = window.create_file_dialog(webview.SAVE_DIALOG, save_filename=filename)
+            if not result:
+                return False
+            path = result if isinstance(result, str) else result[0]
+            data = base64.b64decode(content)
+            with open(path, "wb") as f:
+                f.write(data)
+            return True
+
+    js_api = JsApi()
+
     window = webview.create_window(
         title=APP_NAME,
         html=loading_html,
@@ -239,6 +256,7 @@ def _start_app() -> None:
         text_select=True,
         menu=menus,
         localization=localization,
+        js_api=js_api,
     )
 
     # Windows 11: 启用 Mica 半透明背景效果

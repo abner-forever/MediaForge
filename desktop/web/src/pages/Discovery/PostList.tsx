@@ -47,7 +47,7 @@ export default function PostList({
         <button className="btn btn-sm" onClick={onHandleSelectAllFiltered}>全选/取消</button>
       </div>
       {filteredIndices.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {filteredIndices.map((origIdx) => {
             const p = discoveryPosts[origIdx];
             const imgs = p.local_images || [];
@@ -55,12 +55,11 @@ export default function PostList({
             const displayImgs = imgs.length ? imgs : remoteImgs;
             const isChecked = selectedPosts.has(origIdx);
             const isExpanded = expandedPosts.has(origIdx);
-            const showImgs = isExpanded ? displayImgs : displayImgs.slice(0, MAX_PREVIEW);
             const hiddenCount = displayImgs.length - MAX_PREVIEW;
             return (
               <div
                 key={origIdx}
-                className={`rounded-xl border transition-all overflow-hidden ${
+                className={`rounded-xl border transition-all ${
                   isChecked
                     ? 'ring-1 ring-accent border-accent bg-accent-softer/20'
                     : 'border-border bg-bg-card hover:border-accent/30 hover:shadow-sm'
@@ -108,31 +107,39 @@ export default function PostList({
 
                 {/* Image grid */}
                 <div className="px-3.5 pb-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {showImgs.map((img: string, ii: number) => (
-                      <div key={ii} className="w-[calc(16.666%-6px)] min-w-[60px] aspect-square rounded-lg border border-border/50 overflow-hidden bg-bg-secondary flex-1">
-                        <LazyImage src={thumbSrc(img)} className="w-full h-full cursor-pointer" onClick={() => onOpenLightbox(origIdx, ii)} />
-                      </div>
-                    ))}
-                    {hiddenCount > 0 && !isExpanded && (
+                  {isExpanded ? (
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                      {displayImgs.map((img: string, ii: number) => (
+                        <div key={ii} className="w-20 h-20 shrink-0 rounded-lg border border-border/50 overflow-hidden bg-bg-secondary">
+                          <LazyImage src={thumbSrc(img)} className="w-full h-full cursor-pointer" onClick={() => onOpenLightbox(origIdx, ii)} />
+                        </div>
+                      ))}
                       <button
-                        className="aspect-square min-w-[60px] rounded-lg border border-border flex items-center justify-center text-xs font-medium text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer flex-1"
-                        onClick={() => toggleExpand(origIdx)}
-                        title="展开全部图片"
-                      >
-                        +{hiddenCount}
-                      </button>
-                    )}
-                    {isExpanded && displayImgs.length > MAX_PREVIEW && (
-                      <button
-                        className="aspect-square min-w-[60px] rounded-lg border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer flex-1"
+                        className="w-20 h-20 shrink-0 rounded-lg border border-border flex items-center justify-center text-xs text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer"
                         onClick={() => toggleExpand(origIdx)}
                         title="收起图片"
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="18 15 12 9 6 15" /></svg>
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      {displayImgs.slice(0, MAX_PREVIEW).map((img: string, ii: number) => (
+                        <div key={ii} className="w-20 h-20 shrink-0 rounded-lg border border-border/50 overflow-hidden bg-bg-secondary">
+                          <LazyImage src={thumbSrc(img)} className="w-full h-full cursor-pointer" onClick={() => onOpenLightbox(origIdx, ii)} />
+                        </div>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <button
+                          className="w-20 h-20 shrink-0 rounded-lg border border-border flex items-center justify-center text-xs font-medium text-text-muted bg-bg-secondary hover:bg-accent/10 hover:border-accent/50 transition-all cursor-pointer"
+                          onClick={() => toggleExpand(origIdx)}
+                          title="展开全部图片"
+                        >
+                          +{hiddenCount}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

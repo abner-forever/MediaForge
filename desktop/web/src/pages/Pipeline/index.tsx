@@ -219,6 +219,17 @@ export default function PipelinePage() {
     setDetailEvents(null);
   }, []);
 
+  const handleDeleteRun = useCallback(async (runId: string) => {
+    if (!window.confirm('确定删除这条运行记录吗？')) return;
+    try {
+      await dashboardApi.deleteRun(runId);
+      setHistory(prev => prev.filter(r => r.run_id !== runId));
+      if (detailRun?.run_id === runId) closeDetail();
+    } catch {
+      // ignore
+    }
+  }, [detailRun, closeDetail]);
+
   const handleContinueRun = useCallback((run: RunInfo) => {
     const p = run.payload as Record<string, unknown>;
     const config: PipelineConfig = {
@@ -597,6 +608,15 @@ export default function PipelinePage() {
                                 </svg>
                               </span>
                             )}
+                            <span
+                              onClick={(e) => { e.stopPropagation(); handleDeleteRun(run.run_id); }}
+                              className="p-1 rounded-md hover:bg-red-500/15 text-text-muted/30 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                              title="删除记录"
+                            >
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </span>
                           </div>
                         </div>
 
@@ -971,13 +991,21 @@ export default function PipelinePage() {
             </div>
 
             <div className="px-6 py-3 border-t border-border flex items-center justify-between">
-              <button onClick={() => detailRun && handleContinueRun(detailRun)} className="btn btn-primary text-sm" disabled={running}>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="6 3 20 12 6 21 6 3" />
+              <button onClick={() => detailRun && handleDeleteRun(detailRun.run_id)} className="btn btn-ghost text-sm text-red-500 hover:bg-red-500/10">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
-                重新运行
+                删除
               </button>
-              <button onClick={closeDetail} className="btn btn-ghost text-sm">关闭</button>
+              <div className="flex gap-2">
+                <button onClick={() => detailRun && handleContinueRun(detailRun)} className="btn btn-primary text-sm" disabled={running}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="6 3 20 12 6 21 6 3" />
+                  </svg>
+                  重新运行
+                </button>
+                <button onClick={closeDetail} className="btn btn-ghost text-sm">关闭</button>
+              </div>
             </div>
           </div>
         </div>

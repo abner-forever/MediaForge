@@ -55,19 +55,19 @@ interface PublishConfirmOptions {
   images?: string[];
 }
 
-export function showPublishConfirm(options: PublishConfirmOptions): Promise<boolean> {
+export function showPublishConfirm(options: PublishConfirmOptions): Promise<{ confirmed: boolean; headless: boolean }> {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const root = createRoot(el);
     let done = false;
 
-    function cleanup(value: boolean) {
+    function cleanup(confirmed: boolean, headless: boolean) {
       if (done) return;
       done = true;
       root.unmount();
       if (el.parentNode) el.parentNode.removeChild(el);
-      resolve(value);
+      resolve({ confirmed, headless });
     }
 
     root.render(
@@ -80,8 +80,8 @@ export function showPublishConfirm(options: PublishConfirmOptions): Promise<bool
         cover={options.cover}
         images={options.images}
         loading={false}
-        onConfirm={() => cleanup(true)}
-        onCancel={() => cleanup(false)}
+        onConfirm={(headless) => cleanup(true, headless)}
+        onCancel={() => cleanup(false, false)}
       />
     );
   });

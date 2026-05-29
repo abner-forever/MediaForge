@@ -107,12 +107,12 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
         </div>
       </div>
 
-      {/* Tooltip */}
-      {hover && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-          周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读 {grid[hover.dow][hover.hour].toLocaleString()}
-        </div>
-      )}
+      {/* Tooltip - reserved space to prevent layout shift */}
+      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', minHeight: 20 }}>
+        {hover && (
+          <>周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读 {grid[hover.dow][hover.hour].toLocaleString()}</>
+        )}
+      </div>
     </div>
   );
 }

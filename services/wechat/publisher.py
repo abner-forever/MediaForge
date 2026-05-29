@@ -39,6 +39,7 @@ def publish_article(
     dry_run: bool = False,
     save_draft: bool = False,
     account_id: Optional[str] = None,
+    headless: bool = False,
     on_scan_needed: Optional[Callable[[], None]] = None,
     on_confirm_needed: Optional[Callable[[str], bool]] = None,
     on_log: Optional[Callable[[str], None]] = None,
@@ -76,7 +77,7 @@ def publish_article(
             state_path_global.parent.mkdir(parents=True, exist_ok=True)
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
-                headless=False,
+                headless=headless,
             )
             # 使用浏览器默认打开的页面，避免创建新页面导致出现空白窗口
             pages = context.pages

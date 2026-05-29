@@ -145,6 +145,7 @@ class PublishRequest(BaseModel):
     dry_run: bool = False
     save_draft: bool = True
     account_id: Optional[str] = None
+    headless: bool = False
 
 
 class ArticleCreateRequest(BaseModel):

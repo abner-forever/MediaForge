@@ -14,7 +14,7 @@ interface PublishConfirmModalProps {
   cover?: string;
   images?: string[];
   loading?: boolean;
-  onConfirm: () => void;
+  onConfirm: (headless: boolean) => void;
   onCancel: () => void;
 }
 
@@ -45,6 +45,7 @@ export default function PublishConfirmModal({
   onCancel,
 }: PublishConfirmModalProps) {
   const [ackHighRisk, setAckHighRisk] = useState(false);
+  const [headless, setHeadless] = useState(false);
   const [risks, setRisks] = useState<{ level: 'high' | 'medium' | 'low'; text: string }[]>([]);
   const [dupCheck, setDupCheck] = useState<DuplicateCheckResult | null>(null);
 
@@ -166,12 +167,15 @@ export default function PublishConfirmModal({
           {highRisk && (
             <Checkbox checked={ackHighRisk} onChange={setAckHighRisk}>我已确认以上高风险项，仍要继续</Checkbox>
           )}
+          {action === 'draft' && (
+            <Checkbox checked={headless} onChange={setHeadless}>后台运行（无浏览器窗口，不可扫码登录）</Checkbox>
+          )}
         </div>
       </div>
 
       <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t border-border-subtle">
         <button className="btn" onClick={onCancel} disabled={loading}>返回编辑</button>
-        <button className={`btn ${action === 'publish' ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm} disabled={!canSubmit}>
+        <button className={`btn ${action === 'publish' ? 'btn-danger' : 'btn-primary'}`} onClick={() => onConfirm(headless)} disabled={!canSubmit}>
           {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 处理中</> : action === 'publish' ? '确认发布' : '确认保存草稿'}
         </button>
       </div>

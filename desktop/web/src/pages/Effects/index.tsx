@@ -2,14 +2,16 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { effectsApi, wechatAccountApi } from '../../api/client';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
-import type { EffectSummary, EffectTrendPoint, EffectCompareData, WeChatAccount } from '../../types';
+import type { EffectSummary, EffectTrendPoint, EffectCompareData, WeChatAccount, ImageAnalysisItem } from '../../types';
 import OverviewCards from './OverviewCards';
 import TrendChart from './TrendChart';
 import HeatmapChart from './HeatmapChart';
 import CelebrityRank from './CelebrityRank';
 import CompareChart from './CompareChart';
+import FunnelChart from './FunnelChart';
+import ImageAnalysis from './ImageAnalysis';
+import ArticleDataTabs from './ArticleDataTabs';
 import EmptyState from './EmptyState';
-import MpArticlesTable from './MpArticlesTable';
 import HelpGuide from '../../components/ui/HelpGuide';
 import Select from '../../components/Select';
 
@@ -20,6 +22,7 @@ export default function Effects() {
   const [summary, setSummary] = useState<EffectSummary | null>(null);
   const [trend, setTrend] = useState<EffectTrendPoint[]>([]);
   const [compare, setCompare] = useState<EffectCompareData | null>(null);
+  const [imageItems, setImageItems] = useState<ImageAnalysisItem[]>([]);
   const [exporting, setExporting] = useState(false);
   const [accounts, setAccounts] = useState<WeChatAccount[]>([]);
   const [syncAccountId, setSyncAccountId] = useState('');
@@ -32,14 +35,16 @@ export default function Effects() {
 
   const load = useCallback(async () => {
     await withLoading(async () => {
-      const [s, t, c] = await Promise.all([
+      const [s, t, c, ia] = await Promise.all([
         effectsApi.summary(),
         effectsApi.trend(days),
         effectsApi.compare(),
+        effectsApi.imageAnalysis(),
       ]);
       setSummary(s);
       setTrend(t.trend);
       setCompare(c);
+      setImageItems(ia.items);
     });
   }, [days, withLoading]);
 
@@ -105,9 +110,24 @@ export default function Effects() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>效果分析</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-            追踪发布效果，用数据驱动内容策略
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>时间范围</span>
+            {[7, 14, 30, 0].map(d => (
+              <button
+                key={d}
+                onClick={() => setDays(d)}
+                style={{
+                  padding: '4px 14px', fontSize: 12, fontWeight: 600, borderRadius: 8,
+                  border: 'none', cursor: 'pointer',
+                  background: days === d ? 'var(--accent)' : 'var(--border)',
+                  color: days === d ? '#fff' : 'var(--text-muted)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {d === 0 ? '全部' : `${d}天`}
+              </button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
           {accounts.length > 0 && (
@@ -257,14 +277,18 @@ export default function Effects() {
         <>
           <OverviewCards summary={summary} />
           <TrendChart data={trend} days={days} onDaysChange={setDays} />
-          <HeatmapChart data={trend} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <CelebrityRank />
+            <FunnelChart days={days} />
+            <HeatmapChart data={trend} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <CelebrityRank days={days} />
             {compare && <CompareChart data={compare} />}
           </div>
+          {imageItems.length > 1 && <ImageAnalysis />}
         </>
       )}
-      {!loading && <MpArticlesTable />}
+      {!loading && <ArticleDataTabs onCleared={load} />}
     </div>
   );
 }

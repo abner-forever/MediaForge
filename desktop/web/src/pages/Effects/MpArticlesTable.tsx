@@ -8,7 +8,7 @@ type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 10;
 
-export default function MpArticlesTable() {
+export default function MpArticlesTable({ onCleared }: { onCleared?: () => void }) {
   const [data, setData] = useState<MpArticlesResponse | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
@@ -68,12 +68,13 @@ export default function MpArticlesTable() {
   }
 
   async function handleClear() {
-    if (!confirm('确定清除所有公众号同步数据？此操作不可恢复。')) return;
+    if (!confirm('确定清除所有效果数据？此操作不可恢复。')) return;
     setClearing(true);
     try {
       await effectsApi.clearMpArticles();
       setData(null);
       fetchData();
+      onCleared?.();
     } catch {
       // ignore
     } finally {
@@ -89,12 +90,11 @@ export default function MpArticlesTable() {
   }
 
   return (
-    <div className="card">
+    <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-base font-bold text-text">公众号文章数据</h3>
-          <p className="text-xs text-text-muted mt-0.5">
-            从公众号后台同步的已发布文章{total > 0 && `，共 ${total} 篇`}
+          <p className="text-xs text-text-muted">
+            已发布文章数据{total > 0 && `，共 ${total} 篇`}
           </p>
         </div>
         {total > 0 && (

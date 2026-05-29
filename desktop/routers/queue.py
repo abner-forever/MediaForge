@@ -181,6 +181,7 @@ def _run_queue_publish_background(
     dry_run: bool,
     save_draft: bool,
     account_id: Optional[str],
+    headless: bool,
     publish_session_id: str,
     raw_images: List[str],
     item_account_id: str,
@@ -201,6 +202,7 @@ def _run_queue_publish_background(
             dry_run=dry_run,
             save_draft=save_draft,
             account_id=account_id,
+            headless=headless,
             on_scan_needed=lambda: _on_log("请在弹出的浏览器窗口中扫码登录"),
             on_confirm_needed=lambda t: True,
             on_log=_on_log,
@@ -263,6 +265,7 @@ async def publish_from_queue(item_id: str, req: PublishRequest):
         args=(
             item_id, title, desc, abs_images, abs_cover,
             req.dry_run, req.save_draft, req.account_id,
+            req.headless,
             publish_session_id, list(images),
             item.get("account_id", ""), item.get("type"),
         ),

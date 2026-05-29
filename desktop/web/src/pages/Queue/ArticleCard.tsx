@@ -4,7 +4,7 @@ import { useStore } from '../../stores';
 import { queueApi, type QueueItem, type WeChatAccount } from '../../api/client';
 import Select from '../../components/Select';
 import { imgSrc } from './utils';
-import EffectEntry from '../../components/EffectEntry';
+
 import { showConfirm, showPublishConfirm } from '../../components/modalApi.tsx';
 
 const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
@@ -41,7 +41,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
     return false;
   }
 
-  async function publish(opts: { save_draft?: boolean }) {
+  async function publish(opts: { save_draft?: boolean; headless?: boolean }) {
     const action = opts.save_draft ? '保存草稿' : '发布';
     addToast(`正在${action}...`, 'info');
     try {
@@ -49,12 +49,12 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
       if (r.started) {
         // 后台执行，轮询等终态
         const ok = await pollQueueDone(new AbortController().signal);
-        addToast(ok ? `${action}成功` : '发布失败', ok ? 'success' : 'error');
+        if (ok) alert(`${action}成功`); else addToast('发布失败', 'error');
         setQueue((await queueApi.get()).queue);
         return;
       }
       if (r.success) {
-        addToast(`${action}成功`, 'success');
+        alert(`${action}成功`);
         const newStatus: QueueItem['status'] = opts.save_draft ? 'saved_to_wechat' : 'published';
         const q = useStore.getState().queue;
         const idx = q.findIndex(qi => qi.id === itemId);
@@ -158,21 +158,19 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
             {!isPublished ? (
               <>
                 <button className="btn btn-sm" onClick={async () => {
-                  const ok = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
-                  if (ok) publish({ save_draft: true });
+                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  if (confirmed) publish({ save_draft: true, headless: hl });
                 }}>保存草稿</button>
                 <button className="btn btn-sm" onClick={async () => {
-                  const ok = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
-                  if (ok) publish({ save_draft: false });
+                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  if (confirmed) publish({ save_draft: false, headless: hl });
                 }}>直接发布</button>
                 <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
                   const { confirmed, checkboxChecked } = await showConfirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
                   if (confirmed) deleteItem(checkboxChecked);
                 }}>删除</button>
               </>
-            ) : (
-              <EffectEntry itemId={itemId} title={item.title} />
-            )}
+            ) : null}
           </div>
         </div>
       </div>

@@ -48,6 +48,9 @@ async def effects_summary():
     total_reads = 0
     total_likes = 0
     total_comments = 0
+    total_shares = 0
+    total_favorites = 0
+    total_new_followers = 0
     hour_reads: dict[int, int] = defaultdict(int)
     dow_reads: dict[int, int] = defaultdict(int)
     celeb_data: dict[str, list[int]] = defaultdict(list)
@@ -58,6 +61,9 @@ async def effects_summary():
         total_reads += reads
         total_likes += likes
         total_comments += (item.get("comment_num") or item.get("comments") or 0)
+        total_shares += (item.get("shares") or 0)
+        total_favorites += (item.get("favorites") or 0)
+        total_new_followers += (item.get("new_followers") or 0)
 
         dt = _parse_publish_time(item.get("publish_time"))
         if dt:
@@ -85,6 +91,9 @@ async def effects_summary():
         "total_reads": total_reads,
         "total_likes": total_likes,
         "total_comments": total_comments,
+        "total_shares": total_shares,
+        "total_favorites": total_favorites,
+        "total_new_followers": total_new_followers,
         "avg_reads": round(total_reads / total_posts) if total_posts else 0,
         "avg_likes": round(total_likes / total_posts) if total_posts else 0,
         "best_publish_hour": best_hour,
@@ -95,16 +104,29 @@ async def effects_summary():
 
 @router.get("/api/effects/trend")
 async def effects_trend(days: int = Query(30)):
-    """趋势数据：按天聚合阅读量、点赞数、发布数。"""
+    """趋势数据：按天聚合阅读量、点赞数、发布数。days=0 表示全部。"""
     effects = app_state.get_publish_effects()
     today = datetime.now().date()
-    start = today - timedelta(days=days - 1)
+
+    if days > 0:
+        start = today - timedelta(days=days - 1)
+    else:
+        # 全部：从最早发布日开始
+        earliest = today
+        for item in effects.values():
+            dt = _parse_publish_time(item.get("publish_time"))
+            if dt and dt.date() < earliest:
+                earliest = dt.date()
+        start = earliest
 
     # 初始化每日桶
     daily: dict[str, dict] = {}
     d = start
     while d <= today:
-        daily[d.isoformat()] = {"date": d.isoformat(), "reads": 0, "likes": 0, "posts": 0}
+        daily[d.isoformat()] = {
+            "date": d.isoformat(), "reads": 0, "likes": 0, "posts": 0,
+            "comments": 0, "shares": 0, "favorites": 0, "new_followers": 0,
+        }
         d += timedelta(days=1)
 
     for item in effects.values():
@@ -116,6 +138,10 @@ async def effects_trend(days: int = Query(30)):
             daily[key]["reads"] += item.get("reads", 0) or 0
             daily[key]["likes"] += item.get("likes", 0) or 0
             daily[key]["posts"] += 1
+            daily[key]["comments"] += (item.get("comment_num") or item.get("comments") or 0)
+            daily[key]["shares"] += (item.get("shares") or 0)
+            daily[key]["favorites"] += (item.get("favorites") or 0)
+            daily[key]["new_followers"] += (item.get("new_followers") or 0)
 
     return {"trend": [daily[k] for k in sorted(daily)]}
 
@@ -173,6 +199,109 @@ async def celebrity_rank(days: int = Query(0)):
     return {"celebrities": ranking}
 
 
+@router.get("/api/effects/funnel")
+async def effects_funnel(days: int = Query(0), item_id: str = Query("")):
+    """互动漏斗数据，支持按天数和单篇文章筛选。days=0 表示全部。"""
+    effects = app_state.get_publish_effects()
+    cutoff = None
+    if days > 0:
+        cutoff = datetime.now() - timedelta(days=days)
+
+    total_reads = 0
+    total_likes = 0
+    total_shares = 0
+    total_favorites = 0
+    total_comments = 0
+    total_new_followers = 0
+
+    for key, item in effects.items():
+        if item_id and key != item_id:
+            continue
+        if cutoff:
+            dt = _parse_publish_time(item.get("publish_time"))
+            if not dt or dt < cutoff:
+                continue
+        total_reads += item.get("reads", 0) or 0
+        total_likes += item.get("likes", 0) or 0
+        total_shares += item.get("shares", 0) or 0
+        total_favorites += item.get("favorites", 0) or 0
+        total_comments += (item.get("comment_num") or item.get("comments") or 0)
+        total_new_followers += item.get("new_followers", 0) or 0
+
+    return {
+        "total_reads": total_reads,
+        "total_likes": total_likes,
+        "total_shares": total_shares,
+        "total_favorites": total_favorites,
+        "total_comments": total_comments,
+        "total_new_followers": total_new_followers,
+    }
+
+
+@router.get("/api/effects/article-options")
+async def article_options():
+    """返回所有文章列表（按发布时间降序，标题去重），用于筛选下拉。"""
+    effects = app_state.get_publish_effects()
+    seen: dict[str, dict] = {}
+    for k, v in effects.items():
+        title = (v.get("title") or "").strip()
+        if not title:
+            continue
+        pt = v.get("publish_time", "")
+        if title not in seen or pt > seen[title]["publish_time"]:
+            seen[title] = {"item_id": k, "title": title, "publish_time": pt}
+    articles = sorted(seen.values(), key=lambda x: x["publish_time"], reverse=True)
+    return {"articles": articles}
+
+
+@router.get("/api/effects/top-articles")
+async def top_articles(limit: int = Query(10, ge=1, le=50)):
+    """按阅读量降序返回 Top N 文章。"""
+    effects = app_state.get_publish_effects()
+    articles = sorted(
+        [
+            {
+                "item_id": k,
+                "title": v.get("title", ""),
+                "reads": v.get("reads", 0) or 0,
+                "likes": v.get("likes", 0) or 0,
+                "shares": v.get("shares", 0) or 0,
+                "favorites": v.get("favorites", 0) or 0,
+                "comments": (v.get("comment_num") or v.get("comments") or 0),
+                "celebrity": v.get("celebrity", ""),
+                "source_platform": v.get("source_platform", ""),
+                "publish_time": v.get("publish_time", ""),
+                "image_count": v.get("image_count", 0) or 0,
+            }
+            for k, v in effects.items()
+            if (v.get("reads", 0) or 0) > 0
+        ],
+        key=lambda x: x["reads"],
+        reverse=True,
+    )[:limit]
+    return {"articles": articles}
+
+
+@router.get("/api/effects/image-analysis")
+async def image_analysis():
+    """按图片数量分组统计平均阅读量。"""
+    effects = app_state.get_publish_effects()
+    groups: dict[int, list[int]] = defaultdict(list)
+    for item in effects.values():
+        ic = item.get("image_count") or 0
+        reads = item.get("reads", 0) or 0
+        if reads > 0:
+            groups[ic].append(reads)
+    result = sorted(
+        [
+            {"image_count": ic, "avg_reads": round(sum(vals) / len(vals)), "count": len(vals)}
+            for ic, vals in groups.items()
+        ],
+        key=lambda x: x["image_count"],
+    )
+    return {"items": result}
+
+
 @router.get("/api/effects/export")
 async def export_effects(format: str = Query("csv")):
     """导出效果数据为 CSV。"""
@@ -183,11 +312,17 @@ async def export_effects(format: str = Query("csv")):
         "comments", "new_followers", "content_type",
         "source_platform", "celebrity", "image_count", "updated_at",
     ]
+    headers = [
+        "文章ID", "标题", "账号ID", "发布时间",
+        "阅读量", "点赞数", "转发数", "收藏数",
+        "评论数", "新增关注", "内容类型",
+        "来源平台", "艺人", "图片数", "更新时间",
+    ]
 
     def generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(fields)
+        writer.writerow(headers)
         yield buf.getvalue()
         buf.seek(0)
         buf.truncate(0)
@@ -216,12 +351,11 @@ async def mp_articles(
     sort_key: str = Query("publish_time"),
     sort_dir: str = Query("desc"),
 ):
-    """返回从公众号同步的文章列表（key 以 mp: 开头的记录），支持分页、筛选、排序。"""
+    """返回所有发布效果数据，支持分页、筛选、排序。"""
     effects = app_state.get_publish_effects()
     articles = [
         {**v, "item_id": k}
         for k, v in effects.items()
-        if k.startswith("mp:")
     ]
 
     # 筛选
@@ -256,14 +390,18 @@ async def mp_articles(
 
 @router.delete("/api/effects/mp-articles")
 async def clear_mp_articles():
-    """清除所有从公众号同步的文章数据（key 以 mp: 开头的记录）。"""
-    deleted = app_state.delete_publish_effects_by_prefix("mp:")
+    """清除所有发布效果数据。"""
+    effects = app_state._ensure_publish_effects()
+    deleted = len(effects)
+    effects.clear()
+    app_state._save_publish_effects()
     return {"success": True, "deleted": deleted}
 
 
 @router.get("/api/effects")
 async def list_effects():
-    return {"effects": app_state.get_publish_effects()}
+    effects = app_state.get_publish_effects()
+    return {"effects": effects}
 
 
 @router.get("/api/effects/{item_id}")

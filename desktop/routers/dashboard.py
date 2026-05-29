@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 # 确保项目根目录在 sys.path 中
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -100,6 +100,17 @@ async def recent_runs():
             "title": " ".join(title_parts) if title_parts else run_file.stem,
         })
     return results
+
+
+@router.delete("/api/dashboard/runs/{run_id}")
+async def delete_run(run_id: str):
+    """删除指定的运行历史记录（JSONL 文件）。"""
+    runs_dir = LOG_DIR / "runs"
+    target = runs_dir / f"{run_id}.jsonl"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="运行记录不存在")
+    target.unlink()
+    return {"success": True}
 
 
 @router.get("/api/dashboard/operations")

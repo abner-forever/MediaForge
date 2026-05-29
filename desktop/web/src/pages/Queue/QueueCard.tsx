@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../../stores';
 import { queueApi, publishLogsApi, type QueueItem, type WeChatAccount } from '../../api/client';
 import Select from '../../components/Select';
-import EffectEntry from '../../components/EffectEntry';
 import { useLoading } from '../../hooks/useLoading';
 import { imgSrc, thumbSrc } from './utils';
 import ArticleCard from './ArticleCard';
@@ -155,7 +154,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
     return false;
   }
 
-  async function publish(opts: { dry_run?: boolean; save_draft?: boolean }) {
+  async function publish(opts: { dry_run?: boolean; save_draft?: boolean; headless?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
     addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); setLogsExpanded(true); publishRef.current = true; pollReceivedRef.current = false;
     const pubPromise = queueApi.publish(itemId, { ...opts, account_id: selectedAccountId || undefined });
@@ -164,12 +163,12 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
     pollLogs({ signal: ac.signal });
     let success = false;
     let started = false;
-    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; addToast(r.success ? `${action}成功：${r.message}` : `${action}失败：${r.message}`, r.success ? 'success' : 'error'); } } catch (err: any) { /* empty */ }
+    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; if (r.success) alert(`${action}成功${r.message ? '：' + r.message : ''}`); else addToast(`${action}失败：${r.message}`, 'error'); } } catch (err: any) { /* empty */ }
     publishRef.current = false;
 
     if (started) {
       success = await pollUntilDone(ac.signal);
-      addToast(success ? `${action}成功` : '发布失败', success ? 'success' : 'error');
+      if (success) alert(`${action}成功`); else addToast('发布失败', 'error');
     } else {
       await new Promise(r => setTimeout(r, 800));
     }
@@ -392,14 +391,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
             {!isPublished ? (
               <>
                 <button className="btn btn-primary" onClick={async () => {
-                  const ok = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
-                  if (ok) publish({ save_draft: true });
+                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  if (confirmed) publish({ save_draft: true, headless: hl });
                 }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'draft' ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存草稿中...</> : '保存草稿'}
                 </button>
                 <button className="btn" onClick={async () => {
-                  const ok = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
-                  if (ok) publish({ save_draft: false });
+                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  if (confirmed) publish({ save_draft: false, headless: hl });
                 }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'publish' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 发布中...</> : '直接发布'}
                 </button>
@@ -414,9 +413,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                   if (confirmed) deleteItem(checkboxChecked);
                 }} disabled={!!publishingAction}>删除</button>
               </>
-            ) : (
-              <EffectEntry itemId={itemId} title={title} />
-            )}
+            ) : null}
           </div>
 
           {(logs.length > 0 || publishingAction) && (

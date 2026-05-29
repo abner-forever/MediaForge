@@ -26,6 +26,9 @@ export interface EffectSummary {
   total_reads: number;
   total_likes: number;
   total_comments: number;
+  total_shares: number;
+  total_favorites: number;
+  total_new_followers: number;
   avg_reads: number;
   avg_likes: number;
   best_publish_hour: number;
@@ -38,6 +41,10 @@ export interface EffectTrendPoint {
   reads: number;
   likes: number;
   posts: number;
+  comments: number;
+  shares: number;
+  favorites: number;
+  new_followers: number;
 }
 
 export interface EffectCompareItem {
@@ -59,4 +66,24 @@ export interface MpArticlesResponse {
   page: number;
   page_size: number;
   celebrities: string[];
+}
+
+export interface TopArticle {
+  item_id: string;
+  title: string;
+  reads: number;
+  likes: number;
+  shares: number;
+  favorites: number;
+  comments: number;
+  celebrity: string;
+  source_platform: string;
+  publish_time: string;
+  image_count: number;
+}
+
+export interface ImageAnalysisItem {
+  image_count: number;
+  avg_reads: number;
+  count: number;
 }
