@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Dict
 
-AUTH_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "toutiao_auth.json"
+from config import DATA_DIR
+
+AUTH_PATH = DATA_DIR / "state" / "toutiao_auth.json"
 
 
 def read_toutiao_auth() -> Dict[str, str]:

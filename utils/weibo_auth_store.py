@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Dict
 
-AUTH_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "weibo_auth.json"
+from config import DATA_DIR
+
+AUTH_PATH = DATA_DIR / "state" / "weibo_auth.json"
 
 
 def read_weibo_auth() -> Dict[str, str]:

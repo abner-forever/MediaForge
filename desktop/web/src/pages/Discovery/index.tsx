@@ -1,13 +1,11 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useStore } from '../../stores';
 import { discoveryApi, downloadStream, queueApi, settingsApi, searchStream, platformApi, PlatformMeta } from '../../api/client';
-import Select from '../../components/Select';
-import NumberInput from '../../components/NumberInput';
 import SearchLoadingOverlay from '../../components/SearchLoadingOverlay';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 import HelpGuide from '../../components/ui/HelpGuide';
 import { useLoading } from '../../hooks/useLoading';
-import { fmtTime, imgSrc, thumbSrc, lightboxSrc } from './utils';
+import { imgSrc, thumbSrc, lightboxSrc } from './utils';
 import SearchParams from './SearchParams';
 import PostList from './PostList';
 import GalleryTab from './GalleryTab';
@@ -457,8 +455,8 @@ export default function Discovery() {
       {searching && <SearchLoadingOverlay message={searchMessage} platformName={activePlatform?.name} onCancel={cancelSearch} />}
       {enqueuing && <SearchLoadingOverlay title="正在加入发布队列" message={`已选 ${selectedImages.length} 张图片，正在处理…`} />}
 
-      <ConfirmDialog open={removeConfirmIndex !== null} title="删除帖子" message={`确认删除第 ${removeConfirmIndex !== null ? removeConfirmIndex + 1 : ''} 条帖子？`} confirmText="删除" danger onConfirm={() => { if (removeConfirmIndex !== null) removePost(removeConfirmIndex); setRemoveConfirmIndex(null); }} onCancel={() => setRemoveConfirmIndex(null)} />
-      <ConfirmDialog open={clearConfirm} title="清除搜索结果" message="确认清除所有搜索结果？" confirmText="清除" danger noLoading onConfirm={() => { setClearConfirm(false); clearDiscovery(); }} onCancel={() => setClearConfirm(false)} />
+      <Dialog open={removeConfirmIndex !== null} title="删除帖子" message={`确认删除第 ${removeConfirmIndex !== null ? removeConfirmIndex + 1 : ''} 条帖子？`} confirmText="删除" danger onConfirm={() => { if (removeConfirmIndex !== null) removePost(removeConfirmIndex); setRemoveConfirmIndex(null); }} onCancel={() => setRemoveConfirmIndex(null)} />
+      <Dialog open={clearConfirm} title="清除搜索结果" message="确认清除所有搜索结果？" confirmText="清除" danger noLoading onConfirm={() => { setClearConfirm(false); clearDiscovery(); }} onCancel={() => setClearConfirm(false)} />
     </div>
   );
 }

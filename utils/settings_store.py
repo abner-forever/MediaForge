@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Dict
 
-SETTINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "settings.json"
+from config import DATA_DIR
+
+SETTINGS_PATH = DATA_DIR / "state" / "settings.json"
 
 # 已知的布尔值键名（保存时转为字符串 "true"/"false"）
 _BOOL_KEYS = {

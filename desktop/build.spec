@@ -48,11 +48,21 @@ if system == 'Darwin':
                 _img = _img.crop((_left, _top, _left + _size, _top + _size))
                 _iconset = _mac_icon.parent / 'icon.iconset'
                 _iconset.mkdir(parents=True, exist_ok=True)
+
+                def _padded_resize(src: Image.Image, target: int, ratio: float = 0.82) -> Image.Image:
+                    """缩放图片并添加透明内边距，使内容在 target×target 画布中占指定 ratio。"""
+                    canvas = Image.new('RGBA', (target, target), (0, 0, 0, 0))
+                    inner = int(target * ratio)
+                    resized = src.resize((inner, inner), Image.LANCZOS)
+                    offset = (target - inner) // 2
+                    canvas.paste(resized, (offset, offset), resized)
+                    return canvas
+
                 for _s in [16, 32, 64, 128, 256, 512, 1024]:
-                    _resized = _img.resize((_s, _s), Image.LANCZOS)
-                    _resized.save(str(_iconset / f'icon_{_s}x{_s}.png'))
-                    if _s * 2 <= 1024:
-                        _resized.save(str(_iconset / f'icon_{_s}x{_s}@2x.png'))
+                    _padded_resize(_img, _s).save(str(_iconset / f'icon_{_s}x{_s}.png'))
+                # @2x 版本需要 s*2 像素（macOS iconset 规范要求）
+                for _s in [16, 32, 64, 128, 256, 512]:
+                    _padded_resize(_img, _s * 2).save(str(_iconset / f'icon_{_s}x{_s}@2x.png'))
                 subprocess.run(['iconutil', '-c', 'icns', str(_iconset), '-o', str(_mac_icon)], check=True)
                 shutil.rmtree(_iconset)
                 print(f"[build.spec] [OK] Auto-generated icon: {_mac_icon}")

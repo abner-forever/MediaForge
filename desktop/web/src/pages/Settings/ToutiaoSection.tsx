@@ -4,7 +4,7 @@ import Select from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 import { settingsApi } from '../../api/client';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 
 export default function ToutiaoSection({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload?: () => Promise<void> }) {
   const { loading: saving, withLoading: withSave } = useLoading();
@@ -208,7 +208,7 @@ export default function ToutiaoSection({ data, save, onReload }: { data: Setting
         </button>
       </div>
 
-      <ConfirmDialog
+      <Dialog
         open={showClearConfirm}
         title="清空头条鉴权信息"
         message="确定清空今日头条鉴权信息（Cookie、UID）吗？"

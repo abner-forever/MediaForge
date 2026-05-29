@@ -97,11 +97,20 @@ left = (img.width - size) // 2
 top = (img.height - size) // 2
 img = img.crop((left, top, left + size, top + size))
 os.makedirs('build/icon.iconset', exist_ok=True)
+
+def _padded_resize(src, target, ratio=0.82):
+    """缩放图片并添加透明内边距，使内容在 target×target 画布中占指定 ratio。"""
+    canvas = Image.new('RGBA', (target, target), (0, 0, 0, 0))
+    inner = int(target * ratio)
+    resized = src.resize((inner, inner), Image.LANCZOS)
+    offset = (target - inner) // 2
+    canvas.paste(resized, (offset, offset), resized)
+    return canvas
+
 for s in [16, 32, 64, 128, 256, 512, 1024]:
-    resized = img.resize((s, s), Image.LANCZOS)
-    resized.save(f'build/icon.iconset/icon_{s}x{s}.png')
-    if s * 2 <= 1024:
-        resized.save(f'build/icon.iconset/icon_{s}x{s}@2x.png')
+    _padded_resize(img, s).save(f'build/icon.iconset/icon_{s}x{s}.png')
+for s in [16, 32, 64, 128, 256, 512]:
+    _padded_resize(img, s * 2).save(f'build/icon.iconset/icon_{s}x{s}@2x.png')
 import subprocess
 subprocess.run(['iconutil', '-c', 'icns', 'build/icon.iconset', '-o', 'build/app.icns'], check=True)
 "

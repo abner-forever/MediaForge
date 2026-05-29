@@ -3,7 +3,7 @@ import type { SettingsData, WeChatLoginEvent, PublishHistoryItem } from '../../a
 import { useStore } from '../../stores';
 import { wechatAccountApi } from '../../api/client';
 import Modal from '../../components/Modal';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 
 export default function WechatSection({ data, onReload }: { data: SettingsData; onReload?: () => Promise<void> }) {
   const { addToast, incWechatRefreshKey } = useStore();
@@ -188,7 +188,7 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
         </button>
       </div>
 
-      <ConfirmDialog
+      <Dialog
         open={!!deleteConfirm}
         title="删除公众号账号"
         message={`确定删除公众号「${deleteConfirm?.name}」及其所有数据吗？`}

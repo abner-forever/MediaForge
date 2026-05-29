@@ -4,19 +4,19 @@ import { useStore } from '../../stores';
 import { articleApi, wechatAccountApi } from '../../api/client';
 import type { ArticleItem, ChatMessage, InspirationTopic, CoverImage, TitleCandidate, WeChatAccount } from '../../api/client';
 import Loading from '../../components/Loading';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
 import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../../components/RichTextEditor';
 import Select from '../../components/Select';
 import Drawer from '../../components/ui/Drawer';
-import SuccessDialog from '../../components/ui/SuccessDialog';
 import AIToolbar from './AIToolbar';
 import ArticleList from './ArticleList';
 import CoverSection from './CoverSection';
 import { coverImageUrl, fmtTime } from './utils';
 import type { TabKey } from './utils';
 import HelpGuide from '../../components/ui/HelpGuide';
+import { Modal } from '../../components/modalApi';
 
 const ARTICLE_TEMPLATES = [
   { id: 'gallery', name: '图片合集模板', type: '图片合集', tone: '轻松、有画面感', wordCount: '300-500 字', subtitles: true, gallery: true, prompt: '开头点明主题，中段用 3-5 个小标题串联图片亮点，结尾引导读者收藏或留言。' },
@@ -75,7 +75,6 @@ export default function ArticlePublish() {
   const [templateId, setTemplateId] = useState<(typeof ARTICLE_TEMPLATES)[number]['id']>('gallery');
   const [titleCandidates, setTitleCandidates] = useState<TitleCandidate[]>([]);
   const [titleCandidateLoading, setTitleCandidateLoading] = useState(false);
-  const [successDialog, setSuccessDialog] = useState<{ message: string; detail?: string } | null>(null);
 
   /* ── 加载文章列表 ───────────────────────────── */
   const loadArticles = useCallback(async (filter?: TabKey) => {
@@ -188,10 +187,10 @@ export default function ArticlePublish() {
       const data = { title, content, cover, source, tags, status: 'draft' as const };
       if (editingId) {
         await articleApi.update(editingId, data);
-        setSuccessDialog({ message: '文章已更新', detail: title || undefined });
+        Modal.alert({ message: '文章已更新' });
       } else {
         await articleApi.create(data);
-        setSuccessDialog({ message: '草稿已保存', detail: title || undefined });
+        Modal.alert({ message: '草稿已保存' });
         resetEditor();
       }
       loadArticles(articleFilter);
@@ -906,7 +905,7 @@ export default function ArticlePublish() {
         />
       </Drawer>
 
-      <ConfirmDialog
+      <Dialog
         open={!!confirm}
         title="确认操作"
         message={confirm?.msg || ''}
@@ -928,13 +927,6 @@ export default function ArticlePublish() {
           doPublish(action !== 'publish');
         }}
         onCancel={() => setPublishConfirm(null)}
-      />
-      <SuccessDialog
-        open={!!successDialog}
-        message={successDialog?.message || ''}
-        detail={successDialog?.detail}
-        autoClose={2000}
-        onClose={() => setSuccessDialog(null)}
       />
     </div>
   );

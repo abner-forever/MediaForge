@@ -4,7 +4,7 @@ import Select from '../../components/Select';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 import { settingsApi } from '../../api/client';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 
 export default function WeiboSection({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload?: () => Promise<void> }) {
   const { loading: saving, withLoading: withSave } = useLoading();
@@ -214,7 +214,7 @@ export default function WeiboSection({ data, save, onReload }: { data: SettingsD
         </button>
       </div>
 
-      <ConfirmDialog
+      <Dialog
         open={showClearConfirm}
         title="清空微博鉴权信息"
         message="确定清空微博鉴权信息（Cookie、UID）吗？"

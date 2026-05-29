@@ -5,7 +5,7 @@ import { queueApi, type QueueItem, type WeChatAccount } from '../../api/client';
 import Select from '../../components/Select';
 import { imgSrc } from './utils';
 
-import { showConfirm, showPublishConfirm } from '../../components/modalApi.tsx';
+import { Modal } from '../../components/modalApi.tsx';
 
 const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
@@ -49,12 +49,12 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
       if (r.started) {
         // 后台执行，轮询等终态
         const ok = await pollQueueDone(new AbortController().signal);
-        if (ok) alert(`${action}成功`); else addToast('发布失败', 'error');
+        if (ok) Modal.alert({ message: `${action}成功` }); else addToast('发布失败', 'error');
         setQueue((await queueApi.get()).queue);
         return;
       }
       if (r.success) {
-        alert(`${action}成功`);
+        Modal.alert({ message: `${action}成功` });
         const newStatus: QueueItem['status'] = opts.save_draft ? 'saved_to_wechat' : 'published';
         const q = useStore.getState().queue;
         const idx = q.findIndex(qi => qi.id === itemId);
@@ -158,15 +158,15 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
             {!isPublished ? (
               <>
                 <button className="btn btn-sm" onClick={async () => {
-                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
                   if (confirmed) publish({ save_draft: true, headless: hl });
                 }}>保存草稿</button>
                 <button className="btn btn-sm" onClick={async () => {
-                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
+                  const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
                   if (confirmed) publish({ save_draft: false, headless: hl });
                 }}>直接发布</button>
                 <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
-                  const { confirmed, checkboxChecked } = await showConfirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+                  const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
                   if (confirmed) deleteItem(checkboxChecked);
                 }}>删除</button>
               </>

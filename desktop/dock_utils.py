@@ -13,13 +13,17 @@ APP_NAME = "图文工坊"
 
 
 def get_icon_candidates() -> list[Path]:
-    """返回应用图标候选路径列表，按优先级排列。"""
+    """返回应用图标候选路径列表，按优先级排列。
+
+    .icns 优先于 PNG，因为 macOS 图标渲染依赖多尺寸高清资源，
+    单张 PNG 缺少 @2x 等表示，可能导致 Dock/Launchpad 渲染尺寸异常。
+    """
     root = Path(__file__).resolve().parent.parent  # 项目根目录
     desktop = Path(__file__).resolve().parent      # desktop/
     return [
-        desktop / "web" / "public" / "logo-icon.png",   # dev 模式
-        desktop / "static" / "logo-icon.png",            # build 后
-        root / "build" / "app.icns",                     # 打包用 ICNS
+        root / "build" / "app.icns",                     # 多尺寸 ICNS（含高清 @2x）
+        desktop / "web" / "public" / "logo-icon.png",   # dev 模式备选
+        desktop / "static" / "logo-icon.png",            # build 后备选
     ]
 
 

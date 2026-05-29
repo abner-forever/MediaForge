@@ -6,7 +6,7 @@ import { useLoading } from '../../hooks/useLoading';
 import { imgSrc, thumbSrc } from './utils';
 import ArticleCard from './ArticleCard';
 import LazyImage from '../Discovery/LazyImage';
-import { showConfirm, showPublishConfirm } from '../../components/modalApi.tsx';
+import { Modal } from '../../components/modalApi.tsx';
 
 const MAX_VISIBLE_THUMBS = 3;
 
@@ -163,12 +163,12 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
     pollLogs({ signal: ac.signal });
     let success = false;
     let started = false;
-    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; if (r.success) alert(`${action}成功${r.message ? '：' + r.message : ''}`); else addToast(`${action}失败：${r.message}`, 'error'); } } catch (err: any) { /* empty */ }
+    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; if (r.success) Modal.alert({ message: `${action}成功${r.message ? '：' + r.message : ''}` }); else addToast(`${action}失败：${r.message}`, 'error'); } } catch (err: any) { /* empty */ }
     publishRef.current = false;
 
     if (started) {
       success = await pollUntilDone(ac.signal);
-      if (success) alert(`${action}成功`); else addToast('发布失败', 'error');
+      if (success) Modal.alert({ message: `${action}成功` }); else addToast('发布失败', 'error');
     } else {
       await new Promise(r => setTimeout(r, 800));
     }
@@ -353,7 +353,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 const filename = img.split('/').pop() || img;
-                                const { confirmed, checkboxChecked } = await showConfirm({
+                                const { confirmed, checked: checkboxChecked } = await Modal.confirm({
                                   title: '删除图片',
                                   message: `确认从队列中移除此图片？\n${filename}`,
                                   confirmText: '删除',
@@ -391,13 +391,13 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
             {!isPublished ? (
               <>
                 <button className="btn btn-primary" onClick={async () => {
-                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
                   if (confirmed) publish({ save_draft: true, headless: hl });
                 }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'draft' ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存草稿中...</> : '保存草稿'}
                 </button>
                 <button className="btn" onClick={async () => {
-                  const { confirmed, headless: hl } = await showPublishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
+                  const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
                   if (confirmed) publish({ save_draft: false, headless: hl });
                 }} disabled={!!publishingAction || generating}>
                   {publishingAction === 'publish' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 发布中...</> : '直接发布'}
@@ -409,7 +409,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                   )}
                 </button>
                 <button className="btn btn-ghost text-danger" onClick={async () => {
-                  const { confirmed, checkboxChecked } = await showConfirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+                  const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
                   if (confirmed) deleteItem(checkboxChecked);
                 }} disabled={!!publishingAction}>删除</button>
               </>

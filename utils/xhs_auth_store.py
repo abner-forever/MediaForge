@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Dict
 
-AUTH_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "xhs_auth.json"
-STORAGE_STATE_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "xhs_storage.json"
+from config import DATA_DIR
+
+AUTH_PATH = DATA_DIR / "state" / "xhs_auth.json"
+STORAGE_STATE_PATH = DATA_DIR / "state" / "xhs_storage.json"
 
 
 def read_xhs_auth() -> Dict[str, str]:

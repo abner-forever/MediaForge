@@ -1,10 +1,11 @@
 """本地 API Key 存储，替代环境变量方式管理多供应商 key。"""
 
 import json
-from pathlib import Path
 from typing import Dict
 
-KEYS_PATH = Path(__file__).resolve().parent.parent / "data" / "state" / "api_keys.json"
+from config import DATA_DIR
+
+KEYS_PATH = DATA_DIR / "state" / "api_keys.json"
 
 
 def read_api_keys() -> Dict[str, str]:

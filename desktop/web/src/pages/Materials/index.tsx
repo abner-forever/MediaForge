@@ -3,7 +3,7 @@ import { useStore } from '../../stores';
 import { materialsApi, queueApi } from '../../api/client';
 import type { TreeNode, BrowseFolder, BrowseFile, ScoreInfo, MaterialMeta } from '../../api/client';
 import ContextMenu, { type MenuItem } from '../../components/ContextMenu';
-import ConfirmDialog from '../../components/ConfirmDialog';
+import Dialog from '../../components/Dialog';
 import Modal from '../../components/Modal';
 import Loading from '../../components/Loading';
 import Checkbox from '../../components/Checkbox';
@@ -745,11 +745,11 @@ export default function Materials() {
         </div>
       </div>
 
-      <ConfirmDialog open={showBatchDeleteConfirm} title="批量删除"
+      <Dialog open={showBatchDeleteConfirm} title="批量删除"
         message={`确认删除 ${matSelected.size} 张图片？`} confirmText="删除" danger
         onConfirm={() => { setShowBatchDeleteConfirm(false); handleBatchDelete(); }}
         onCancel={() => setShowBatchDeleteConfirm(false)} />
-      <ConfirmDialog open={!!showDeleteFolderConfirm} title="删除文件夹"
+      <Dialog open={!!showDeleteFolderConfirm} title="删除文件夹"
         message={`确认删除文件夹「${showDeleteFolderConfirm?.split('/').pop() || ''}」及其所有内容？`}
         confirmText="删除" danger
         onConfirm={() => { if (showDeleteFolderConfirm) handleDeleteFolder(showDeleteFolderConfirm); }}
