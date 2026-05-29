@@ -87,7 +87,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
           border text-left
           transition-all duration-150
           bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
-          ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-[8px] text-[13px]'}
+          ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-[5px] text-[13px]'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           ${open
             ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
@@ -96,7 +96,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
               : 'border-[var(--border)] hover:border-[var(--accent)]'
           }
         `}
-        style={{ borderRadius: 'var(--radius)' }}
+        style={{ borderRadius: 'var(--radius-sm)' }}
         disabled={disabled}
       >
         <span className={!selected ? 'text-[var(--text-muted)]' : ''}>

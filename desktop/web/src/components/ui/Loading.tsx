@@ -1,11 +1,12 @@
 interface LoadingProps {
   text?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
   inline?: boolean;
 }
 
 const sizeConfig = {
+  xs: { wrapper: 16, ring: 12, ring2: 14 },
   sm: { wrapper: 32, ring: 24, ring2: 28 },
   md: { wrapper: 48, ring: 36, ring2: 42 },
   lg: { wrapper: 64, ring: 48, ring2: 56 },

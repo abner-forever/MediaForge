@@ -46,6 +46,6 @@ export const articleApi = {
     get<{ images: CoverImage[] }>(`/api/articles/cover-search?keyword=${encodeURIComponent(keyword)}`),
   coverDownload: (url: string) =>
     post<{ success: boolean; path: string }>('/api/articles/cover-download', { url }),
-  chat: (id: string, instruction: string) =>
-    post<ArticleContentResponse>(`/api/articles/${id}/chat`, { instruction }),
+  chat: (id: string, instruction: string, messages?: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    post<ArticleContentResponse>(`/api/articles/${id}/chat`, { instruction, messages: messages?.length ? messages : undefined }),
 };

@@ -56,13 +56,13 @@ export const effectsApi = {
     const fields = [
       'item_id', 'title', 'account_id', 'publish_time',
       'reads', 'likes', 'shares', 'favorites',
-      'comments', 'new_followers', 'content_type',
+      'comments', 'content_type',
       'source_platform', 'celebrity', 'image_count', 'updated_at',
     ] as const;
     const headers = [
       '文章ID', '标题', '账号ID', '发布时间',
       '阅读量', '点赞数', '转发数', '收藏数',
-      '评论数', '新增关注', '内容类型',
+      '评论数', '内容类型',
       '来源平台', '艺人', '图片数', '更新时间',
     ];
     const csvEscape = (v: unknown) => {

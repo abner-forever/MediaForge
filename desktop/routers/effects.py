@@ -50,7 +50,6 @@ async def effects_summary():
     total_comments = 0
     total_shares = 0
     total_favorites = 0
-    total_new_followers = 0
     hour_reads: dict[int, int] = defaultdict(int)
     dow_reads: dict[int, int] = defaultdict(int)
     celeb_data: dict[str, list[int]] = defaultdict(list)
@@ -63,7 +62,6 @@ async def effects_summary():
         total_comments += (item.get("comment_num") or item.get("comments") or 0)
         total_shares += (item.get("shares") or 0)
         total_favorites += (item.get("favorites") or 0)
-        total_new_followers += (item.get("new_followers") or 0)
 
         dt = _parse_publish_time(item.get("publish_time"))
         if dt:
@@ -93,7 +91,6 @@ async def effects_summary():
         "total_comments": total_comments,
         "total_shares": total_shares,
         "total_favorites": total_favorites,
-        "total_new_followers": total_new_followers,
         "avg_reads": round(total_reads / total_posts) if total_posts else 0,
         "avg_likes": round(total_likes / total_posts) if total_posts else 0,
         "best_publish_hour": best_hour,
@@ -125,7 +122,7 @@ async def effects_trend(days: int = Query(30)):
     while d <= today:
         daily[d.isoformat()] = {
             "date": d.isoformat(), "reads": 0, "likes": 0, "posts": 0,
-            "comments": 0, "shares": 0, "favorites": 0, "new_followers": 0,
+            "comments": 0, "shares": 0, "favorites": 0,
         }
         d += timedelta(days=1)
 
@@ -141,7 +138,6 @@ async def effects_trend(days: int = Query(30)):
             daily[key]["comments"] += (item.get("comment_num") or item.get("comments") or 0)
             daily[key]["shares"] += (item.get("shares") or 0)
             daily[key]["favorites"] += (item.get("favorites") or 0)
-            daily[key]["new_followers"] += (item.get("new_followers") or 0)
 
     return {"trend": [daily[k] for k in sorted(daily)]}
 
@@ -212,7 +208,6 @@ async def effects_funnel(days: int = Query(0), item_id: str = Query("")):
     total_shares = 0
     total_favorites = 0
     total_comments = 0
-    total_new_followers = 0
 
     for key, item in effects.items():
         if item_id and key != item_id:
@@ -226,7 +221,6 @@ async def effects_funnel(days: int = Query(0), item_id: str = Query("")):
         total_shares += item.get("shares", 0) or 0
         total_favorites += item.get("favorites", 0) or 0
         total_comments += (item.get("comment_num") or item.get("comments") or 0)
-        total_new_followers += item.get("new_followers", 0) or 0
 
     return {
         "total_reads": total_reads,
@@ -234,7 +228,6 @@ async def effects_funnel(days: int = Query(0), item_id: str = Query("")):
         "total_shares": total_shares,
         "total_favorites": total_favorites,
         "total_comments": total_comments,
-        "total_new_followers": total_new_followers,
     }
 
 
@@ -309,13 +302,13 @@ async def export_effects(format: str = Query("csv")):
     fields = [
         "item_id", "title", "account_id", "publish_time",
         "reads", "likes", "shares", "favorites",
-        "comments", "new_followers", "content_type",
+        "comments", "content_type",
         "source_platform", "celebrity", "image_count", "updated_at",
     ]
     headers = [
         "文章ID", "标题", "账号ID", "发布时间",
         "阅读量", "点赞数", "转发数", "收藏数",
-        "评论数", "新增关注", "内容类型",
+        "评论数", "内容类型",
         "来源平台", "艺人", "图片数", "更新时间",
     ]
 

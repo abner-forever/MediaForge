@@ -7,10 +7,10 @@ export interface PublishEffect {
   likes: number;
   shares: number;
   favorites: number;
+  recommendations?: number;
   updated_at: string;
   // 新增指标
   comments?: number;
-  new_followers?: number;
   // 内容维度标签
   content_type?: 'image' | 'article';
   source_platform?: string;
@@ -28,7 +28,6 @@ export interface EffectSummary {
   total_comments: number;
   total_shares: number;
   total_favorites: number;
-  total_new_followers: number;
   avg_reads: number;
   avg_likes: number;
   best_publish_hour: number;
@@ -44,7 +43,6 @@ export interface EffectTrendPoint {
   comments: number;
   shares: number;
   favorites: number;
-  new_followers: number;
 }
 
 export interface EffectCompareItem {

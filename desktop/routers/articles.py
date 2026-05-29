@@ -426,7 +426,8 @@ async def chat_article_content(article_id: str, req: ArticleChatRequest):
     if not instruction:
         raise HTTPException(400, "请输入指令")
 
-    content = chat_article(article.get("content", ""), instruction)
+    msg_dicts = [m.model_dump() for m in req.messages] if req.messages else None
+    content = chat_article(article.get("content", ""), instruction, messages=msg_dicts)
     app_state.update_article(article_id, {"content": content, "ai_generated": True})
     app_state.add_operation("AI 对话", f"「{instruction[:30]}」")
     return {"success": True, "content": content}

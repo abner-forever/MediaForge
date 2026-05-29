@@ -5,7 +5,7 @@ import MpArticlesTable from './MpArticlesTable';
 type Tab = 'hot' | 'raw';
 
 export default function ArticleDataTabs({ onCleared }: { onCleared?: () => void }) {
-  const [tab, setTab] = useState<Tab>('hot');
+  const [tab, setTab] = useState<Tab>('raw');
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -13,8 +13,8 @@ export default function ArticleDataTabs({ onCleared }: { onCleared?: () => void 
         display: 'flex', borderBottom: '1px solid var(--border)',
       }}>
         {([
-          { key: 'hot' as const, label: '爆款文章' },
           { key: 'raw' as const, label: '原始数据' },
+          { key: 'hot' as const, label: '爆款文章' },
         ]).map(t => (
           <button
             key={t.key}

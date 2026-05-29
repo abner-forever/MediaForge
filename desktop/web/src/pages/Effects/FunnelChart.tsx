@@ -8,7 +8,6 @@ interface FunnelData {
   total_shares: number;
   total_favorites: number;
   total_comments: number;
-  total_new_followers: number;
 }
 
 const STEPS = [
@@ -17,7 +16,6 @@ const STEPS = [
   { key: 'total_favorites' as const, label: '收藏', color: '#10b981' },
   { key: 'total_comments' as const, label: '评论', color: '#8b5cf6' },
   { key: 'total_shares' as const, label: '转发', color: '#ef4444' },
-  { key: 'total_new_followers' as const, label: '关注', color: '#ec4899' },
 ];
 
 export default function FunnelChart({ days }: { days: number }) {

@@ -195,6 +195,7 @@ def _parse_articles(data: dict) -> list:
             if not appmsg.get("create_time"):
                 line_info = appmsg.get("line_info") or {}
                 appmsg["create_time"] = line_info.get("send_time") or info.get("create_time") or 0
+
             articles.append(appmsg)
     return articles
 
@@ -221,7 +222,8 @@ def _match_and_update(articles: list, _emit) -> int:
             continue
 
         reads = art.get("read_num", 0) or 0
-        likes = art.get("like_num", 0) or 0
+        likes = art.get("old_like_num", 0) or 0  # old_like_num=点赞数, like_num=推荐数(在看)
+        recommends = art.get("like_num", 0) or 0  # like_num=推荐数(在看)
         share = art.get("share_num", 0) or art.get("share", 0) or 0
 
         # 发布时间：line_info.send_time（秒级时间戳），create_time 通常为 0
@@ -243,6 +245,7 @@ def _match_and_update(articles: list, _emit) -> int:
         update_data: Dict[str, Any] = {
             "reads": max(reads, existing.get("reads", 0)),
             "likes": max(likes, existing.get("likes", 0)),
+            "recommendations": max(recommends, existing.get("recommendations", 0)),
             "shares": max(share, existing.get("shares", 0)),
             "title": mp_title,
             "source_platform": "wechat_mp",

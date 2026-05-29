@@ -7,11 +7,11 @@ import type { ArticleItem } from '../../api/client';
 export default function ArticleList({
   articles, articleFilter, editingId, loading,
   onSelectArticle, onSwitchFilter, onDelete,
-  expanded, onToggleExpanded,
+  expanded, onToggleExpanded, fillHeight,
 }: {
   articles: ArticleItem[]; articleFilter: TabKey; editingId: string | null; loading: boolean;
   onSelectArticle: (a: ArticleItem) => void; onSwitchFilter: (tab: TabKey) => void; onDelete: (id: string) => void;
-  expanded: boolean; onToggleExpanded: () => void;
+  expanded: boolean; onToggleExpanded: () => void; fillHeight?: boolean;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [animating, setAnimating] = useState(false);
@@ -23,8 +23,9 @@ export default function ArticleList({
   }, [expanded]);
 
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {/* Header — always visible */}
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 0, ...(fillHeight ? { flex: 1, overflow: 'hidden' } : {}) }}>
+      {/* Header — always visible (hidden in fillHeight mode since Drawer has its own title) */}
+      {!fillHeight && (
       <div
         onClick={onToggleExpanded}
         style={{
@@ -58,20 +59,21 @@ export default function ArticleList({
           {articles.length}
         </span>
       </div>
+      )}
 
-      {/* Animated expand/collapse */}
+      {/* Content area */}
       <div
         ref={innerRef}
-        style={{
+        style={fillHeight ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {
           overflow: 'hidden',
           maxHeight: expanded ? (innerRef.current?.scrollHeight || 600) + 'px' : '0px',
           opacity: expanded ? 1 : 0,
           transition: `max-height 0.3s ${expanded ? 'var(--ease-out)' : 'ease-in'}, opacity 0.2s ${expanded ? '0.05s' : '0s'} ease`,
         }}
       >
-        <div style={{ paddingTop: 4 }}>
+        <div style={{ paddingTop: fillHeight ? 0 : 4, ...(fillHeight ? { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } : {}) }}>
           {/* Filter tabs */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8, flexShrink: 0 }}>
             {(Object.keys(TAB_LABELS) as TabKey[]).map((tab) => (
               <FilterTab key={tab} active={articleFilter === tab} onClick={() => onSwitchFilter(tab)}>
                 {TAB_LABELS[tab]}
@@ -80,7 +82,7 @@ export default function ArticleList({
           </div>
 
           {/* Article list */}
-          <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={fillHeight ? { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 } : { maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {loading && articles.length === 0 && (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}><Loading /></div>
             )}

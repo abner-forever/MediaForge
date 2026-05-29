@@ -160,6 +160,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
               <th className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('shares')}>
                 分享<SortIcon k="shares" />
               </th>
+              <th className="text-right py-2 pr-3 font-medium">推荐</th>
               <th className="text-right py-2 pr-3 font-medium">留言</th>
               <th className="text-left py-2 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('publish_time')}>
                 发布时间<SortIcon k="publish_time" />
@@ -168,7 +169,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
           </thead>
           <tbody>
             {articles.length === 0 ? (
-              <tr><td colSpan={8} className="py-8 text-center text-text-muted">无匹配数据</td></tr>
+              <tr><td colSpan={9} className="py-8 text-center text-text-muted">无匹配数据</td></tr>
             ) : articles.map((art, i) => (
               <tr key={art.item_id} className={`border-b border-border/50 ${i % 2 === 0 ? '' : 'bg-bg/50'}`}>
                 <td className="py-2 pr-2">
@@ -197,6 +198,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
                 <td className="py-2 pr-3 text-right font-mono text-text">{(art.reads || 0).toLocaleString()}</td>
                 <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.likes || 0}</td>
                 <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.shares || 0}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.recommendations || 0}</td>
                 <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.comment_num ?? '-'}</td>
                 <td className="py-2 text-text-muted text-xs whitespace-nowrap">
                   {art.publish_time ? formatTime(art.publish_time) : '-'}

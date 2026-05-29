@@ -2,7 +2,7 @@ export type { HealthStatus, DashboardStats, RunInfo, OperationItem, OperationsRe
 export type { Post, ScoreInfo, DiscoveryResult, DownloadStreamEvent, SearchStreamEvent } from './discovery';
 export type { MaterialsGroup, MaterialsData, TreeNode, BrowseFolder, BrowseFile, BrowseResult, TreeResult, MaterialMeta, MaterialsTagsResponse, MetadataResponse, CoverImage } from './materials';
 export type { QueueItem, PublishLogsResponse } from './queue';
-export type { ArticleItem, InspirationTopic, ArticleListResponse, ArticleResponse, ArticleContentResponse, TitleCandidate, InspirationResponse } from './articles';
+export type { ArticleItem, ChatMessage, InspirationTopic, ArticleListResponse, ArticleResponse, ArticleContentResponse, TitleCandidate, InspirationResponse } from './articles';
 export type { SettingsData, PlatformMeta, LogFileInfo, LogContentResponse } from './settings';
 export type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem, EffectsSyncEvent } from './wechat';
 export type { PipelineConfig, PipelineEvent, PipelineSummary } from './pipeline';

@@ -44,7 +44,6 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
   const [shares, setShares] = useState('');
   const [favorites, setFavorites] = useState('');
   const [comments, setComments] = useState('');
-  const [newFollowers, setNewFollowers] = useState('');
   const [contentType, setContentType] = useState<'image' | 'article' | ''>('');
   const [sourcePlatform, setSourcePlatform] = useState('');
   const [celebrity, setCelebrity] = useState('');
@@ -60,7 +59,6 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
         setShares(String(e.shares || ''));
         setFavorites(String(e.favorites || ''));
         setComments(String(e.comments || ''));
-        setNewFollowers(String(e.new_followers || ''));
         setContentType(e.content_type || '');
         setSourcePlatform(e.source_platform || '');
         setCelebrity(e.celebrity || '');
@@ -82,7 +80,6 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
         shares: parseInt(shares) || 0,
         favorites: parseInt(favorites) || 0,
         comments: parseInt(comments) || 0,
-        new_followers: parseInt(newFollowers) || 0,
         content_type: contentType || undefined,
         source_platform: sourcePlatform || undefined,
         celebrity: celebrity || undefined,
@@ -128,10 +125,6 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
           <div>
             <label className={labelStyle}>评论数</label>
             <input type="number" min="0" className="w-full text-sm" value={comments} onChange={e => setComments(e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label className={labelStyle}>新增关注</label>
-            <input type="number" min="0" className="w-full text-sm" value={newFollowers} onChange={e => setNewFollowers(e.target.value)} placeholder="0" />
           </div>
           <div>
             <label className={labelStyle}>内容类型</label>

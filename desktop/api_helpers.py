@@ -184,8 +184,14 @@ class ArticleGenerateRequest(BaseModel):
     template_prompt: str = ""
 
 
+class ArticleChatMessage(BaseModel):
+    role: str  # 'user' | 'assistant'
+    content: str
+
+
 class ArticleChatRequest(BaseModel):
     instruction: str
+    messages: Optional[List[ArticleChatMessage]] = None
 
 
 class ArticlePublishRequest(BaseModel):

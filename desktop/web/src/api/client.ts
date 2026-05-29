@@ -9,7 +9,7 @@ export type {
   MaterialsGroup, MaterialsData, TreeNode, BrowseFolder, BrowseFile, BrowseResult, TreeResult,
   MaterialMeta, MaterialsTagsResponse, MetadataResponse, CoverImage,
   QueueItem, PublishLogsResponse,
-  ArticleItem, InspirationTopic, ArticleListResponse, ArticleResponse, ArticleContentResponse,
+  ArticleItem, ChatMessage, InspirationTopic, ArticleListResponse, ArticleResponse, ArticleContentResponse,
   TitleCandidate, InspirationResponse,
   SettingsData, PlatformMeta, LogFileInfo, LogContentResponse,
   WeChatAccount, WeChatLoginEvent, PublishHistoryItem,

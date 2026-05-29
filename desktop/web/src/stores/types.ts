@@ -1,4 +1,4 @@
-import type { Post, ScoreInfo, QueueItem, ArticleItem, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary } from '../types';
+import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary } from '../types';
 
 /* ── Theme Presets ──────────────────────────── */
 export interface ThemePreset {
@@ -101,10 +101,14 @@ export interface AppState {
   currentArticle: ArticleItem | null;
   articleFilter: 'all' | 'draft' | 'queued' | 'published';
   inspirationResults: InspirationTopic[];
+  chatMessages: Record<string, ChatMessage[]>;
   setArticles: (articles: ArticleItem[]) => void;
   setCurrentArticle: (article: ArticleItem | null) => void;
   setArticleFilter: (filter: 'all' | 'draft' | 'queued' | 'published') => void;
   setInspirationResults: (results: InspirationTopic[]) => void;
+  addChatMessage: (articleId: string, message: ChatMessage) => void;
+  clearChatMessages: (articleId: string) => void;
+  getChatMessages: (articleId: string) => ChatMessage[];
 
   // WeChat sidebar sync
   wechatRefreshKey: number;
