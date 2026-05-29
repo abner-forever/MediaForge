@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.19.1 (2026-05-29)
+
+### Bug Fixes
+
+- Refactor modal handling and improve icon generation
+  ([`5ac5307`](https://github.com/abner-forever/MediaForge/commit/5ac5307761d284c2bc6c669f3c1d70a3860333cf))
+
+
 ## v1.19.0 (2026-05-29)
 
 ### Bug Fixes
