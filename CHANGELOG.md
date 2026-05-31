@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.19.2 (2026-05-31)
+
+### Bug Fixes
+
+- 重构流水线页面，优化运行历史卡片展示
+  ([`8659356`](https://github.com/abner-forever/MediaForge/commit/86593564a77db01ede2225d270b3c8dac272c7aa))
+
+
 ## v1.19.1 (2026-05-29)
 
 ### Bug Fixes
