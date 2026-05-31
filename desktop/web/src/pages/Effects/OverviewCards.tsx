@@ -1,4 +1,5 @@
 import type { EffectSummary } from '../../types';
+import { formatCount } from '../../utils/format';
 
 const CARDS = [
   { key: 'total_posts' as const, label: '发布总数', color: '#7868d0' },
@@ -30,13 +31,16 @@ export default function OverviewCards({ summary }: { summary: EffectSummary }) {
             background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
             borderRadius: '0 0 4px 4px',
           }} />
-          <div style={{
-            fontSize: 32, fontWeight: 700, lineHeight: 1, marginBottom: 6,
-            fontFeatureSettings: '"tnum"',
-            background: `linear-gradient(135deg, var(--text), ${color})`,
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-          }}>
-            {summary[key].toLocaleString()}
+          <div
+            title={summary[key].toLocaleString()}
+            style={{
+              fontSize: 32, fontWeight: 700, lineHeight: 1, marginBottom: 6,
+              fontFeatureSettings: '"tnum"',
+              background: `linear-gradient(135deg, var(--text), ${color})`,
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}
+          >
+            {formatCount(summary[key])}
           </div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
             {label}

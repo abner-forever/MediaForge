@@ -14,7 +14,7 @@ from datetime import datetime
 from threading import Event
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from config import settings
+from config import DOWNLOAD_DIR, settings
 from utils.logger import get_logger
 
 from services.pipeline.constants import (
@@ -134,7 +134,7 @@ class PipelineAgent:
                     try:
                         resp = _req.post(
                             url, headers=headers, json=payload,
-                            timeout=settings.request_timeout,
+                            timeout=settings.ai_timeout,
                         )
                         resp.raise_for_status()
                         data = resp.json()
@@ -218,7 +218,7 @@ class PipelineAgent:
         if self.config.ai_decision_mode != "interactive":
             return None
         try:
-            from desktop.api import pipeline_decision_events, pipeline_decision_results
+            from desktop.routers.pipeline import pipeline_decision_events, pipeline_decision_results
             decision_evt = Event()
             run_id = self.run_id
             pipeline_decision_events[run_id] = decision_evt
@@ -259,6 +259,7 @@ class PipelineAgent:
             "items": [],
         }
 
+        cancelled = False
         try:
             # Step 1: 健康检查
             health_ok = self._step_health_check()
@@ -352,6 +353,7 @@ class PipelineAgent:
         except PipelineCancelledError:
             self._emit(EVENT_CANCELLED, "", {"reason": "用户取消了流水线"})
             summary["failed"] = 1
+            cancelled = True
             return summary
 
         except Exception as err:
@@ -359,11 +361,14 @@ class PipelineAgent:
             self._emit(EVENT_STEP_ERROR, "", {"error": str(err)})
             summary["failed"] += 1
 
-        elapsed = time.time() - start_time
-        summary["elapsed_seconds"] = round(elapsed, 1)
-        summary["prompt_tokens"] = self.total_prompt_tokens
-        summary["completion_tokens"] = self.total_completion_tokens
-        self._emit(EVENT_COMPLETED, "", {"summary": summary, "run_id": self.run_id})
+        finally:
+            if not cancelled:
+                elapsed = time.time() - start_time
+                summary["elapsed_seconds"] = round(elapsed, 1)
+                summary["prompt_tokens"] = self.total_prompt_tokens
+                summary["completion_tokens"] = self.total_completion_tokens
+                self._emit(EVENT_COMPLETED, "", {"summary": summary, "run_id": self.run_id})
+
         return summary
 
     # ── Step 1: 健康检查 ────────────────────────────────
@@ -1063,6 +1068,13 @@ class PipelineAgent:
 
         from desktop.app_state import app_state
 
+        def _to_relative(path: str) -> str:
+            """将绝对路径转为相对于 DOWNLOAD_DIR 的相对路径。"""
+            try:
+                return str(Path(path).relative_to(DOWNLOAD_DIR))
+            except ValueError:
+                return path
+
         added = 0
         for i, post in enumerate(posts):
             self._check_cancelled()
@@ -1076,11 +1088,13 @@ class PipelineAgent:
                 # 封面图放在第一张，与发布队列逻辑一致
                 if cover and cover in images:
                     images = [cover] + [img for img in images if img != cover]
+                rel_images = [_to_relative(img) for img in images]
+                rel_cover = _to_relative(cover) if cover else ""
                 item = {
                     "title": post.get("title", ""),
                     "desc": post.get("desc", ""),
-                    "images": images,
-                    "cover": cover or (images[0] if images else ""),
+                    "images": rel_images,
+                    "cover": rel_cover or (rel_images[0] if rel_images else ""),
                     "celebrity": post.get("celebrity", ""),
                     "status": "queued",
                     "account_id": self.config.account_id or "",
@@ -1187,7 +1201,7 @@ class PipelineAgent:
 
         # checkpoint: 请求用户确认
         if self.config.require_confirm:
-            from desktop.api import pipeline_confirm_events
+            from desktop.routers.pipeline import pipeline_confirm_events
             confirm_evt = Event()
             pipeline_confirm_events[self.run_id] = confirm_evt
 

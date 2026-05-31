@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../stores';
+import { useShallow } from 'zustand/react/shallow';
 import { articleApi, wechatAccountApi } from '../../api/client';
 import type { ArticleItem, ChatMessage, InspirationTopic, CoverImage, TitleCandidate, WeChatAccount } from '../../api/client';
 import Loading from '../../components/Loading';
 import Dialog from '../../components/Dialog';
 import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
-import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../../components/RichTextEditor';
+import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../../components/feature/RichTextEditor';
 import Select from '../../components/Select';
 import Drawer from '../../components/ui/Drawer';
 import AIToolbar from './AIToolbar';
@@ -29,7 +30,23 @@ const ARTICLE_TEMPLATES = [
 export default function ArticlePublish() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox, sidebarOpen, setSidebarOpen, chatMessages, addChatMessage, clearChatMessages } = useStore();
+  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox, sidebarOpen, setSidebarOpen, chatMessages, addChatMessage, clearChatMessages } = useStore(useShallow(s => ({
+    addToast: s.addToast,
+    articles: s.articles,
+    setArticles: s.setArticles,
+    currentArticle: s.currentArticle,
+    setCurrentArticle: s.setCurrentArticle,
+    articleFilter: s.articleFilter,
+    setArticleFilter: s.setArticleFilter,
+    inspirationResults: s.inspirationResults,
+    setInspirationResults: s.setInspirationResults,
+    openLightbox: s.openLightbox,
+    sidebarOpen: s.sidebarOpen,
+    setSidebarOpen: s.setSidebarOpen,
+    chatMessages: s.chatMessages,
+    addChatMessage: s.addChatMessage,
+    clearChatMessages: s.clearChatMessages,
+  })));
 
   /* ── 编辑器状态 ────────────────────────────── */
   const [title, setTitle] = useState('');

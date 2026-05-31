@@ -30,7 +30,7 @@ function formatTime(iso: string): string {
 }
 
 export default function AboutSection() {
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const [clickCount, setClickCount] = useState(0);
   const [devMode, setDevMode] = useState(false);
 
@@ -44,6 +44,8 @@ export default function AboutSection() {
   const [loadingContent, setLoadingContent] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
 
   useEffect(() => {
     logsApi.list().then(res => {
@@ -123,6 +125,36 @@ export default function AboutSection() {
       addToast(err.message || '复制失败', 'error');
     } finally {
       setCopying(false);
+    }
+  }, [addToast]);
+
+  const handleDeleteFile = useCallback(async (file: LogFileInfo) => {
+    setDeleting(file.name);
+    try {
+      await logsApi.delete(file.name);
+      setLogFiles(prev => prev.filter(f => f.name !== file.name));
+      if (openedFile === file.name) setOpenedFile(null);
+      setFileContents(prev => { const next = { ...prev }; delete next[file.name]; return next; });
+      addToast(`已删除「${file.name}」`, 'success');
+    } catch (err: any) {
+      addToast(err.message || '删除失败', 'error');
+    } finally {
+      setDeleting(null);
+    }
+  }, [openedFile, addToast]);
+
+  const handleClearAll = useCallback(async () => {
+    setClearingAll(true);
+    try {
+      const res = await logsApi.clearAll();
+      setLogFiles([]);
+      setOpenedFile(null);
+      setFileContents({});
+      addToast(`已清空 ${res.deleted} 个日志文件`, 'success');
+    } catch (err: any) {
+      addToast(err.message || '清空失败', 'error');
+    } finally {
+      setClearingAll(false);
     }
   }, [addToast]);
 
@@ -260,6 +292,9 @@ export default function AboutSection() {
             <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
               {savingAll ? '保存中...' : '保存到下载目录'}
             </button>
+            <button onClick={handleClearAll} disabled={clearingAll} className="btn btn-sm btn-danger">
+              {clearingAll ? '清空中...' : '清空全部'}
+            </button>
           </div>
         )}
         {!expanded && !loading && !logError && logFiles.length === 0 && (
@@ -314,6 +349,21 @@ export default function AboutSection() {
                       <div className="flex items-center gap-3 shrink-0 ml-2">
                         <span className="text-xs text-text-muted">{formatSize(file.size)}</span>
                         <span className="text-xs text-text-muted">{formatTime(file.mtime)}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteFile(file); }}
+                          disabled={deleting === file.name}
+                          className="w-6 h-6 flex items-center justify-center rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors cursor-pointer"
+                          title="删除此日志"
+                        >
+                          {deleting === file.name ? (
+                            <div className="w-3 h-3 border border-danger border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     </button>
 
@@ -351,6 +401,9 @@ export default function AboutSection() {
                 </button>
                 <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
                   {savingAll ? '保存中...' : '保存到下载目录'}
+                </button>
+                <button onClick={handleClearAll} disabled={clearingAll} className="btn btn-sm btn-danger">
+                  {clearingAll ? '清空中...' : '清空全部'}
                 </button>
               </div>
             )}

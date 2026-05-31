@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { pipelineApi, dashboardApi, type PipelineConfig, type PipelineEvent, type PipelineSummary, type RunInfo } from '../../api/client';
 import { useStore } from '../../stores';
+import { useShallow } from 'zustand/react/shallow';
 import ConfigPanel from './ConfigPanel';
 import ProgressView from './ProgressView';
 import SummaryPanel from './SummaryPanel';
+import Loading from '../../components/Loading';
 import HelpGuide from '../../components/ui/HelpGuide';
 
 const PIPELINE_STEPS = [
@@ -18,28 +20,39 @@ const PIPELINE_STEPS = [
 
 export default function PipelinePage() {
   const {
-    addToast,
-    pipelineRunning,
-    setPipelineRunning,
-    pipelineEvents: events,
-    pipelineCurrentStep: currentStep,
-    pipelineStepProgress: stepProgress,
-    pipelineSummary: summary,
-    pipelineError: error,
-    pipelineCheckpoint: checkpoint,
-    pipelineDecisionReq: decisionReq,
-    pipelineAbortController,
-    setPipelineEvents,
-    addPipelineEvent,
-    setPipelineCurrentStep,
-    setPipelineStepProgress,
-    setPipelineSummary,
-    setPipelineError,
-    setPipelineCheckpoint,
-    setPipelineDecisionReq,
-    setPipelineAbortController,
+    addToast, pipelineRunning, setPipelineRunning,
+    pipelineEvents: events, pipelineCurrentStep: currentStep,
+    pipelineStepProgress: stepProgress, pipelineSummary: summary,
+    pipelineError: error, pipelineCheckpoint: checkpoint,
+    pipelineDecisionReq: decisionReq, pipelineAbortController,
+    setPipelineEvents, processPipelineEvent,
+    setPipelineCurrentStep, setPipelineStepProgress,
+    setPipelineSummary, setPipelineError,
+    setPipelineCheckpoint, setPipelineDecisionReq, setPipelineAbortController,
     resetPipelineState,
-  } = useStore();
+  } = useStore(useShallow(s => ({
+    addToast: s.addToast,
+    pipelineRunning: s.pipelineRunning,
+    setPipelineRunning: s.setPipelineRunning,
+    pipelineEvents: s.pipelineEvents,
+    pipelineCurrentStep: s.pipelineCurrentStep,
+    pipelineStepProgress: s.pipelineStepProgress,
+    pipelineSummary: s.pipelineSummary,
+    pipelineError: s.pipelineError,
+    pipelineCheckpoint: s.pipelineCheckpoint,
+    pipelineDecisionReq: s.pipelineDecisionReq,
+    pipelineAbortController: s.pipelineAbortController,
+    setPipelineEvents: s.setPipelineEvents,
+    processPipelineEvent: s.processPipelineEvent,
+    setPipelineCurrentStep: s.setPipelineCurrentStep,
+    setPipelineStepProgress: s.setPipelineStepProgress,
+    setPipelineSummary: s.setPipelineSummary,
+    setPipelineError: s.setPipelineError,
+    setPipelineCheckpoint: s.setPipelineCheckpoint,
+    setPipelineDecisionReq: s.setPipelineDecisionReq,
+    setPipelineAbortController: s.setPipelineAbortController,
+    resetPipelineState: s.resetPipelineState,
+  })));
 
   const running = pipelineRunning;
 
@@ -82,33 +95,18 @@ export default function PipelinePage() {
 
     try {
       const result = await pipelineApi.run(config, (evt) => {
-        eventsRef.current = [...eventsRef.current, evt];
-        addPipelineEvent(evt);
-        if (evt.type === 'step_start' && evt.step) setPipelineCurrentStep(evt.step);
-        if (evt.type === 'step_error') setPipelineCurrentStep(evt.step);
-        if (evt.type === 'step_progress' && evt.current !== undefined && evt.total !== undefined) {
-          setPipelineStepProgress({ current: evt.current as number, total: evt.total as number });
-        }
-        if (evt.type === 'checkpoint_required') {
-          setPipelineCheckpoint({
-            message: (evt.message as string) || '确认发布？',
-            runId: (evt.pipeline_run_id as string) || '',
-            items: evt.items as Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }> | undefined,
-          });
-        }
-        if (evt.type === 'step_error' && !evt.step) setPipelineError((evt.error as string) || '运行出错');
-        if (evt.type === 'decision_required') {
-          setPipelineDecisionReq({
-            message: (evt.message as string) || '请做出选择',
-            runId: (evt.pipeline_run_id as string) || '',
-            options: (evt.options as Array<{ id: string; label: string }>) || [],
-            context: evt.context as Record<string, unknown> | undefined,
-          });
-        }
+        eventsRef.current.push(evt);
+        processPipelineEvent(evt);
       }, abort.signal);
 
-      if (result) setPipelineSummary(result);
-      addToast('流水线执行完成', 'success');
+      if (result) {
+        setPipelineSummary(result);
+        if (result.failed > 0) {
+          addToast('流水线执行出错，请查看日志', 'error');
+        } else {
+          addToast('流水线执行完成', 'success');
+        }
+      }
     } catch (err: any) {
       if (err.name === 'AbortError') {
         addToast('流水线已取消', 'info');
@@ -124,7 +122,7 @@ export default function PipelinePage() {
       setPipelineAbortController(null);
       loadHistory();
     }
-  }, [addToast, loadHistory, setPipelineRunning, setPipelineEvents, setPipelineCurrentStep, setPipelineStepProgress, setPipelineSummary, setPipelineError, setPipelineCheckpoint, setPipelineDecisionReq, setPipelineAbortController, addPipelineEvent]);
+  }, [addToast, loadHistory, setPipelineRunning, setPipelineEvents, setPipelineCurrentStep, setPipelineStepProgress, setPipelineSummary, setPipelineError, setPipelineCheckpoint, setPipelineDecisionReq, setPipelineAbortController, processPipelineEvent]);
 
   const handleCancel = useCallback(() => {
     if (pipelineAbortController) {
@@ -286,14 +284,24 @@ export default function PipelinePage() {
     return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
+  const fmtDuration = (sec?: number) => {
+    if (sec == null || sec <= 0) return '-';
+    if (sec < 60) return `${sec.toFixed(0)}s`;
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    return `${m}m${s}s`;
+  };
+
   const statusColor = (s: string) => {
     if (s === 'completed') return 'bg-green-500';
     if (s === 'partial_failure') return 'bg-yellow-500';
+    if (s === 'no_output') return 'bg-orange-500';
     return 'bg-blue-500';
   };
   const statusText = (s: string) => {
     if (s === 'completed') return '成功';
     if (s === 'partial_failure') return '部分失败';
+    if (s === 'no_output') return '无产出';
     return '进行中';
   };
 
@@ -441,9 +449,9 @@ export default function PipelinePage() {
           {/* 启动中加载状态 */}
           {running && events.length === 0 && (
             <div className="card">
-              <div className="flex items-center justify-center py-10 gap-3">
-                <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <div>
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Loading size="sm" />
+                <div className="text-center">
                   <div className="text-sm font-medium text-text">正在启动流水线...</div>
                   <div className="text-xs text-text-muted mt-0.5">正在初始化运行环境并验证配置</div>
                 </div>
@@ -570,7 +578,7 @@ export default function PipelinePage() {
                   暂无运行记录
                 </div>
               ) : (
-                <div className="space-y-0.5 px-2 pb-2 max-h-[calc(100vh-220px)] overflow-y-auto">
+                <div className="space-y-1.5 px-2 pb-2 max-h-[calc(100vh-220px)] overflow-y-auto">
                   {history.map((run) => {
                     const isActive = detailRun?.run_id === run.run_id;
                     const totalTokens = (run.prompt_tokens ?? 0) + (run.completion_tokens ?? 0);
@@ -578,29 +586,21 @@ export default function PipelinePage() {
                       <button
                         key={run.run_id}
                         onClick={() => openDetail(run)}
-                        className={`w-full text-left p-3 rounded-xl transition-all group ${
-                          isActive ? 'bg-accent/10 text-accent ring-1 ring-accent/20' : 'hover:bg-bg-secondary text-text'
+                        className={`w-full text-left px-3 py-3 rounded-xl transition-all group ${
+                          isActive
+                            ? 'bg-accent/10 ring-1 ring-accent/20'
+                            : 'hover:bg-bg-secondary'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor(run.status)}`} />
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                              run.status === 'completed' ? 'bg-green-500/10 text-green-600' :
-                              run.status === 'partial_failure' ? 'bg-yellow-500/10 text-yellow-600' :
-                              'bg-blue-500/10 text-blue-600'
-                            }`}>
-                              {statusText(run.status)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {run.started_at && (
-                              <span className="text-[10px] text-text-muted/60 font-mono">{fmtTime(run.started_at)}</span>
-                            )}
+                        {/* 第一行：状态点 + 标题 + 操作 */}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor(run.status)}`} />
+                          <div className="text-sm font-medium truncate text-text flex-1 min-w-0">{run.title || run.run_id}</div>
+                          <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                             {run.status === 'running' && (
                               <span
                                 onClick={(e) => { e.stopPropagation(); handleContinueRun(run); }}
-                                className="p-1 rounded-md hover:bg-accent/20 text-accent transition-all"
+                                className="p-1 rounded-md hover:bg-accent/20 text-accent"
                                 title="继续运行"
                               >
                                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
@@ -610,7 +610,7 @@ export default function PipelinePage() {
                             )}
                             <span
                               onClick={(e) => { e.stopPropagation(); handleDeleteRun(run.run_id); }}
-                              className="p-1 rounded-md hover:bg-red-500/15 text-text-muted/30 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                              className="p-1 rounded-md hover:bg-red-500/15 text-text-muted hover:text-red-500"
                               title="删除记录"
                             >
                               <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -620,28 +620,47 @@ export default function PipelinePage() {
                           </div>
                         </div>
 
-                        <div className="text-sm font-medium truncate mb-2">{run.title || run.run_id}</div>
+                        {/* 第二行：状态 + 时间 */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-xs font-medium ${
+                            run.status === 'completed' ? 'text-green-600' :
+                            run.status === 'partial_failure' ? 'text-yellow-600' :
+                            run.status === 'no_output' ? 'text-orange-600' :
+                            'text-blue-600'
+                          }`}>
+                            {statusText(run.status)}
+                          </span>
+                          {run.started_at && (
+                            <span className="text-[11px] text-text-muted font-mono">{fmtTime(run.started_at)}</span>
+                          )}
+                        </div>
 
-                        <div className="grid grid-cols-4 gap-1">
-                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-text tabular-nums">{run.processed}</div>
-                            <div className="text-[10px] text-text-muted/70 leading-tight">处理</div>
+                        {/* 第三行：指标网格 */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <div className="bg-bg-secondary/60 rounded-lg px-2 py-1.5 text-center">
+                            <div className="text-xs font-semibold text-text tabular-nums">{run.total_posts ?? run.processed}</div>
+                            <div className="text-[10px] text-text-muted leading-tight">帖子</div>
                           </div>
-                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-green-600 tabular-nums">{run.processed - run.failed}</div>
-                            <div className="text-[10px] text-text-muted/70 leading-tight">成功</div>
+                          <div className="bg-bg-secondary/60 rounded-lg px-2 py-1.5 text-center">
+                            <div className="text-xs font-semibold text-green-600 tabular-nums">{run.published ?? (run.processed - run.failed)}</div>
+                            <div className="text-[10px] text-text-muted leading-tight">入队</div>
                           </div>
-                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className={`text-xs font-semibold tabular-nums ${run.failed > 0 ? 'text-red-500' : 'text-text'}`}>{run.failed}</div>
-                            <div className="text-[10px] text-text-muted/70 leading-tight">失败</div>
+                          <div className="bg-bg-secondary/60 rounded-lg px-2 py-1.5 text-center">
+                            <div className={`text-xs font-semibold tabular-nums ${run.failed > 0 ? 'text-red-500' : 'text-text-muted'}`}>{run.failed}</div>
+                            <div className="text-[10px] text-text-muted leading-tight">失败</div>
                           </div>
-                          <div className="bg-bg-secondary/50 rounded-md py-1.5 px-1 text-center">
-                            <div className="text-xs font-semibold text-text-muted tabular-nums">
-                              {totalTokens > 0 ? totalTokens.toLocaleString() : '-'}
-                            </div>
-                            <div className="text-[10px] text-text-muted/70 leading-tight">Token</div>
+                          <div className="bg-bg-secondary/60 rounded-lg px-2 py-1.5 text-center">
+                            <div className="text-xs font-semibold text-text-muted tabular-nums">{fmtDuration(run.elapsed_seconds)}</div>
+                            <div className="text-[10px] text-text-muted leading-tight">耗时</div>
                           </div>
                         </div>
+
+                        {/* Token 用量（可选） */}
+                        {totalTokens > 0 && (
+                          <div className="mt-1.5 text-[10px] text-text-muted text-right tabular-nums">
+                            {totalTokens.toLocaleString()} tokens
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -686,7 +705,7 @@ export default function PipelinePage() {
                 {checkpoint.items.map((item, i) => {
                   const isExpanded = expandedCheckpointItems.has(i);
                   const imgSrc = (path: string) =>
-                    path.startsWith('http') ? `/api/proxy/image?url=${encodeURIComponent(path)}` : `/api/images/${encodeURIComponent(path)}`;
+                    path.startsWith('http') ? `/proxy?url=${encodeURIComponent(path)}` : `/images/${encodeURIComponent(path).replace(/%2F/g, '/')}`;
                   const images = item.image_list || (item.cover ? [item.cover] : []);
                   return (
                     <div key={i} className="border border-border rounded-xl p-3 bg-bg-secondary/30">
@@ -840,7 +859,7 @@ export default function PipelinePage() {
             <div className="flex-1 overflow-y-auto min-h-0">
               {detailLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  <Loading size="sm" />
                 </div>
               ) : detailTab === 'overview' ? (
                 <div className="p-6 space-y-5">
@@ -848,9 +867,11 @@ export default function PipelinePage() {
                     <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold
                       ${detailRun.status === 'completed' ? 'bg-green-500/20 text-green-500' :
                         detailRun.status === 'partial_failure' ? 'bg-yellow-500/20 text-yellow-500' :
+                        detailRun.status === 'no_output' ? 'bg-orange-500/20 text-orange-500' :
                         'bg-blue-500/20 text-blue-500'}`}>
                       {detailRun.status === 'completed' ? '✓' :
-                       detailRun.status === 'partial_failure' ? '⚠' : '⋯'}
+                       detailRun.status === 'partial_failure' ? '⚠' :
+                       detailRun.status === 'no_output' ? '○' : '⋯'}
                     </div>
                     <div>
                       <div className="text-lg font-bold text-text">{statusText(detailRun.status)}</div>
@@ -859,17 +880,18 @@ export default function PipelinePage() {
                   </div>
 
                   <div className="grid grid-cols-4 gap-3">
-                    <StatBox label="处理帖子" value={detailRun.processed} color="text-accent" />
-                    <StatBox label="成功" value={detailRun.processed - detailRun.failed} color="text-green-500" />
+                    <StatBox label="帖子" value={detailRun.total_posts ?? detailRun.processed} color="text-accent" />
+                    <StatBox label="入队" value={detailRun.published ?? (detailRun.processed - detailRun.failed)} color="text-green-500" />
                     <StatBox label="失败" value={detailRun.failed} color="text-red-500" />
-                    {detailTokens && (
-                      <StatBox label="Token" value={`${(detailTokens.prompt + detailTokens.completion).toLocaleString()}`} color="text-text-muted" />
-                    )}
+                    <StatBox label="耗时" value={fmtDuration(detailRun.elapsed_seconds)} color="text-text-muted" />
                   </div>
 
                   {detailRun.started_at && (
                     <div className="text-xs text-text-muted flex gap-4 flex-wrap">
                       <span>开始时间: {fmtTimeFull(detailRun.started_at)}</span>
+                      {detailTokens && (detailTokens.prompt + detailTokens.completion) > 0 && (
+                        <span>Token: {(detailTokens.prompt + detailTokens.completion).toLocaleString()}</span>
+                      )}
                     </div>
                   )}
                 </div>

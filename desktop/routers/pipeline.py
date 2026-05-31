@@ -87,7 +87,12 @@ async def pipeline_run(req: PipelineRunRequest):
 
             summary = agent.run()
 
-            status = "completed" if summary.get("failed", 0) == 0 else "partial_failure"
+            if summary.get("failed", 0) > 0:
+                status = "partial_failure"
+            elif summary.get("total_posts", 0) == 0 and summary.get("total_images", 0) == 0:
+                status = "no_output"
+            else:
+                status = "completed"
             append_audit(audit_path, "run_finished", {
                 "status": status,
                 "total_posts": summary.get("total_posts", 0),

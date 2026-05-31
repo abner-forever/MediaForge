@@ -3,7 +3,7 @@ import { useStore } from '../../stores';
 const CIRCUMFERENCE = 2 * Math.PI * 48;
 
 export default function ProgressOverlay() {
-  const { progress } = useStore();
+  const progress = useStore(s => s.progress);
   if (!progress) return null;
   const { current, total, detail } = progress;
 

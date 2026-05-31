@@ -4,6 +4,7 @@ import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/vi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { marked } from 'marked';
+import './RichTextEditor.less';
 
 interface RichTextEditorProps {
   value: object;
@@ -143,7 +144,10 @@ export default function RichTextEditor({
   const [plainText, setPlainText] = useState('');
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const previewPaneRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
+  const scrollSyncLock = useRef<'editor' | 'preview' | null>(null);
+  const scrollSyncTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Sync external Tiptap JSON value → CodeMirror
   useEffect(() => {
@@ -204,6 +208,44 @@ export default function RichTextEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Scroll sync between editor and preview
+  useEffect(() => {
+    if (viewMode !== 'split') return;
+
+    const editorScroller = editorContainerRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
+    const previewPane = previewPaneRef.current;
+    if (!editorScroller || !previewPane) return;
+
+    const acquireLock = (who: 'editor' | 'preview') => {
+      clearTimeout(scrollSyncTimer.current);
+      scrollSyncLock.current = who;
+      scrollSyncTimer.current = setTimeout(() => { scrollSyncLock.current = null; }, 80);
+    };
+
+    const onEditorScroll = () => {
+      if (scrollSyncLock.current === 'preview') return;
+      acquireLock('editor');
+      const ratio = editorScroller.scrollTop / (editorScroller.scrollHeight - editorScroller.clientHeight || 1);
+      previewPane.scrollTop = ratio * (previewPane.scrollHeight - previewPane.clientHeight);
+    };
+
+    const onPreviewScroll = () => {
+      if (scrollSyncLock.current === 'editor') return;
+      acquireLock('preview');
+      const ratio = previewPane.scrollTop / (previewPane.scrollHeight - previewPane.clientHeight || 1);
+      editorScroller.scrollTop = ratio * (editorScroller.scrollHeight - editorScroller.clientHeight);
+    };
+
+    editorScroller.addEventListener('scroll', onEditorScroll, { passive: true });
+    previewPane.addEventListener('scroll', onPreviewScroll, { passive: true });
+
+    return () => {
+      clearTimeout(scrollSyncTimer.current);
+      editorScroller.removeEventListener('scroll', onEditorScroll);
+      previewPane.removeEventListener('scroll', onPreviewScroll);
+    };
+  }, [viewMode]);
 
   // Rendered HTML for preview pane
   const htmlPreview = (() => {
@@ -370,7 +412,7 @@ export default function RichTextEditor({
 
         {/* Preview pane */}
         {viewMode !== 'edit' && (
-          <div className="rte-preview-pane">
+          <div className="rte-preview-pane" ref={previewPaneRef}>
             <div className="rte-preview-content" dangerouslySetInnerHTML={{ __html: htmlPreview }} />
           </div>
         )}
@@ -381,152 +423,6 @@ export default function RichTextEditor({
         <span>{wordCount} 字 / {charCount} 字符</span>
       </div>
 
-      <style>{`
-        .rte-wrapper {
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          background: var(--bg-card);
-          overflow: hidden;
-          transition: border-color 0.2s, box-shadow 0.2s;
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-          min-height: 0;
-        }
-        .rte-wrapper:focus-within {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 2px var(--accent-soft);
-        }
-        .rte-wrapper.fullscreen {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 9999;
-          border-radius: 0;
-          border: none;
-          flex: unset;
-          width: 100vw;
-          height: 100vh;
-        }
-        .rte-wrapper.fullscreen:focus-within {
-          box-shadow: none;
-        }
-        .rte-toolbar {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 2px;
-          padding: 6px 8px;
-          border-bottom: 1px solid var(--border-subtle);
-          background: var(--bg-secondary);
-          align-items: center;
-          flex-shrink: 0;
-        }
-        .rte-toolbar-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 28px;
-          height: 28px;
-          border: none;
-          border-radius: 4px;
-          background: transparent;
-          color: var(--text-muted);
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-          transition: all 0.15s;
-          padding: 0;
-        }
-        .rte-toolbar-btn:hover {
-          background: var(--bg-inset);
-          color: var(--text);
-        }
-        .rte-toolbar-btn.active {
-          background: var(--accent-soft);
-          color: var(--accent);
-        }
-        .rte-toolbar-icon {
-          font-size: 16px;
-          width: 30px;
-          height: 30px;
-        }
-        .rte-divider {
-          width: 1px;
-          height: 20px;
-          background: var(--border);
-          margin: 0 4px;
-          flex-shrink: 0;
-        }
-        .rte-content-area {
-          display: flex;
-          flex: 1;
-          overflow: hidden;
-          min-height: 0;
-          min-width: 0;
-        }
-        .rte-editor-pane {
-          flex: 1;
-          overflow: hidden;
-          min-width: 0;
-          background: var(--bg-card);
-          flex-direction: column;
-          min-height: 0;
-        }
-        .rte-editor-pane .cm-editor {
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          min-height: 0;
-        }
-        .rte-editor-pane .cm-scroller {
-          flex: 1;
-          overflow: auto;
-          min-height: 0;
-        }
-        .rte-preview-pane {
-          flex: 1;
-          overflow-y: auto;
-          border-left: 1px solid var(--border-subtle);
-          padding: 14px 16px;
-          font-size: 16px;
-          line-height: 1.7;
-          color: var(--text);
-          min-width: 0;
-          background: var(--bg-card);
-          min-height: 0;
-          height: 100%;
-        }
-        .rte-preview-content h1 { font-size: 1.75em; font-weight: 700; margin: 1em 0 0.5em; line-height: 1.3; color: var(--text); }
-        .rte-preview-content h2 { font-size: 1.4em; font-weight: 600; margin: 0.8em 0 0.4em; line-height: 1.3; color: var(--text); }
-        .rte-preview-content h3 { font-size: 1.15em; font-weight: 600; margin: 0.6em 0 0.3em; line-height: 1.3; color: var(--text); }
-        .rte-preview-content p { margin: 0 0 0.75em; }
-        .rte-preview-content p:last-child { margin-bottom: 0; }
-        .rte-preview-content ul { list-style: disc; padding-left: 1.5em; margin: 0 0 0.75em; }
-        .rte-preview-content ol { list-style: decimal; padding-left: 1.5em; margin: 0 0 0.75em; }
-        .rte-preview-content li { margin: 0.25em 0; }
-        .rte-preview-content li > p { margin: 0; }
-        .rte-preview-content blockquote { border-left: 3px solid var(--accent); padding-left: 1em; color: var(--text-secondary); margin: 0.75em 0; }
-        .rte-preview-content a { color: var(--accent); text-decoration: underline; }
-        .rte-preview-content code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-        .rte-preview-content pre { background: var(--bg-secondary); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 0.75em 0; }
-        .rte-preview-content pre code { background: none; padding: 0; }
-        .rte-preview-content hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
-        .rte-preview-content strong { font-weight: 700; }
-        .rte-preview-content em { font-style: italic; }
-        .rte-preview-content s { text-decoration: line-through; }
-        .rte-status-bar {
-          display: flex;
-          justify-content: flex-end;
-          padding: 4px 12px;
-          border-top: 1px solid var(--border-subtle);
-          font-size: 11px;
-          color: var(--text-muted);
-          background: var(--bg-secondary);
-          flex-shrink: 0;
-        }
-      `}</style>
     </div>
   );
 }

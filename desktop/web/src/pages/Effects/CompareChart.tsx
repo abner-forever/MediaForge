@@ -1,4 +1,5 @@
 import type { EffectCompareItem } from '../../types';
+import { formatCount } from '../../utils/format';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -34,12 +35,15 @@ function BarGroup({ title, items, labelMap }: {
                 background: COLORS[i % COLORS.length],
                 transition: 'width 0.6s ease-out',
               }} />
-              <span style={{
-                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                fontSize: 11, fontWeight: 600, color: 'var(--text)',
-                fontFeatureSettings: '"tnum"',
-              }}>
-                {item.reads.toLocaleString()}
+              <span
+                title={item.reads.toLocaleString()}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  fontSize: 11, fontWeight: 600, color: 'var(--text)',
+                  fontFeatureSettings: '"tnum"',
+                }}
+              >
+                {formatCount(item.reads)}
               </span>
             </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 40, textAlign: 'right', flexShrink: 0 }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { effectsApi } from '../../api/client';
+import { formatCount } from '../../utils/format';
 
 interface Celebrity {
   name: string;
@@ -80,10 +81,13 @@ export default function CelebrityRank({ days }: { days: number }) {
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {c.name}
                     </span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>
+                    <span
+                      style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}
+                      title={mode === 'total' ? `总阅读 ${totalReads.toLocaleString()}` : `均阅读 ${c.avg_reads.toLocaleString()}`}
+                    >
                       {mode === 'total'
-                        ? `总阅 ${totalReads.toLocaleString()} · ${c.count} 篇`
-                        : `均阅 ${c.avg_reads.toLocaleString()} · ${c.count} 篇`}
+                        ? `总阅 ${formatCount(totalReads)} · ${c.count} 篇`
+                        : `均阅 ${formatCount(c.avg_reads)} · ${c.count} 篇`}
                     </span>
                   </div>
                   <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>

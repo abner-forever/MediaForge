@@ -12,7 +12,9 @@ const MAX_VISIBLE_THUMBS = 3;
 
 const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
-  const { openLightbox, addToast, setQueue } = useStore();
+  const openLightbox = useStore(s => s.openLightbox);
+  const addToast = useStore(s => s.addToast);
+  const setQueue = useStore(s => s.setQueue);
   const [title, setTitle] = useState(item.title);
   const [desc, setDesc] = useState(item.desc);
   const [cover, setCover] = useState(item.cover);

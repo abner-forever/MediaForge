@@ -1,7 +1,10 @@
 import { useStore, THEME_PRESETS } from '../../stores';
 
 export default function ThemeSection() {
-  const { theme, setTheme, accentId, setAccentId } = useStore();
+  const theme = useStore(s => s.theme);
+  const setTheme = useStore(s => s.setTheme);
+  const accentId = useStore(s => s.accentId);
+  const setAccentId = useStore(s => s.setAccentId);
   return (
     <div className="card space-y-5">
       <div className="section-header">主题管理</div>

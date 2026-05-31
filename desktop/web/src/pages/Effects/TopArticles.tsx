@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { effectsApi } from '../../api/client';
 import type { TopArticle } from '../../types';
+import { formatCount } from '../../utils/format';
 
 export default function TopArticles() {
   const [articles, setArticles] = useState<TopArticle[]>([]);
@@ -52,8 +53,8 @@ export default function TopArticles() {
                   </div>
                   <div style={{ display: 'flex', gap: 12, marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
                     {a.celebrity && <span>{a.celebrity}</span>}
-                    <span>阅 {a.reads.toLocaleString()}</span>
-                    <span>赞 {a.likes.toLocaleString()}</span>
+                    <span title={a.reads.toLocaleString()}>阅 {formatCount(a.reads)}</span>
+                    <span title={a.likes.toLocaleString()}>赞 {formatCount(a.likes)}</span>
                     <span>互动率 {rate}%</span>
                   </div>
                 </div>

@@ -13,10 +13,12 @@ import ImageAnalysis from './ImageAnalysis';
 import ArticleDataTabs from './ArticleDataTabs';
 import EmptyState from './EmptyState';
 import HelpGuide from '../../components/ui/HelpGuide';
+import Loading from '../../components/Loading';
+import Modal from '../../components/Modal';
 import Select from '../../components/Select';
 
 export default function Effects() {
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const { loading, withLoading } = useLoading();
   const [days, setDays] = useState(30);
   const [summary, setSummary] = useState<EffectSummary | null>(null);
@@ -29,6 +31,8 @@ export default function Effects() {
   const [syncing, setSyncing] = useState(false);
   const [syncLogs, setSyncLogs] = useState<string[]>([]);
   const [syncPages, setSyncPages] = useState(1);
+  const [syncPageSize, setSyncPageSize] = useState(20);
+  const [syncModal, setSyncModal] = useState(false);
   const [logsExpanded, setLogsExpanded] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -81,7 +85,7 @@ export default function Effects() {
         } else if (evt.type === 'error') {
           addToast(`同步失败：${evt.message}`, 'error');
         }
-      }, syncPages);
+      }, syncPages, syncPageSize);
       load();
     } catch {
       addToast('同步请求失败', 'error');
@@ -131,60 +135,23 @@ export default function Effects() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
           {accounts.length > 0 && (
-            <>
-              <div style={{ width: 140 }}>
-                <Select
-                  value={syncAccountId}
-                  onChange={setSyncAccountId}
-                  options={[
-                    { label: '选择公众号', value: '' },
-                    ...accounts.map(a => ({
-                      label: `${a.name}${a.logged_in ? '' : ' (未登录)'}`,
-                      value: a.account_id,
-                    })),
-                  ]}
-                />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span className="text-xs text-text-muted whitespace-nowrap">页数</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={syncPages}
-                  onChange={e => setSyncPages(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-                  className="w-14 text-sm text-center"
-                  disabled={syncing}
-                  style={{ height: 32 }}
-                />
-              </div>
-              <button
-                onClick={handleSync}
-                disabled={syncing || !syncAccountId}
-                className="btn btn-sm btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', height: 32 }}
-              >
-                {syncing ? (
-                  <>
-                    <span style={{
-                      width: 12, height: 12, border: '2px solid rgba(255,255,255,0.3)',
-                      borderTopColor: '#fff', borderRadius: '50%',
-                      animation: 'spin 0.8s linear infinite', display: 'inline-block',
-                    }} />
-                    同步中...
-                  </>
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="23 4 23 10 17 10" />
-                      <polyline points="1 20 1 14 7 14" />
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                    </svg>
-                    同步公众号数据
-                  </>
-                )}
-              </button>
-            </>
+            <button
+              onClick={() => setSyncModal(true)}
+              disabled={syncing}
+              className="btn btn-sm"
+              title="同步公众号数据"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, padding: 0 }}
+            >
+              {syncing ? (
+                <Loading size="xs" inline />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              )}
+            </button>
           )}
           {hasData && (
             <button
@@ -264,13 +231,7 @@ export default function Effects() {
 
       {/* Content */}
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-          <div style={{
-            width: 32, height: 32, border: '3px solid var(--border)',
-            borderTopColor: 'var(--accent)', borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }} />
-        </div>
+        <div className="flex items-center justify-center min-h-[300px]"><Loading text="加载中" /></div>
       ) : !hasData ? (
         <EmptyState />
       ) : (
@@ -289,6 +250,68 @@ export default function Effects() {
         </>
       )}
       {!loading && <ArticleDataTabs onCleared={load} />}
+
+      {/* 同步设置弹窗 */}
+      <Modal open={syncModal} onClose={() => setSyncModal(false)} className="!p-0 !w-[380px]">
+        <div style={{ padding: '20px 24px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 20px' }}>同步公众号数据</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>公众号账号</label>
+              <Select
+                value={syncAccountId}
+                onChange={setSyncAccountId}
+                options={[
+                  { label: '选择公众号', value: '' },
+                  ...accounts.map(a => ({
+                    label: `${a.name}${a.logged_in ? '' : ' (未登录)'}`,
+                    value: a.account_id,
+                  })),
+                ]}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>拉取页数</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={syncPages}
+                  onChange={e => setSyncPages(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                  className="w-full text-sm text-center"
+                  style={{ height: 36 }}
+                  disabled={syncing}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>每页数量</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={50}
+                  value={syncPageSize}
+                  onChange={e => setSyncPageSize(Math.max(5, Math.min(50, Number(e.target.value) || 20)))}
+                  className="w-full text-sm text-center"
+                  style={{ height: 36 }}
+                  disabled={syncing}
+                />
+              </div>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+              共拉取 {syncPages} 页 × {syncPageSize} 条 = 最多 {syncPages * syncPageSize} 篇文章
+            </p>
+            <button
+              onClick={() => { setSyncModal(false); handleSync(); }}
+              disabled={syncing || !syncAccountId}
+              className="btn btn-primary w-full"
+              style={{ height: 40, fontSize: 14, fontWeight: 600 }}
+            >
+              {syncing ? '同步中...' : '开始同步'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

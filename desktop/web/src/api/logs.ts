@@ -1,4 +1,4 @@
-import { get, post } from './base';
+import { get, post, del } from './base';
 import type { LogFileInfo, LogContentResponse } from '../types';
 
 export const logsApi = {
@@ -11,4 +11,8 @@ export const logsApi = {
     post<{ success: boolean; path: string }>('/api/logs/save-to-downloads', { file }),
   logToast: (message: string, type = 'info') =>
     post<{ success: boolean }>('/api/logs/toast', { message, type }),
+  delete: (file: string) =>
+    del<{ success: boolean }>(`/api/logs/delete?file=${encodeURIComponent(file)}`),
+  clearAll: () =>
+    del<{ success: boolean; deleted: number }>('/api/logs/clear'),
 };

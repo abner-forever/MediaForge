@@ -19,7 +19,8 @@ const ICONS = {
 };
 
 export default function Toast() {
-  const { toasts, removeToast } = useStore();
+  const toasts = useStore(s => s.toasts);
+  const removeToast = useStore(s => s.removeToast);
   if (!toasts.length) return null;
 
   return (

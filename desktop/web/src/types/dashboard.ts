@@ -27,6 +27,9 @@ export interface RunInfo {
   completion_tokens?: number;
   started_at?: string;
   title?: string;
+  elapsed_seconds?: number;
+  total_posts?: number;
+  published?: number;
 }
 
 export interface OperationItem {

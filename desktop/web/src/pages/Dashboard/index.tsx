@@ -12,7 +12,7 @@ import OperationsList from './OperationsList';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ops, setOps] = useState<OperationItem[]>([]);

@@ -19,7 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function Queue() {
-  const { queue, setQueue } = useStore();
+  const queue = useStore(s => s.queue);
+  const setQueue = useStore(s => s.setQueue);
   const [accounts, setAccounts] = useState<WeChatAccount[]>([]);
   const [filterAccount, setFilterAccount] = useState('');
   const [filterType, setFilterType] = useState('');

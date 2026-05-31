@@ -114,6 +114,48 @@ async def save_log_to_downloads(req: Dict[str, Any]):
     return {"success": True, "path": str(dest)}
 
 
+@router.delete("/api/logs/delete")
+async def delete_log_file(file: str = Query(...)):
+    """删除指定日志文件。
+
+    安全限制：文件路径必须位于 LOG_DIR 下，防止目录穿越。
+    """
+    safe_path = (LOG_DIR / file).resolve()
+    if not str(safe_path).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(403, "不允许访问该路径")
+    if not safe_path.exists() or not safe_path.is_file():
+        raise HTTPException(404, "日志文件不存在")
+
+    safe_path.unlink()
+    return {"success": True}
+
+
+@router.delete("/api/logs/clear")
+async def clear_all_logs():
+    """清空所有日志文件。"""
+    deleted = 0
+
+    # 主日志及备份
+    for f in LOG_DIR.glob("app.log*"):
+        f.unlink(missing_ok=True)
+        deleted += 1
+
+    # 崩溃日志
+    crash = LOG_DIR / "crash.log"
+    if crash.exists():
+        crash.unlink()
+        deleted += 1
+
+    # 运行审计日志
+    runs_dir = LOG_DIR / "runs"
+    if runs_dir.exists():
+        for f in runs_dir.glob("*.jsonl"):
+            f.unlink(missing_ok=True)
+            deleted += 1
+
+    return {"success": True, "deleted": deleted}
+
+
 def _copy_to_clipboard(text: str) -> None:
     """跨平台写入系统剪贴板。"""
     try:

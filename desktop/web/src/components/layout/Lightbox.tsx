@@ -2,7 +2,10 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { useStore } from '../../stores';
 
 export default function Lightbox() {
-  const { lightbox, closeLightbox, lightboxNav, lightboxGoTo } = useStore();
+  const lightbox = useStore(s => s.lightbox);
+  const closeLightbox = useStore(s => s.closeLightbox);
+  const lightboxNav = useStore(s => s.lightboxNav);
+  const lightboxGoTo = useStore(s => s.lightboxGoTo);
 
   const handleKey = useCallback((e: KeyboardEvent) => {
     if (!lightbox) return;

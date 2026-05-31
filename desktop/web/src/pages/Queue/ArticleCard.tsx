@@ -10,7 +10,8 @@ import { Modal } from '../../components/modalApi.tsx';
 const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
   const navigate = useNavigate();
-  const { addToast, setQueue } = useStore();
+  const addToast = useStore(s => s.addToast);
+  const setQueue = useStore(s => s.setQueue);
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const tags = item.tags || [];
 

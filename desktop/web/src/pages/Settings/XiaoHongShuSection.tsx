@@ -20,7 +20,7 @@ export default function XiaoHongShuSection({ data, save, onReload }: { data: Set
   const [avatarError, setAvatarError] = useState(false);
   const [verifyState, setVerifyState] = useState<'idle' | 'verifying' | 'valid' | 'invalid'>('idle');
   const [verifyMessage, setVerifyMessage] = useState('');
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const rawCookie = cookie || data.xhs_cookie || '';

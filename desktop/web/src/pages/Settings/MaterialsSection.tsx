@@ -5,7 +5,7 @@ import { useStore } from '../../stores';
 
 export default function MaterialsSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
   const { loading: saving, withLoading: withSave } = useLoading();
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const [materialsPath, setMaterialsPath] = useState(data.download_dir);
   const [browsing, setBrowsing] = useState(false);
 

@@ -98,6 +98,9 @@ async def recent_runs():
             "completion_tokens": fp.get("completion_tokens", 0),
             "started_at": start.get("ts", "") if start else "",
             "title": " ".join(title_parts) if title_parts else run_file.stem,
+            "elapsed_seconds": fp.get("elapsed_seconds"),
+            "total_posts": fp.get("total_posts"),
+            "published": fp.get("published"),
         })
     return results
 

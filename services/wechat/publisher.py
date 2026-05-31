@@ -12,6 +12,7 @@ from config import DATA_DIR, WECHAT_STATE_PATH
 from utils.logger import get_logger
 
 from services.wechat.helpers import (
+    _cleanup_stale_lock,
     _click_first_available,
     _emit,
     _ensure_login,
@@ -75,6 +76,7 @@ def publish_article(
                 state_path_global = WECHAT_STATE_PATH
             user_data_dir.mkdir(parents=True, exist_ok=True)
             state_path_global.parent.mkdir(parents=True, exist_ok=True)
+            _cleanup_stale_lock(user_data_dir)
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(user_data_dir),
                 headless=headless,

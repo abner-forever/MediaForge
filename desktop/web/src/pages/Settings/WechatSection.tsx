@@ -6,7 +6,8 @@ import Modal from '../../components/Modal';
 import Dialog from '../../components/Dialog';
 
 export default function WechatSection({ data, onReload }: { data: SettingsData; onReload?: () => Promise<void> }) {
-  const { addToast, incWechatRefreshKey } = useStore();
+  const addToast = useStore(s => s.addToast);
+  const incWechatRefreshKey = useStore(s => s.incWechatRefreshKey);
   const [accounts, setAccounts] = useState(data.wechat_accounts || []);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -99,6 +100,8 @@ export default function WechatSection({ data, onReload }: { data: SettingsData; 
         addToast('登录状态有效', 'success');
       } else {
         addToast('登录已失效，请重新登录', 'info');
+        // 立即更新本地状态，再异步刷新全局
+        setAccounts(prev => prev.map(a => a.account_id === accountId ? { ...a, logged_in: false } : a));
         await refreshAccounts();
       }
     } catch (err: any) {

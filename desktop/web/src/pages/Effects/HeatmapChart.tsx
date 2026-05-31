@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { EffectTrendPoint } from '../../types';
+import { formatCount } from '../../utils/format';
 
 const DAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const CELL = 18;
@@ -110,7 +111,7 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
       {/* Tooltip - reserved space to prevent layout shift */}
       <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', minHeight: 20 }}>
         {hover && (
-          <>周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读 {grid[hover.dow][hover.hour].toLocaleString()}</>
+          <>周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读 {formatCount(grid[hover.dow][hover.hour])}</>
         )}
       </div>
     </div>

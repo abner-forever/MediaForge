@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { effectsApi } from '../../api/client';
 import Select from '../../components/Select';
+import { formatCount } from '../../utils/format';
 
 interface FunnelData {
   total_reads: number;
@@ -93,8 +94,11 @@ export default function FunnelChart({ days }: { days: number }) {
                       }} />
                     </div>
                   </div>
-                  <span style={{ width: 64, fontSize: 12, fontWeight: 600, color: 'var(--text)', textAlign: 'right', flexShrink: 0 }}>
-                    {val.toLocaleString()}
+                  <span
+                    title={val.toLocaleString()}
+                    style={{ width: 64, fontSize: 12, fontWeight: 600, color: 'var(--text)', textAlign: 'right', flexShrink: 0 }}
+                  >
+                    {formatCount(val)}
                   </span>
                   {rate && (
                     <span style={{ width: 48, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>

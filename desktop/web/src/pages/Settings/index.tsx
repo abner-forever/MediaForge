@@ -12,7 +12,7 @@ const TABS = [
 ];
 
 export default function Settings() {
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('general');

@@ -8,7 +8,7 @@ import { settingsApi } from '../../api/client';
 import { PROVIDERS } from './providers';
 
 export default function LLMSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
-  const { addToast } = useStore();
+  const addToast = useStore(s => s.addToast);
   const { loading: saving, withLoading: withSave } = useLoading();
   const [provider, setProvider] = useState(data.ai_provider);
   const [model, setModel] = useState(data.ai_model);

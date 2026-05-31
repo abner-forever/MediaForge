@@ -143,6 +143,7 @@ export interface AppState {
   setPipelineAbortController: (controller: AbortController | null) => void;
   setPipelineEvents: (events: PipelineEvent[]) => void;
   addPipelineEvent: (evt: PipelineEvent) => void;
+  processPipelineEvent: (evt: PipelineEvent) => void;
   setPipelineCurrentStep: (step: string | null) => void;
   setPipelineStepProgress: (progress: { current: number; total: number } | null) => void;
   setPipelineSummary: (summary: PipelineSummary | null) => void;

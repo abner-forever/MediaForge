@@ -52,12 +52,43 @@ async def wechat_remove_account(account_id: str):
 
 @router.get("/api/wechat/accounts/{account_id}/status")
 async def wechat_account_status(account_id: str):
-    """检查指定账号的登录状态。"""
-    from utils.wechat_auth_store import get_account, validate_login_state
+    """检查指定账号的登录状态（含浏览器真实验证）。"""
+    from utils.wechat_auth_store import get_account, validate_login_state, get_account_paths
     account = get_account(account_id)
     if not account:
         raise HTTPException(404, "账号不存在")
-    return {"logged_in": validate_login_state(account_id), "name": account.get("name", "")}
+    # 快速本地检查：state.json 不存在或 cookie 已过期则直接判定无效
+    if not validate_login_state(account_id):
+        return {"logged_in": False, "name": account.get("name", "")}
+    # 真实验证：打开浏览器检查页面是否真正登录
+    profile_dir, state_path = get_account_paths(account_id)
+
+    def _check():
+        from services.wechat.helpers import _cleanup_stale_lock, _looks_logged_in
+        from playwright.sync_api import sync_playwright
+        if not profile_dir.exists():
+            return False
+        _cleanup_stale_lock(profile_dir)
+        try:
+            with sync_playwright() as p:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=str(profile_dir),
+                    headless=True,
+                    channel="chromium",
+                )
+                page = context.pages[0] if context.pages else context.new_page()
+                page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
+                result = _looks_logged_in(page)
+                context.close()
+                return result
+        except Exception:
+            return False
+
+    logged_in = await asyncio.to_thread(_check)
+    # 真实验证失败时清除 state.json，让 list_accounts 等接口返回正确状态
+    if not logged_in and state_path.exists():
+        state_path.unlink()
+    return {"logged_in": logged_in, "name": account.get("name", "")}
 
 
 @router.get("/api/wechat/accounts/{account_id}/login")
@@ -72,6 +103,7 @@ async def wechat_account_login(account_id: str):
 
     def _task(msg_queue):
         from services.wechat import _ensure_login, _looks_logged_in
+        from services.wechat.helpers import _cleanup_stale_lock
         from playwright.sync_api import sync_playwright
 
         def _emit(msg: str) -> None:
@@ -79,6 +111,7 @@ async def wechat_account_login(account_id: str):
 
         profile_dir.mkdir(parents=True, exist_ok=True)
         state_path.parent.mkdir(parents=True, exist_ok=True)
+        _cleanup_stale_lock(profile_dir)
         try:
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(
@@ -111,17 +144,18 @@ async def wechat_account_login(account_id: str):
 
 
 @router.get("/api/wechat/accounts/{account_id}/sync-effects")
-async def sync_effects(account_id: str, pages: int = 1):
+async def sync_effects(account_id: str, pages: int = 1, page_size: int = 20):
     """从公众号后台抓取已发布文章的真实阅读数据，同步到本地效果记录。通过 SSE 流式返回进度。"""
     from utils.wechat_auth_store import get_account
     pages = max(1, min(50, int(pages)))
+    page_size = max(5, min(50, int(page_size)))
     account = get_account(account_id)
     if not account:
         raise HTTPException(404, "账号不存在")
 
     def _task(msg_queue):
         from services.wechat.fetcher import fetch_published_articles
-        fetch_published_articles(account_id, msg_queue, pages=pages)
+        fetch_published_articles(account_id, msg_queue, pages=pages, page_size=page_size)
 
     return create_sse_response(_task)
 
@@ -140,6 +174,8 @@ async def wechat_account_logout(account_id: str):
             return
         try:
             from playwright.sync_api import sync_playwright
+            from services.wechat.helpers import _cleanup_stale_lock
+            _cleanup_stale_lock(profile_dir)
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(profile_dir),

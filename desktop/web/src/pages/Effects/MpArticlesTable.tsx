@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { effectsApi } from '../../api/client';
 import type { MpArticlesResponse } from '../../types';
 import Select from '../../components/Select';
+import { formatCount } from '../../utils/format';
 
 type SortKey = 'reads' | 'likes' | 'shares' | 'publish_time';
 type SortDir = 'asc' | 'desc';
@@ -171,7 +172,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
             {articles.length === 0 ? (
               <tr><td colSpan={9} className="py-8 text-center text-text-muted">无匹配数据</td></tr>
             ) : articles.map((art, i) => (
-              <tr key={art.item_id} className={`border-b border-border/50 ${i % 2 === 0 ? '' : 'bg-bg/50'}`}>
+              <tr key={art.item_id} className={`border-b border-border-subtle ${i % 2 === 0 ? '' : 'bg-bg/50'}`}>
                 <td className="py-2 pr-2">
                   {art.cover ? (
                     <img
@@ -195,11 +196,11 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
                   )}
                 </td>
                 <td className="py-2 pr-3 text-text-secondary">{art.celebrity || '-'}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text">{(art.reads || 0).toLocaleString()}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.likes || 0}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.shares || 0}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.recommendations || 0}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary">{art.comment_num ?? '-'}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text" title={String(art.reads || 0)}>{formatCount(art.reads || 0)}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.likes || 0)}>{formatCount(art.likes || 0)}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.shares || 0)}>{formatCount(art.shares || 0)}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.recommendations || 0)}>{formatCount(art.recommendations || 0)}</td>
+                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={art.comment_num != null ? String(art.comment_num) : undefined}>{art.comment_num != null ? formatCount(art.comment_num) : '-'}</td>
                 <td className="py-2 text-text-muted text-xs whitespace-nowrap">
                   {art.publish_time ? formatTime(art.publish_time) : '-'}
                 </td>

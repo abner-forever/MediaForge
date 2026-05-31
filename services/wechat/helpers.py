@@ -20,6 +20,17 @@ def _emit(msg: str, on_log: Optional[Callable[[str], None]] = None) -> None:
             logger.exception("发布日志回调失败: %s", msg)
 
 
+def _cleanup_stale_lock(profile_dir: Path) -> None:
+    """清除 Chromium 遗留的 SingletonLock 文件，避免启动失败。"""
+    lock = profile_dir / "SingletonLock"
+    if lock.exists():
+        try:
+            lock.unlink()
+            logger.info("已清除残留锁文件: %s", lock)
+        except OSError as e:
+            logger.warning("清除锁文件失败: %s", e)
+
+
 def _human_sleep(base: float = 1.0, jitter: float = 0.8) -> None:
     time.sleep(base + __import__("random").random() * jitter)
 
@@ -44,6 +55,8 @@ def _looks_logged_in(page) -> bool:
 
 def _ensure_login(page, state_path: Optional[Path] = None,
                    on_scan_needed: Optional[Callable[[], None]] = None) -> None:
+    from playwright.sync_api import Error as PlaywrightError
+
     if "mp.weixin.qq.com" not in page.url:
         page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
     if not _looks_logged_in(page):
@@ -54,12 +67,15 @@ def _ensure_login(page, state_path: Optional[Path] = None,
             input("请完成微信扫码登录，然后按回车继续...")
         logger.info("正在确认登录状态...")
         for i in range(60):
-            if _looks_logged_in(page):
-                break
-            if i % 5 == 0:
-                logger.info("登录状态确认中...(%ss)", (i + 1) * 2)
-            page.wait_for_timeout(2000)
-        if not _looks_logged_in(page):
+            try:
+                if _looks_logged_in(page):
+                    break
+                if i % 5 == 0:
+                    logger.info("登录状态确认中...(%ss)", (i + 1) * 2)
+                page.wait_for_timeout(2000)
+            except PlaywrightError:
+                raise RuntimeError("浏览器已关闭，登录流程中止")
+        else:
             raise RuntimeError("扫码后仍未检测到登录成功，请确认浏览器页面已进入公众号后台")
     logger.info("登录成功，当前页面: %s", page.url)
     path_to_use = state_path or WECHAT_STATE_PATH

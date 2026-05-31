@@ -42,6 +42,7 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const [account, setAccount] = useState<WeChatAccount | null>(null);
   const wechatRefreshKey = useStore(s => s.wechatRefreshKey);
+  const incWechatRefreshKey = useStore(s => s.incWechatRefreshKey);
   const width = useStore(s => s.sidebarWidth);
   const setWidth = useStore(s => s.setSidebarWidth);
   const pipelineRunning = useStore(s => s.pipelineRunning);
@@ -51,13 +52,25 @@ export default function Sidebar() {
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
   const rafRef = useRef<number | null>(null);
+  const startupCheckDone = useRef(false);
 
   const collapsed = width <= NARROW_WIDTH + 10;
   const effectiveWidth = collapsed ? NARROW_WIDTH : width;
 
   useEffect(() => {
     wechatAccountApi.list().then(({ accounts }) => {
-      setAccount(accounts.find(a => a.is_default) || accounts[0] || null);
+      const defaultAcc = accounts.find(a => a.is_default) || accounts[0] || null;
+      setAccount(defaultAcc);
+      // 启动时异步检测默认账号真实登录状态（仅首次）
+      if (defaultAcc?.logged_in && defaultAcc.account_id && !startupCheckDone.current) {
+        startupCheckDone.current = true;
+        wechatAccountApi.status(defaultAcc.account_id).then(({ logged_in }) => {
+          if (!logged_in) {
+            setAccount(prev => prev ? { ...prev, logged_in: false } : prev);
+            incWechatRefreshKey();
+          }
+        }).catch(() => { /* 静默失败，不影响启动 */ });
+      }
     }).catch(() => setAccount(null));
   }, [wechatRefreshKey]);
 

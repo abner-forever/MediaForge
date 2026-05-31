@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useStore } from '../../stores';
+import { useShallow } from 'zustand/react/shallow';
 import { discoveryApi, downloadStream, queueApi, settingsApi, searchStream, platformApi, PlatformMeta } from '../../api/client';
 import SearchLoadingOverlay from '../../components/SearchLoadingOverlay';
 import Dialog from '../../components/Dialog';
@@ -11,7 +12,6 @@ import PostList from './PostList';
 import GalleryTab from './GalleryTab';
 
 export default function Discovery() {
-  const store = useStore();
   const {
     discoveryPosts, selectedPosts, imageScores, selectedImages,
     setDiscoveryPosts, togglePostSelect, clearSelectedPosts,
@@ -22,7 +22,32 @@ export default function Discovery() {
     discoveryTags: tags, setDiscoveryTags: _setTags,
     discoverySuperTopics: superTopics, setDiscoverySuperTopics: _setSuperTopics,
     discoveryToutiaoKeywords: toutiaoKeywords, setDiscoveryToutiaoKeywords: _setToutiaoKeywords,
-  } = store;
+  } = useStore(useShallow(s => ({
+    discoveryPosts: s.discoveryPosts,
+    selectedPosts: s.selectedPosts,
+    imageScores: s.imageScores,
+    selectedImages: s.selectedImages,
+    setDiscoveryPosts: s.setDiscoveryPosts,
+    togglePostSelect: s.togglePostSelect,
+    clearSelectedPosts: s.clearSelectedPosts,
+    setImageScores: s.setImageScores,
+    toggleImageSelect: s.toggleImageSelect,
+    selectAllImages: s.selectAllImages,
+    clearSelectedImages: s.clearSelectedImages,
+    openLightbox: s.openLightbox,
+    addToast: s.addToast,
+    setProgress: s.setProgress,
+    recommendedCelebs: s.recommendedCelebs,
+    setRecommendedCelebs: s.setRecommendedCelebs,
+    discoveryCelebs: s.discoveryCelebs,
+    setDiscoveryCelebs: s.setDiscoveryCelebs,
+    discoveryTags: s.discoveryTags,
+    setDiscoveryTags: s.setDiscoveryTags,
+    discoverySuperTopics: s.discoverySuperTopics,
+    setDiscoverySuperTopics: s.setDiscoverySuperTopics,
+    discoveryToutiaoKeywords: s.discoveryToutiaoKeywords,
+    setDiscoveryToutiaoKeywords: s.setDiscoveryToutiaoKeywords,
+  })));
 
   const markEdited = useCallback(() => { userEditedRef.current = true; }, []);
   const setCelebs = useCallback((v: string) => { markEdited(); _setCelebs(v); }, [markEdited, _setCelebs]);

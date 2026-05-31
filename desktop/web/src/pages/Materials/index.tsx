@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useStore } from '../../stores';
+import { useShallow } from 'zustand/react/shallow';
 import { materialsApi, queueApi } from '../../api/client';
 import type { TreeNode, BrowseFolder, BrowseFile, ScoreInfo, MaterialMeta } from '../../api/client';
 import ContextMenu, { type MenuItem } from '../../components/ContextMenu';
@@ -23,7 +24,28 @@ export default function Materials() {
     setFolderTree, setCurrentPath, setCurrentFolders, setCurrentFiles, setBreadcrumb,
     toggleFolderExpanded, matToggleSelect, matSelectAll, matSetSelection, matClearSelection, setViewMode,
     openLightbox, addToast,
-  } = useStore();
+  } = useStore(useShallow(s => ({
+    folderTree: s.folderTree,
+    currentPath: s.currentPath,
+    currentFolders: s.currentFolders,
+    currentFiles: s.currentFiles,
+    breadcrumb: s.breadcrumb,
+    matSelected: s.matSelected,
+    viewMode: s.viewMode,
+    setFolderTree: s.setFolderTree,
+    setCurrentPath: s.setCurrentPath,
+    setCurrentFolders: s.setCurrentFolders,
+    setCurrentFiles: s.setCurrentFiles,
+    setBreadcrumb: s.setBreadcrumb,
+    toggleFolderExpanded: s.toggleFolderExpanded,
+    matToggleSelect: s.matToggleSelect,
+    matSelectAll: s.matSelectAll,
+    matSetSelection: s.matSetSelection,
+    matClearSelection: s.matClearSelection,
+    setViewMode: s.setViewMode,
+    openLightbox: s.openLightbox,
+    addToast: s.addToast,
+  })));
 
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState('');

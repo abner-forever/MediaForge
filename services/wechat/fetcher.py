@@ -16,7 +16,7 @@ from config import DATA_DIR
 from utils.logger import get_logger
 
 from services.wechat.helpers import (
-    _ensure_login,
+    _cleanup_stale_lock,
     _extract_token_from_url,
     _human_sleep,
     _looks_logged_in,
@@ -29,11 +29,13 @@ def fetch_published_articles(
     account_id: str,
     msg_queue: Queue,
     pages: int = 1,
+    page_size: int = 20,
 ) -> None:
     """抓取公众号已发布文章列表及其阅读数据。
 
     Args:
-        pages: 拉取页数，每页 20 条。默认 1 页（20 条）。
+        pages: 拉取页数，默认 1 页。
+        page_size: 每页条数，默认 20。
 
     通过 msg_queue 推送进度：
       - ("progress", str)   进度消息
@@ -58,6 +60,7 @@ def fetch_published_articles(
         msg_queue.put(("progress", msg))
 
     try:
+        _cleanup_stale_lock(profile_dir)
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(profile_dir),
@@ -70,8 +73,9 @@ def fetch_published_articles(
             _emit("正在检查登录状态...")
 
             if not _looks_logged_in(page):
-                _emit("检测到未登录，正在等待扫码...")
-                _ensure_login(page, state_path=state_path)
+                context.close()
+                msg_queue.put(("error", "登录已失效，请先在微信配置中重新登录"))
+                return
             _emit("登录成功，开始分页拉取文章数据...")
 
             token = _extract_token_from_url(page.url or "")
@@ -87,7 +91,6 @@ def fetch_published_articles(
 
             # 分页拉取全部已发布文章
             all_articles: list = []
-            page_size = 20
             begin = 0
             total_count = None
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type { EffectTrendPoint } from '../../types';
+import { formatCount } from '../../utils/format';
 
 const W = 800, H = 280, PAD = { top: 20, right: 56, bottom: 40, left: 56 };
 const IW = W - PAD.left - PAD.right;
@@ -57,10 +58,10 @@ export default function TrendChart({ data, days, onDaysChange }: {
   const tooltipLines: Array<{ label: string; value: string; color: string }> = [];
   if (hover !== null) {
     const d = data[hover];
-    tooltipLines.push({ label: '阅读', value: d.reads.toLocaleString(), color: '#3b82f6' });
-    tooltipLines.push({ label: '点赞', value: d.likes.toLocaleString(), color: '#f59e0b' });
-    if (extras.has('comments')) tooltipLines.push({ label: '评论', value: (d.comments || 0).toLocaleString(), color: '#8b5cf6' });
-    if (extras.has('shares')) tooltipLines.push({ label: '分享', value: (d.shares || 0).toLocaleString(), color: '#ef4444' });
+    tooltipLines.push({ label: '阅读', value: formatCount(d.reads), color: '#3b82f6' });
+    tooltipLines.push({ label: '点赞', value: formatCount(d.likes), color: '#f59e0b' });
+    if (extras.has('comments')) tooltipLines.push({ label: '评论', value: formatCount(d.comments || 0), color: '#8b5cf6' });
+    if (extras.has('shares')) tooltipLines.push({ label: '分享', value: formatCount(d.shares || 0), color: '#ef4444' });
     if (extras.has('rate')) tooltipLines.push({ label: '互动率', value: `${rates[hover].toFixed(1)}%`, color: '#10b981' });
   }
   const tooltipH = 20 + tooltipLines.length * 16;
