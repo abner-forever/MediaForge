@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.20.0 (2026-06-02)
+
+### Bug Fixes
+
+- 更新 Mimo 相关链接，修正图片处理逻辑，增强材料页面状态管理
+  ([`5b1bad2`](https://github.com/abner-forever/MediaForge/commit/5b1bad24686cdf36f92302be84590408a1faa615))
+
+### Features
+
+- Add watermark removal service and enhance AI client with streaming support
+  ([`efa803b`](https://github.com/abner-forever/MediaForge/commit/efa803b7ab633af498ea8ef5907e5ada92ba7b5d))
+
+
 ## v1.19.2 (2026-05-31)
 
 ### Bug Fixes
