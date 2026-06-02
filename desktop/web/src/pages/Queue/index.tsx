@@ -68,7 +68,7 @@ export default function Queue() {
           <p><b>2. 筛选与排序</b>：顶部可按公众号账号、内容类型（图文/文章）、状态（待发布/已发布/失败）筛选。</p>
           <p><b>3. 预览内容</b>：展开卡片可预览完整标题、图片列表和文章摘要，确认无误后再发布。</p>
           <p><b>4. 发布操作</b>：点击卡片上的「发布」按钮将内容推送到绑定的公众号。发布过程中请勿关闭程序。</p>
-          <p><b>5. 效果录入</b>：已发布的项目可录入阅读量、点赞、评论等数据，用于后续效果分析。</p>
+          <p><b>5. 效果录入</b>：已发布的项目可录入阅读量、点赞、评论等数据，用于后续数据分析。</p>
           <p><b>6. 编辑与删除</b>：可编辑队列项的标题和图片顺序，或将其从队列中移除。</p>
         </HelpGuide>
       </div>
@@ -78,6 +78,7 @@ export default function Queue() {
         <span className="text-xs text-text-muted shrink-0">按账号筛选</span>
         <div className="w-44">
           <Select
+            size="sm"
             value={filterAccount}
             onChange={setFilterAccount}
             options={[
@@ -91,6 +92,7 @@ export default function Queue() {
         </div>
         <div className="w-28">
           <Select
+            size="sm"
             value={filterType}
             onChange={setFilterType}
             options={typeOptions}
@@ -98,6 +100,7 @@ export default function Queue() {
         </div>
         <div className="w-32">
           <Select
+            size="sm"
             value={filterStatus}
             onChange={setFilterStatus}
             options={statusOptions}

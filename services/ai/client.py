@@ -1,8 +1,9 @@
 """AI API 客户端 — 通用调用逻辑。"""
 
+import json as _json
 import re
 import time
-from typing import List
+from typing import Generator, List
 
 import requests
 
@@ -137,3 +138,82 @@ def _call_ai(prompt: str, fallback: str, *, raise_on_fail: bool = False) -> str:
     if raise_on_fail:
         raise RuntimeError(f"AI 服务调用失败（已重试 {settings.retry_times} 次）：{last_err}")
     return fallback
+
+
+def _call_ai_stream(
+    prompt: str,
+    *,
+    raise_on_fail: bool = False,
+) -> Generator[str, None, None]:
+    """流式 AI 调用：发 prompt，逐 token yield 文本片段。"""
+    if not settings.ai_api_key:
+        msg = "未配置 AI API Key，请先在设置页配置"
+        if raise_on_fail:
+            raise RuntimeError(msg)
+        logger.error(msg)
+        return
+
+    url_candidates = _resolve_chat_url_candidates()
+    if not url_candidates:
+        msg = "未配置 AI Base URL，请先在设置页配置"
+        if raise_on_fail:
+            raise RuntimeError(msg)
+        logger.error(msg)
+        return
+
+    headers = {
+        "Authorization": f"Bearer {settings.ai_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": _normalize_model_name(settings.ai_model),
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.8,
+        "stream": True,
+    }
+
+    last_err = None
+    for i in range(settings.retry_times):
+        try:
+            for url in url_candidates:
+                try:
+                    resp = requests.post(
+                        url, headers=headers, json=payload,
+                        timeout=(settings.ai_timeout, settings.ai_timeout * 3),
+                        stream=True,
+                    )
+                    if resp.status_code >= 400:
+                        logger.error("AI 接口返回 %s，url=%s，body=%s", resp.status_code, url, resp.text[:300])
+                    resp.raise_for_status()
+                    # 流式读取 SSE 数据（显式设 UTF-8，避免 streaming 默认 ISO-8859-1 导致中文乱码）
+                    resp.encoding = 'utf-8'
+                    for line in resp.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str.strip() == "[DONE]":
+                                return
+                            try:
+                                data = _json.loads(data_str)
+                                choices = data.get("choices") or []
+                                if not choices:
+                                    continue
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield content
+                            except (_json.JSONDecodeError, IndexError, KeyError):
+                                continue
+                    return  # 流正常结束
+                except Exception as inner_err:
+                    last_err = inner_err
+                    continue
+            logger.error("AI 流式调用失败，第 %s 次重试: %s", i + 1, last_err)
+            time.sleep(1.2 * (i + 1))
+        except Exception as err:
+            last_err = err
+            logger.error("AI 流式调用失败，第 %s 次重试: %s", i + 1, err)
+            time.sleep(1.2 * (i + 1))
+    if raise_on_fail:
+        raise RuntimeError(f"AI 服务调用失败（已重试 {settings.retry_times} 次）：{last_err}")

@@ -74,7 +74,7 @@
 - 添加前端开发规范和API模块，重构项目结构
   ([`6443773`](https://github.com/abner-forever/MediaForge/commit/6443773b68e9b72cd82b1a50a7db21879f4a3e64))
 
-- 添加效果分析API模块，重构相关路由和前端逻辑
+- 添加数据分析API模块，重构相关路由和前端逻辑
   ([`09958aa`](https://github.com/abner-forever/MediaForge/commit/09958aa84e354c0c36bfd785fe81c7a0051e9417))
 
 - 重构前端路由和API模块，提升代码结构和可维护性

@@ -270,7 +270,7 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
         <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); })} disabled={saving}>
           {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}
         </button>
-        <button className="btn btn-sm" onClick={testConnection} disabled={testState === 'testing'}>
+        <button className="btn" onClick={testConnection} disabled={testState === 'testing'}>
           {testState === 'testing' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 测试中</> : '测试连接'}
         </button>
         {testState !== 'idle' && (

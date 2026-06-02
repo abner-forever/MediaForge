@@ -119,6 +119,66 @@ async def remove_image_from_queue(item_id: str, image_path: str = Query(...), de
     return {"success": True, "queue": app_state.get_queue()}
 
 
+@router.post("/api/queue/{item_id}/remove-watermark")
+async def remove_watermark_from_image(item_id: str, image_path: str = Query(...)):
+    from services.watermark_remover import remove_watermark
+
+    item = app_state.get_queue_item_by_id(item_id)
+    if not item:
+        raise HTTPException(404, "队列项不存在")
+    images = list(item.get("images", []))
+    if image_path not in images:
+        raise HTTPException(404, "图片不存在")
+
+    full_path = Path(image_path) if Path(image_path).is_absolute() else DOWNLOAD_DIR / image_path
+    if not full_path.exists():
+        raise HTTPException(404, "图片文件不存在")
+
+    result = remove_watermark(str(full_path))
+    return {**result, "queue": app_state.get_queue()}
+
+
+@router.post("/api/queue/{item_id}/remove-watermarks")
+async def batch_remove_watermarks(item_id: str):
+    from services.watermark_remover import remove_watermark
+
+    item = app_state.get_queue_item_by_id(item_id)
+    if not item:
+        raise HTTPException(404, "队列项不存在")
+    images = list(item.get("images", []))
+    if not images:
+        raise HTTPException(400, "没有图片")
+
+    results = []
+    processed = 0
+    skipped = 0
+    failed = 0
+    for img in images:
+        full_path = Path(img) if Path(img).is_absolute() else DOWNLOAD_DIR / img
+        if not full_path.exists():
+            results.append({"image": img, "success": False, "message": "文件不存在"})
+            failed += 1
+            continue
+        r = remove_watermark(str(full_path))
+        results.append({"image": img, **r})
+        if r.get("success") and r.get("action") != "none":
+            processed += 1
+        elif r.get("success"):
+            skipped += 1
+        else:
+            failed += 1
+
+    return {
+        "success": True,
+        "processed": processed,
+        "skipped": skipped,
+        "failed": failed,
+        "total": len(images),
+        "results": results,
+        "queue": app_state.get_queue(),
+    }
+
+
 @router.post("/api/queue/{item_id}/generate")
 async def generate_queue_content(item_id: str):
     from config import settings

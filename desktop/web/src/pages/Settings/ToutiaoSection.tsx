@@ -200,10 +200,10 @@ export default function ToutiaoSection({ data, save, onReload }: { data: Setting
         <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { TOUTIAO_COOKIE: rawCookie, TOUTIAO_UID: uid, TOUTIAO_SCREEN_NAME: screenName, TOUTIAO_AVATAR: avatar, TOUTIAO_USER_ID: userId, TOUTIAO_FETCH_MODE: fetchMode, TOUTIAO_SEARCH_TAGS: searchTags }; await save(u); })} disabled={saving || loginState === 'loading'}>
           {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存头条配置'}
         </button>
-        <button className="btn btn-sm" onClick={handleVerify} disabled={verifyState === 'verifying'}>
+        <button className="btn" onClick={handleVerify} disabled={verifyState === 'verifying'}>
           {verifyState === 'verifying' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 验证中</> : '测试连接'}
         </button>
-        <button className="btn btn-sm btn-danger ml-auto" onClick={() => setShowClearConfirm(true)}>
+        <button className="btn btn-danger ml-auto" onClick={() => setShowClearConfirm(true)}>
           清空
         </button>
       </div>

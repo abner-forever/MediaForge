@@ -7,6 +7,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   { id: 'green', name: '清新绿', light: '#2e9e7a', dark: '#5cbe9e', hover: '#238464' },
   { id: 'purple', name: '创作紫', light: '#7868d0', dark: '#a599e0', hover: '#6354b8' },
   { id: 'orange', name: '暖阳橙', light: '#d4893a', dark: '#e0aa6a', hover: '#b87228' },
+  { id: 'notion', name: 'Notion', light: '#2eaadc', dark: '#5cc3e4', hover: '#2496c4' },
 ];
 
 const THEME_KEY = 'w2w-theme';
@@ -46,6 +47,7 @@ const ACCENT_GRADIENTS: Record<string, string> = {
   green: 'linear-gradient(135deg, #2e9e7a, #48a89a)',
   purple: 'linear-gradient(135deg, #7868d0, #a078d0)',
   orange: 'linear-gradient(135deg, #d4893a, #c8a050)',
+  notion: 'linear-gradient(135deg, #2eaadc, #4ab8e0)',
 };
 
 function applyAccentVars(accentId: string, theme: string) {
@@ -54,12 +56,16 @@ function applyAccentVars(accentId: string, theme: string) {
   const accent = isDark ? preset.dark : preset.light;
   const gradient = ACCENT_GRADIENTS[accentId] || ACCENT_GRADIENTS.purple;
   const root = document.documentElement;
+  root.setAttribute('data-accent', accentId);
   root.style.setProperty('--accent', accent);
   root.style.setProperty('--accent-hover', preset.hover);
   root.style.setProperty('--accent-solid', accent);
   root.style.setProperty('--accent-soft', accent + '18');
   root.style.setProperty('--accent-softer', accent + '0a');
   root.style.setProperty('--accent-gradient', gradient);
+  // 先清除行内侧边栏样式，避免深色→自动时旧值残留
+  ['--bg-sidebar', '--sidebar-hover', '--sidebar-text', '--sidebar-text-secondary', '--sidebar-text-muted', '--sidebar-text-logo', '--sidebar-border', '--status-ok', '--status-error'].forEach(v => root.style.removeProperty(v));
+
   if (isDark) {
     root.style.setProperty('--bg-sidebar', '#12131c');
     root.style.setProperty('--sidebar-hover', '#1e2030');
@@ -73,14 +79,15 @@ function applyAccentVars(accentId: string, theme: string) {
   } else {
     root.style.setProperty('--bg-sidebar', '#f0f1f6');
     root.style.setProperty('--sidebar-hover', '#e4e6ee');
-    root.style.setProperty('--sidebar-text', '#1e293b');
-    root.style.setProperty('--sidebar-text-secondary', '#64748b');
-    root.style.setProperty('--sidebar-text-muted', '#94a3b8');
+    root.style.setProperty('--sidebar-text', '#1a1a2e');
+    root.style.setProperty('--sidebar-text-secondary', '#475569');
+    root.style.setProperty('--sidebar-text-muted', '#64748b');
     root.style.setProperty('--sidebar-text-logo', '#0f172a');
     root.style.setProperty('--sidebar-border', 'rgba(0,0,0,0.06)');
     root.style.setProperty('--status-ok', '#10b981');
     root.style.setProperty('--status-error', '#ef4444');
   }
+
   localStorage.setItem(ACCENT_KEY, accentId);
 }
 

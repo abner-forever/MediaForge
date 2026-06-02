@@ -117,8 +117,8 @@ class AppState:
 
     def get_articles(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         if status:
-            return [a for a in self.articles if a.get("status") == status]
-        return list(self.articles)
+            return [a for a in self.articles if a.get("status") == status][::-1]
+        return list(self.articles)[::-1]
 
     def get_article(self, article_id: str) -> Optional[Dict[str, Any]]:
         for a in self.articles:

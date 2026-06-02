@@ -113,7 +113,7 @@ export default function Effects() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>效果分析</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>数据分析</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>时间范围</span>
             {[7, 14, 30, 0].map(d => (
@@ -168,7 +168,7 @@ export default function Effects() {
               {exporting ? '导出中…' : '导出 CSV'}
             </button>
           )}
-          <HelpGuide title="效果分析 — 使用说明">
+          <HelpGuide title="数据分析 — 使用说明">
             <p><b>1. 数据来源</b>：在「发布队列」或「文章发布」页面对已发布内容录入效果数据（阅读量、点赞等），此处自动汇总展示。也可点击「同步公众号数据」自动从公众号后台抓取。</p>
             <p><b>2. 概览卡片</b>：顶部 4 个指标卡片展示发布总数、总阅读量、平均阅读和平均点赞，一眼掌握整体表现。</p>
             <p><b>3. 趋势图</b>：折线图展示近 7/14/30 天的阅读量和点赞趋势，鼠标悬停查看每日详情。</p>

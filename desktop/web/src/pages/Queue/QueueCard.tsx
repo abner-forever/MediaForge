@@ -10,6 +10,12 @@ import { Modal } from '../../components/modalApi.tsx';
 
 const MAX_VISIBLE_THUMBS = 3;
 
+function withCacheBust(url: string, versions: Record<string, number>, img: string): string {
+  const v = versions[img];
+  if (!v) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'v=' + v;
+}
+
 const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item: QueueItem; seq?: number; accounts: WeChatAccount[] }) {
   const itemId = item.id!;
   const openLightbox = useStore(s => s.openLightbox);
@@ -33,6 +39,67 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
   const logsLenRef = useRef(logs.length);
   const pollReceivedRef = useRef(false);
   const [thumbStart, setThumbStart] = useState(0);
+  const [thumbVersions, setThumbVersions] = useState<Record<string, number>>({});
+  const [removingWm, setRemovingWm] = useState<string | null>(null);
+  const [batchRemovingWm, setBatchRemovingWm] = useState(false);
+
+  async function handleRemoveWatermark(img: string) {
+    const filename = img.split('/').pop() || img;
+    const { confirmed } = await Modal.confirm({
+      title: '去除水印',
+      message: `将尝试去除此图片的水印：\n${filename}`,
+      confirmText: '去除',
+    });
+    if (!confirmed) return;
+    setRemovingWm(img);
+    try {
+      const r = await queueApi.removeWatermark(itemId, img);
+      if (r.success && r.action !== 'none') {
+        setQueue(r.queue);
+        setThumbVersions(prev => ({ ...prev, [img]: Date.now() }));
+        addToast(r.message || '水印已去除', 'success');
+      } else if (r.success) {
+        addToast(r.message || '未检测到水印', 'info');
+      } else {
+        addToast(r.message || '去除失败', 'error');
+      }
+    } catch (err: any) {
+      addToast(err.message || '去除失败', 'error');
+    } finally {
+      setRemovingWm(null);
+    }
+  }
+
+  async function handleBatchRemoveWatermarks() {
+    const { confirmed } = await Modal.confirm({
+      title: '批量去水印',
+      message: `将对全部 ${images.length} 张图片检测并去除水印，是否继续？`,
+      confirmText: '开始处理',
+    });
+    if (!confirmed) return;
+    setBatchRemovingWm(true);
+    try {
+      const r = await queueApi.batchRemoveWatermarks(itemId);
+      setQueue(r.queue);
+      if (r.processed > 0) {
+        const now = Date.now();
+        setThumbVersions(prev => {
+          const next = { ...prev };
+          images.forEach(img => { next[img] = now; });
+          return next;
+        });
+      }
+      const parts = [];
+      if (r.processed > 0) parts.push(`${r.processed} 张已去除`);
+      if (r.skipped > 0) parts.push(`${r.skipped} 张无需处理`);
+      if (r.failed > 0) parts.push(`${r.failed} 张失败`);
+      addToast(parts.join('，') || '处理完成', r.failed > 0 ? 'info' : 'success');
+    } catch (err: any) {
+      addToast(err.message || '批量去水印失败', 'error');
+    } finally {
+      setBatchRemovingWm(false);
+    }
+  }
 
   // 账号列表由父组件传入，不再独立请求
   useEffect(() => {
@@ -229,8 +296,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
           )}
           {cover && (
             <div className="relative mb-3 rounded-xl overflow-hidden cursor-pointer group"
-              onClick={() => openLightbox(images.map(imgSrc), images.indexOf(cover))}>
-              <LazyImage src={thumbSrc(cover)} alt="" className="w-full h-28 transition-transform duration-300 group-hover:scale-105" />
+              onClick={() => openLightbox(images.map(i => withCacheBust(imgSrc(i), thumbVersions, i)), images.indexOf(cover))}>
+              <LazyImage src={withCacheBust(thumbSrc(cover), thumbVersions, cover)} alt="" className="w-full h-28 transition-transform duration-300 group-hover:scale-105" />
               <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-xl" />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl" />
               <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/40 text-white/70 text-[10px] font-medium backdrop-blur">封面</div>
@@ -248,14 +315,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
               {visibleImages.map((img, ii) => {
                 const globalIdx = thumbStart + ii;
                 return (
-                  <LazyImage key={globalIdx} src={thumbSrc(img)} alt=""
+                  <LazyImage key={globalIdx} src={withCacheBust(thumbSrc(img), thumbVersions, img)} alt=""
                     className={`shrink-0 w-12 h-12 rounded-lg border cursor-pointer transition-all hover:border-accent hover:shadow-sm ${img === cover ? 'border-accent' : 'border-border'}`}
-                    onClick={() => openLightbox(images.map(imgSrc), globalIdx)} />
+                    onClick={() => openLightbox(images.map(i => withCacheBust(imgSrc(i), thumbVersions, i)), globalIdx)} />
                 );
               })}
               {hiddenCount > 0 && (
                 <div className="shrink-0 w-12 h-12 rounded-lg border border-border bg-bg-secondary flex items-center justify-center cursor-pointer hover:border-accent hover:bg-accent-softer transition-all"
-                  onClick={() => openLightbox(images.map(imgSrc), thumbStart + MAX_VISIBLE_THUMBS)}
+                  onClick={() => openLightbox(images.map(i => withCacheBust(imgSrc(i), thumbVersions, i)), thumbStart + MAX_VISIBLE_THUMBS)}
                   title={`查看全部 ${images.length} 张图片`}>
                   <span className="text-xs font-semibold text-text-muted">+{hiddenCount}</span>
                 </div>
@@ -341,39 +408,54 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                             onClick={() => { setCover(img); updateField('cover', img); }}
                             disabled={isPublished}
                             title={img.split('/').pop() || img}>
-                            <LazyImage src={thumbSrc(img)} alt="" className="w-full h-full object-cover" />
+                            <LazyImage src={withCacheBust(thumbSrc(img), thumbVersions, img)} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute bottom-2 left-2 min-w-[16px] h-4 px-1 rounded bg-black/50 text-white text-[10px] font-medium flex items-center justify-center backdrop-blur-sm">{i + 1}</div>
                             {isActive && (
-                              <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
+                              <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
                                 <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                               </div>
                             )}
                           </button>
+                          <button type="button"
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-black/80 backdrop-blur-sm"
+                            title="查看大图"
+                            onClick={(e) => { e.stopPropagation(); openLightbox(images.map(j => withCacheBust(imgSrc(j), thumbVersions, j)), i); }}>
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                          </button>
                           {!isPublished && (
-                            <button type="button"
-                              className="absolute top-1 left-1 z-10 w-5 h-5 rounded-full bg-danger/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-danger shadow-sm"
-                              title="删除此图片"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const filename = img.split('/').pop() || img;
-                                const { confirmed, checked: checkboxChecked } = await Modal.confirm({
-                                  title: '删除图片',
-                                  message: `确认从队列中移除此图片？\n${filename}`,
-                                  confirmText: '删除',
-                                  danger: true,
-                                  checkboxLabel: '同时删除本地资源',
-                                  defaultChecked: true,
-                                });
-                                if (!confirmed) return;
-                                try {
-                                  const r = await queueApi.removeImage(itemId, img, checkboxChecked);
-                                  setQueue(r.queue);
-                                  addToast('已删除图片', 'info');
-                                } catch (err: any) {
-                                  addToast(err.message || '删除失败', 'error');
-                                }
-                              }}>
-                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                            </button>
+                            <>
+                              <button type="button"
+                                className="absolute top-1 left-1 z-10 w-5 h-5 rounded-full bg-danger/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-danger shadow-sm"
+                                title="删除此图片"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const filename = img.split('/').pop() || img;
+                                  const { confirmed, checked: checkboxChecked } = await Modal.confirm({
+                                    title: '删除图片',
+                                    message: `确认从队列中移除此图片？\n${filename}`,
+                                    confirmText: '删除',
+                                    danger: true,
+                                    checkboxLabel: '同时删除本地资源',
+                                    defaultChecked: true,
+                                  });
+                                  if (!confirmed) return;
+                                  try {
+                                    const r = await queueApi.removeImage(itemId, img, checkboxChecked);
+                                    setQueue(r.queue);
+                                    addToast('已删除图片', 'info');
+                                  } catch (err: any) {
+                                    addToast(err.message || '删除失败', 'error');
+                                  }
+                                }}>
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                              </button>
+                              <button type="button"
+                                className={`absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-accent/80 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-accent shadow-sm ${removingWm === img ? 'animate-pulse pointer-events-none' : ''}`}
+                                title="去除水印"
+                                onClick={(e) => { e.stopPropagation(); handleRemoveWatermark(img); }}>
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+                              </button>
+                            </>
                           )}
                         </div>
                       );
@@ -381,7 +463,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                   </div>
                   {images.length > 1 && (
                     <div className="text-[10px] text-text-muted/40 text-right mt-1 select-none">
-                      共 {images.length} 张 · 点击选择封面
+                      共 {images.length} 张 · 点击设封面 · 悬停查看大图
                     </div>
                   )}
                 </div>
@@ -408,6 +490,12 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                   {generating ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 润色中</> : (
                     <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 2v4"/><path d="M12 22a10 10 0 0 1-10-10"/><path d="M12 22v-4"/><path d="M22 12h-4"/><path d="M2 12h4"/></svg>
                     AI 润色</>
+                  )}
+                </button>
+                <button className="btn" onClick={handleBatchRemoveWatermarks} disabled={!!publishingAction || batchRemovingWm || generating}>
+                  {batchRemovingWm ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin" /> 去水印中...</> : (
+                    <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+                    批量去水印</>
                   )}
                 </button>
                 <button className="btn btn-ghost text-danger" onClick={async () => {

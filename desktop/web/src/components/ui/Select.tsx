@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import '../../styles/form.less';
 
 export interface SelectOption {
   label: string;
@@ -13,12 +14,12 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   menuPosition?: 'bottom' | 'top';
-  size?: 'md' | 'sm';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export default function Select({ value, onChange, options, placeholder, disabled, menuPosition = 'bottom', size = 'md' }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
@@ -76,39 +77,33 @@ export default function Select({ value, onChange, options, placeholder, disabled
     return () => document.removeEventListener('keydown', handler);
   }, [open, close]);
 
+  const wrapperSizeClass = size === 'sm' ? 'form-wrapper-sm' : size === 'lg' ? 'form-wrapper-lg' : '';
+  const triggerSizeClass = size === 'sm' ? 'form-select-trigger-sm' : size === 'lg' ? 'form-select-trigger-lg' : '';
+
   return (
     <>
-      <button
+      <div
         ref={triggerRef}
-        type="button"
+        className={`form-wrapper ${wrapperSizeClass} ${disabled ? 'form-wrapper-disabled' : ''} ${open ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]' : ''}`}
+        style={{ borderRadius: 'var(--radius-sm)', cursor: disabled ? 'not-allowed' : 'pointer' }}
         onClick={() => !disabled && setOpen((v) => !v)}
-        className={`
-          w-full flex items-center justify-between
-          border text-left
-          transition-all duration-150
-          bg-[var(--bg-card)] text-[var(--text)] font-[inherit]
-          ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-3 py-[5px] text-[13px]'}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          ${open
-            ? 'border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-soft)]'
-            : disabled
-              ? 'border-[var(--border)]'
-              : 'border-[var(--border)] hover:border-[var(--accent)]'
-          }
-        `}
-        style={{ borderRadius: 'var(--radius-sm)' }}
-        disabled={disabled}
       >
-        <span className={!selected ? 'text-[var(--text-muted)]' : ''}>
-          {selected ? selected.label : placeholder ?? '请选择'}
-        </span>
-        <svg
-          className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''} ${size === 'sm' ? 'w-3 h-3 ml-1.5' : 'w-3.5 h-3.5 ml-2'}`}
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        <button
+          type="button"
+          className={`form-select-trigger ${triggerSizeClass}`}
+          disabled={disabled}
         >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
+          <span className={!selected ? 'form-select-placeholder' : ''}>
+            {selected ? selected.label : placeholder ?? '请选择'}
+          </span>
+          <svg
+            className={`shrink-0 text-[var(--text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''} ${size === 'sm' ? 'w-3 h-3 ml-1.5' : size === 'lg' ? 'w-4 h-4 ml-2.5' : 'w-3.5 h-3.5 ml-2'}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+      </div>
 
       {open && createPortal(
         <div
@@ -118,7 +113,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
           onPointerDown={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-[13px] text-[var(--text-muted)] text-center">无选项</div>
+            <div className="px-3 py-2.5 text-sm text-[var(--text-muted)] text-center">无选项</div>
           ) : (
             options.map((opt) => {
               const isActive = opt.value === value;
@@ -128,7 +123,7 @@ export default function Select({ value, onChange, options, placeholder, disabled
                   onClick={() => { onChange(opt.value); close(); }}
                   className={`
                     cursor-pointer transition-colors duration-100
-                    ${size === 'sm' ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-[13px]'}
+                    ${size === 'sm' ? 'px-2 py-1.5 text-xs' : size === 'lg' ? 'px-4 py-3 text-base' : 'px-3 py-2.5 text-sm'}
                     ${isActive
                       ? 'bg-[var(--accent-soft)] text-[var(--accent)] font-medium'
                       : 'text-[var(--text)] hover:bg-[var(--bg-secondary)]'

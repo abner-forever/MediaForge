@@ -107,6 +107,8 @@ export interface AppState {
   setArticleFilter: (filter: 'all' | 'draft' | 'queued' | 'published') => void;
   setInspirationResults: (results: InspirationTopic[]) => void;
   addChatMessage: (articleId: string, message: ChatMessage) => void;
+  updateChatMessage: (articleId: string, messageId: string, content: string) => void;
+  removeChatMessage: (articleId: string, messageId: string) => void;
   clearChatMessages: (articleId: string) => void;
   getChatMessages: (articleId: string) => ChatMessage[];
 

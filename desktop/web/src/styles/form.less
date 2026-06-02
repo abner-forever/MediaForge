@@ -1,0 +1,223 @@
+// ── 表单组件统一尺寸 ─────────────────────────
+// 所有表单组件使用相同的高度计算公式，确保视觉一致性
+
+@form-height-sm: 28px;
+@form-height-md: 36px;
+@form-height-lg: 44px;
+
+@form-padding-sm-v: 5px;
+@form-padding-sm-h: 8px;
+@form-padding-md-v: 9px;
+@form-padding-md-h: 12px;
+@form-padding-lg-v: 13px;
+@form-padding-lg-h: 16px;
+
+@form-font-size-sm: 12px;
+@form-font-size-md: 14px;
+@form-font-size-lg: 16px;
+
+@form-line-height: 1.2;
+@form-border-width: 1px;
+
+// ── 基础表单控件 ─────────────────────────
+.form-control {
+  width: 100%;
+  height: @form-height-md;
+  padding: 0 @form-padding-md-h;
+  border: @form-border-width solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: @form-font-size-md;
+  line-height: 1;
+  transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// 尺寸变体
+.form-control-sm {
+  height: @form-height-sm;
+  padding: 0 @form-padding-sm-h;
+  font-size: @form-font-size-sm;
+}
+
+.form-control-lg {
+  height: @form-height-lg;
+  padding: 0 @form-padding-lg-h;
+  font-size: @form-font-size-lg;
+}
+
+// ── Select / NumberInput 共用的 wrapper ─────────────────────────
+.form-wrapper {
+  display: flex;
+  align-items: stretch;
+  border: @form-border-width solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  box-sizing: border-box;
+  height: @form-height-md;
+
+  &.form-wrapper-sm {
+    height: @form-height-sm;
+  }
+
+  &.form-wrapper-lg {
+    height: @form-height-lg;
+  }
+
+  &:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  &:disabled,
+  &.form-wrapper-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ── Select trigger 按钮 ─────────────────────────
+.form-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 @form-padding-md-h;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: @form-font-size-md;
+  line-height: @form-line-height;
+  cursor: pointer;
+  box-sizing: border-box;
+  font-family: inherit;
+  text-align: left;
+
+  &.form-select-trigger-sm {
+    padding: 0 @form-padding-sm-h;
+    font-size: @form-font-size-sm;
+  }
+
+  &.form-select-trigger-lg {
+    padding: 0 @form-padding-lg-h;
+    font-size: @form-font-size-lg;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  .form-select-placeholder {
+    color: var(--text-muted);
+  }
+}
+
+// ── NumberInput ─────────────────────────
+.form-number-input {
+  display: flex;
+  align-items: stretch;
+  border: @form-border-width solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+  transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  box-sizing: border-box;
+  height: @form-height-md;
+
+  &.form-number-input-sm {
+    height: @form-height-sm;
+  }
+
+  &.form-number-input-lg {
+    height: @form-height-lg;
+  }
+
+  &:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .form-number-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s;
+    border: none;
+    background: transparent;
+    padding: 0;
+
+    &:hover:not(:disabled) {
+      color: var(--accent);
+      background: var(--accent-softer);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    &.form-number-btn-sm {
+      width: 28px;
+    }
+
+    &.form-number-btn-lg {
+      width: 36px;
+    }
+  }
+
+  .form-number-value {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: @form-font-size-md;
+    text-align: center;
+    box-sizing: border-box;
+    font-family: inherit;
+    outline: none;
+    min-width: 0;
+    box-shadow: none;
+    &.form-number-value-sm {
+      font-size: @form-font-size-sm;
+    }
+
+    &.form-number-value-lg {
+      font-size: @form-font-size-lg;
+    }
+
+    // 隐藏数字输入框的 spinner
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    -moz-appearance: textfield;
+  }
+}

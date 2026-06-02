@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { HealthStatus } from '../../api/client';
 import GlowOrb from './GlowOrb';
 import StatusDot, { getGreeting } from './StatusDot';
@@ -28,11 +29,12 @@ function formatTime(d: Date) {
 
 export default function HeroSection({ health }: { health: HealthStatus | null }) {
   const now = useCurrentTime();
-  const statusItems: { label: string; ok: boolean | undefined }[] = [
-    { label: '平台认证', ok: health?.platform_auth },
-    { label: '微博 Cookie', ok: health?.weibo_cookie },
-    { label: 'AI API Key', ok: health?.ai_api_key },
-    { label: 'AI Base URL', ok: health?.ai_base_url },
+  const navigate = useNavigate();
+  const statusItems: { label: string; ok: boolean | undefined; hash: string }[] = [
+    { label: '平台认证', ok: health?.platform_auth, hash: 'system-media-source' },
+    { label: '微博 Cookie', ok: health?.weibo_cookie, hash: 'system-media-source' },
+    { label: 'AI API Key', ok: health?.ai_api_key, hash: 'system-llm' },
+    { label: 'AI Base URL', ok: health?.ai_base_url, hash: 'system-llm' },
   ];
 
   return (
@@ -120,7 +122,12 @@ export default function HeroSection({ health }: { health: HealthStatus | null })
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 24px', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             {statusItems.map((item) => (
-              <span key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+              <span key={item.label}
+                onClick={() => navigate({ pathname: '/settings', hash: item.hash })}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer', transition: 'color 0.15s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
                 <StatusDot ok={item.ok} />
                 {item.label}
               </span>

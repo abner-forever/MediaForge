@@ -2,6 +2,7 @@ requests
 playwright
 openai
 pillow
+opencv-python-headless
 tenacity>=8.2.0
 fastapi
 uvicorn

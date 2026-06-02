@@ -141,6 +141,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
               <span className="text-xs text-text-muted shrink-0">发布到</span>
               <div className="w-44">
                 <Select
+                  size="sm"
                   value={selectedAccountId}
                   onChange={setSelectedAccountId}
                   options={accounts.map(acc => ({

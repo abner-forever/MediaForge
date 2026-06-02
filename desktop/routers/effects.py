@@ -1,4 +1,4 @@
-"""发布效果分析 API。"""
+"""发布数据分析 API。"""
 
 import csv
 import io

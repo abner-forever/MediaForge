@@ -85,9 +85,8 @@ def generate_content(text: str) -> Tuple[str, str]:
     return "今日美图分享", ""
 
 
-def chat_article(content: str, instruction: str, messages: list | None = None) -> str:
-    """根据用户指令修改或生成文章正文，支持多轮对话上下文。"""
-    # 构建对话历史文本（最近 5 轮）
+def _build_chat_prompt(content: str, instruction: str, messages: list | None = None, *, title: str = "", tags: list | None = None) -> str:
+    """构建 chat prompt 文本，供同步和流式调用共用。"""
     history_lines: list[str] = []
     if messages:
         # 取最近 10 条（5 轮 user+assistant），排除最后一条（即当前 instruction）
@@ -103,11 +102,24 @@ def chat_article(content: str, instruction: str, messages: list | None = None) -
             history_lines.append("")
     chat_history = "\n".join(history_lines)
 
-    prompt = ARTICLE_CHAT_TEMPLATE.format(
+    context_parts: list[str] = []
+    if title:
+        context_parts.append(f"文章标题：{title}")
+    if tags:
+        context_parts.append(f"标签：{', '.join(tags)}")
+    context = "\n".join(context_parts) + "\n\n" if context_parts else ""
+
+    return ARTICLE_CHAT_TEMPLATE.format(
         content=content[:3000] or "(空)",
         chat_history=chat_history,
         instruction=instruction,
+        context=context,
     )
+
+
+def chat_article(content: str, instruction: str, messages: list | None = None) -> str:
+    """根据用户指令修改或生成文章正文，支持多轮对话上下文。"""
+    prompt = _build_chat_prompt(content, instruction, messages)
     return _call_ai(prompt, instruction)
 
 

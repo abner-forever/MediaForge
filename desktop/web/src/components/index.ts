@@ -1,4 +1,5 @@
 // UI 原语
+export { default as Button } from './ui/Button';
 export { default as Checkbox } from './ui/Checkbox';
 export { default as Dialog } from './ui/Dialog';
 export { default as ContextMenu } from './ui/ContextMenu';

@@ -13,6 +13,8 @@ export interface ArticlesSlice {
   setArticleFilter: (filter: 'all' | 'draft' | 'queued' | 'published') => void;
   setInspirationResults: (results: InspirationTopic[]) => void;
   addChatMessage: (articleId: string, message: ChatMessage) => void;
+  updateChatMessage: (articleId: string, messageId: string, content: string) => void;
+  removeChatMessage: (articleId: string, messageId: string) => void;
   clearChatMessages: (articleId: string) => void;
   getChatMessages: (articleId: string) => ChatMessage[];
 }
@@ -32,6 +34,22 @@ export const createArticlesSlice: StateCreator<AppState, [], [], ArticlesSlice> 
       chatMessages: {
         ...state.chatMessages,
         [articleId]: [...(state.chatMessages[articleId] || []), message],
+      },
+    })),
+  updateChatMessage: (articleId, messageId, content) =>
+    set((state) => ({
+      chatMessages: {
+        ...state.chatMessages,
+        [articleId]: (state.chatMessages[articleId] || []).map(msg =>
+          msg.id === messageId ? { ...msg, content } : msg
+        ),
+      },
+    })),
+  removeChatMessage: (articleId, messageId) =>
+    set((state) => ({
+      chatMessages: {
+        ...state.chatMessages,
+        [articleId]: (state.chatMessages[articleId] || []).filter(msg => msg.id !== messageId),
       },
     })),
   clearChatMessages: (articleId) =>

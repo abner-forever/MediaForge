@@ -39,6 +39,8 @@ from services.ai import (
     optimize_layout,
     polish_article,
 )
+from services.ai.content import _build_chat_prompt
+from desktop.sse_helpers import create_sse_response
 from services.extensions import build_html
 from desktop.routers.images import get_proxy_cache
 
@@ -130,37 +132,77 @@ async def article_cover_search(keyword: str = Query("")):
             })
             seen.add(rel)
 
-    # 2) 网络搜索 (Bing Images)
+    # 2) 网络搜索 (百度图片)
     if keyword:
         try:
             from urllib.parse import quote as _url_quote, unquote as _unquote
             resp = http_requests.get(
-                f"https://www.bing.com/images/search?q={_url_quote(keyword)}&count=30",
+                "https://image.baidu.com/search/acjson",
+                params={
+                    "tn": "resultjson_com",
+                    "logid": "1234567890",
+                    "ipn": "rj",
+                    "ct": "201326592",
+                    "is": "",
+                    "fp": "result",
+                    "fr": "",
+                    "word": keyword,
+                    "queryWord": keyword,
+                    "cl": "2",
+                    "lm": "-1",
+                    "ie": "utf-8",
+                    "oe": "utf-8",
+                    "adpicid": "",
+                    "st": "-1",
+                    "z": "",
+                    "ic": "",
+                    "hd": "",
+                    "latest": "",
+                    "copyright": "",
+                    "s": "",
+                    "se": "",
+                    "tab": "",
+                    "width": "",
+                    "height": "",
+                    "face": "0",
+                    "istype": "2",
+                    "qc": "",
+                    "nc": "1",
+                    "expermode": "",
+                    "nojc": "",
+                    "isAsync": "",
+                    "pn": "0",
+                    "rn": "30",
+                    "gsm": "1e",
+                },
                 headers={
                     "User-Agent": (
                         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     ),
-                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept": "application/json",
+                    "Referer": f"https://image.baidu.com/search/index?tn=baiduimage&word={_url_quote(keyword)}",
                 },
                 timeout=15,
             )
-            raw_urls = re.findall(r'mediaurl=([^&]+)', resp.text)
-            for raw in raw_urls:
+            data = resp.json()
+            for item in data.get("data", []):
                 if len(images) >= 60:
                     break
-                decoded = _unquote(raw).replace("\\\\/", "/").replace("\\/", "/")
-                if "/th/id/" in decoded:
-                    riu_match = re.search(r'riu=([^&]+)', decoded)
-                    if riu_match:
-                        original = _unquote(riu_match.group(1)).replace("\\\\/", "/").replace("\\/", "/")
-                        if original.startswith("http") and original not in seen:
-                            seen.add(original)
-                            images.append({"path": original, "name": original.rsplit("/", 1)[-1][:50], "source": "web", "celebrity": ""})
-                            continue
-                if decoded.startswith("http") and decoded not in seen:
-                    seen.add(decoded)
-                    images.append({"path": decoded, "name": decoded.rsplit("/", 1)[-1][:50], "source": "web", "celebrity": ""})
+                url = item.get("thumbURL") or item.get("middleURL") or ""
+                if not url or not url.startswith("http") or url in seen:
+                    continue
+                seen.add(url)
+                name = item.get("fromPageTitleEnc") or item.get("title", "")
+                if not name:
+                    name = url.rsplit("/", 1)[-1][:50]
+                else:
+                    try:
+                        name = _unquote(name)
+                    except Exception:
+                        pass
+                    name = re.sub(r"<[^>]+>", "", name)[:50]
+                images.append({"path": url, "name": name, "source": "web", "celebrity": ""})
         except Exception as e:
             _req_logger.warning("网络配图搜索失败: %s", e)
 
@@ -217,7 +259,7 @@ async def article_cover_download(req: _CoverDownloadRequest):
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 ),
-                "Referer": "https://www.bing.com/",
+                "Referer": "https://image.baidu.com/",
             },
             timeout=30,
             stream=True,
@@ -416,7 +458,7 @@ async def optimize_article_layout(article_id: str):
 
 @router.post("/api/articles/{article_id}/chat")
 async def chat_article_content(article_id: str, req: ArticleChatRequest):
-    """AI 对话式修改/生成正文。"""
+    """AI 对话式修改/生成正文（SSE 流式响应）。"""
     if not settings.ai_api_key:
         raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     article = app_state.get_article(article_id)
@@ -426,11 +468,69 @@ async def chat_article_content(article_id: str, req: ArticleChatRequest):
     if not instruction:
         raise HTTPException(400, "请输入指令")
 
+    # 在进入线程前构建 prompt（req 对象不能跨线程）
     msg_dicts = [m.model_dump() for m in req.messages] if req.messages else None
-    content = chat_article(article.get("content", ""), instruction, messages=msg_dicts)
-    app_state.update_article(article_id, {"content": content, "ai_generated": True})
-    app_state.add_operation("AI 对话", f"「{instruction[:30]}」")
-    return {"success": True, "content": content}
+    prompt = _build_chat_prompt(
+        article.get("content", ""), instruction, messages=msg_dicts,
+        title=article.get("title", ""), tags=article.get("tags"),
+    )
+
+    def _task(msg_queue):
+        from services.ai.client import _call_ai_stream
+        SEPARATOR = "\n---\n"
+        full_content = []
+        separator_found = False
+        sent_up_to = 0  # 已发送的 message 字符数
+        try:
+            for token in _call_ai_stream(prompt, raise_on_fail=True):
+                full_content.append(token)
+                if not separator_found:
+                    buffer = "".join(full_content)
+                    sep_idx = buffer.find(SEPARATOR)
+                    if sep_idx != -1:
+                        separator_found = True
+                        # 发送分隔符前的解释部分（未发送的尾部）
+                        explanation = buffer[sent_up_to:sep_idx]
+                        if explanation:
+                            msg_queue.put(("message", explanation))
+                        # 发送分隔符后的内容部分
+                        after_sep = buffer[sep_idx + len(SEPARATOR):]
+                        if after_sep:
+                            msg_queue.put(("content", after_sep))
+                        sent_up_to = -1  # 标记已切换到 content 模式
+                    else:
+                        # 分隔符未找到，逐 token 发送为 message
+                        # 但要保留 buffer 尾部以防分隔符被跨 token 切分
+                        safe_len = len(buffer) - 10  # 保留尾部 10 字符
+                        if safe_len > sent_up_to:
+                            chunk = buffer[sent_up_to:safe_len]
+                            msg_queue.put(("message", chunk))
+                            sent_up_to = safe_len
+                else:
+                    # 分隔符已找到，token 直接作为 content 发送
+                    msg_queue.put(("content", token))
+
+            # 流结束，处理剩余 buffer
+            buffer = "".join(full_content)
+            if not separator_found:
+                # 分隔符从未出现，整个输出作为文章内容
+                remaining = buffer[sent_up_to:] if sent_up_to >= 0 else buffer
+                if remaining:
+                    msg_queue.put(("message", remaining))
+                final_content = buffer.strip()
+            else:
+                # 分隔符已找到，发送 buffer 中分隔符后未发送的部分
+                sep_idx = buffer.find(SEPARATOR)
+                final_content = buffer[sep_idx + len(SEPARATOR):].strip()
+
+            if final_content:
+                app_state.update_article(article_id, {"content": final_content, "ai_generated": True})
+                app_state.add_operation("AI 对话", f"「{instruction[:30]}」")
+            msg_queue.put(("done", {"content": final_content}))
+        except Exception as e:
+            msg_queue.put(("error", str(e)))
+
+    return create_sse_response(_task)
 
 
 @router.post("/api/articles/{article_id}/queue")

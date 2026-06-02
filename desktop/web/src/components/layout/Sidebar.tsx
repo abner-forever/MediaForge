@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { path: '/pipeline', icon: ICONS.pipeline, label: '智能流水线' },
   { path: '/articles', icon: ICONS.edit, label: '文章发布' },
   { path: '/queue', icon: ICONS.list, label: '发布队列' },
-  { path: '/effects', icon: ICONS.effects, label: '效果分析' },
+  { path: '/effects', icon: ICONS.effects, label: '数据分析' },
   { path: '/materials', icon: ICONS.image, label: '本地素材' },
 ] as const;
 
@@ -227,7 +227,7 @@ export default function Sidebar() {
       }}>
         {!collapsed && (
           <NavLink
-            to="/settings"
+            to={{ pathname: '/settings', hash: 'system-wechat' }}
             className="block rounded-lg px-3 py-[10px] mb-2 hover:bg-[var(--sidebar-hover)]"
             style={{ textDecoration: 'none', border: '1px solid var(--sidebar-border)' }}
             title="进入公众号账号设置"

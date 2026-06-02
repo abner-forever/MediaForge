@@ -12,4 +12,8 @@ export const queueApi = {
   enqueueSelected: (images?: string[]) => post<{ success: boolean; title: string; desc: string }>('/api/queue/enqueue-selected', { images }),
   removeImage: (id: string, imagePath: string, deleteLocal?: boolean) =>
     del<{ success: boolean; queue: QueueItem[] }>(`/api/queue/${id}/image?image_path=${encodeURIComponent(imagePath)}${deleteLocal ? '&delete_local=true' : ''}`),
+  removeWatermark: (id: string, imagePath: string) =>
+    post<{ success: boolean; action?: string; message: string; queue: QueueItem[] }>(`/api/queue/${id}/remove-watermark?image_path=${encodeURIComponent(imagePath)}`),
+  batchRemoveWatermarks: (id: string) =>
+    post<{ success: boolean; processed: number; skipped: number; failed: number; total: number; queue: QueueItem[] }>(`/api/queue/${id}/remove-watermarks`),
 };

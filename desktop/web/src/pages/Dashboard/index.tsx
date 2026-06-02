@@ -134,7 +134,7 @@ export default function Dashboard() {
           <div className={`text-sm mt-1 ${defaultAccount?.logged_in ? 'text-success' : 'text-danger'}`}>
             {defaultAccount?.logged_in ? '已登录，可用于发布' : '未登录，请先扫码'}
           </div>
-          <button className="btn btn-sm mt-4" onClick={() => navigate('/settings')}>切换或登录</button>
+          <button className="btn btn-sm mt-4" onClick={() => navigate({ pathname: '/settings', hash: 'system-wechat' })}>切换或登录</button>
         </div>
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">

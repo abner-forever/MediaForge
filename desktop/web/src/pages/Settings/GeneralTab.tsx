@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import type { SettingsData } from '../../api/client';
 import ThemeSection from './ThemeSection';
 import RunSection from './RunSection';
 import AboutSection from './AboutSection';
 
-export default function GeneralTab({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
-  const [subTab, setSubTab] = useState('theme');
+export default function GeneralTab({ data, save, subTab, onSubTabChange }: { data: SettingsData; save: (u: Record<string, string>) => void; subTab: string; onSubTabChange: (s: string) => void }) {
   const SUB_TABS = [
     { id: 'theme', label: '主题管理' },
     { id: 'run', label: '运行参数' },
@@ -15,7 +13,7 @@ export default function GeneralTab({ data, save }: { data: SettingsData; save: (
     <div className="flex gap-6">
       <div className="w-44 shrink-0 flex flex-col gap-1">
         {SUB_TABS.map(t => (
-          <button key={t.id} onClick={() => setSubTab(t.id)}
+          <button key={t.id} onClick={() => onSubTabChange(t.id)}
             className={`relative flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
               subTab === t.id
                 ? 'bg-accent-soft text-accent shadow-sm'

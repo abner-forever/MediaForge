@@ -24,6 +24,9 @@ def create_sse_response(
     task_fn 接收一个 Queue 实例，通过 msg_queue.put((type, ...)) 推送消息。
     支持的消息类型：
       - ("progress", message)  → 进度消息
+      - ("token", text)        → 流式 token（细粒度，不终止流）
+      - ("message", text)      → AI 解释文本（Agent 模式，不终止流）
+      - ("content", text)      → 文章内容（Agent 模式，不终止流）
       - ("done", ...)          → 完成，支持 dict 或位置参数
       - ("error", message)     → 错误消息
 
@@ -46,6 +49,12 @@ def create_sse_response(
             msg_type = msg[0]
             if msg_type == "progress":
                 yield f"data: {json.dumps({'type': 'progress', 'message': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg_type == "token":
+                yield f"data: {json.dumps({'type': 'token', 'content': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg_type == "message":
+                yield f"data: {json.dumps({'type': 'message', 'content': msg[1]}, ensure_ascii=False)}\n\n"
+            elif msg_type == "content":
+                yield f"data: {json.dumps({'type': 'content', 'content': msg[1]}, ensure_ascii=False)}\n\n"
             elif msg_type == "done":
                 if on_done:
                     try:

@@ -1,12 +1,23 @@
+import '../../styles/form.less';
+
 interface NumberInputProps {
   value: number;
   onChange: (value: number) => void;
   min?: number;
   max?: number;
   step?: number;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-export default function NumberInput({ value, onChange, min, max, step = 1 }: NumberInputProps) {
+const sizeConfig = {
+  sm: { wrapper: 'form-number-input-sm', btn: 'form-number-btn form-number-btn-sm', icon: 'w-2.5 h-2.5', text: 'form-number-value form-number-value-sm' },
+  md: { wrapper: '', btn: 'form-number-btn', icon: 'w-3 h-3', text: 'form-number-value' },
+  lg: { wrapper: 'form-number-input-lg', btn: 'form-number-btn form-number-btn-lg', icon: 'w-3.5 h-3.5', text: 'form-number-value form-number-value-lg' },
+};
+
+export default function NumberInput({ value, onChange, min, max, step = 1, size = 'md' }: NumberInputProps) {
+  const s = sizeConfig[size];
+
   function clamp(v: number) {
     if (min !== undefined) v = Math.max(min, v);
     if (max !== undefined) v = Math.min(max, v);
@@ -14,14 +25,17 @@ export default function NumberInput({ value, onChange, min, max, step = 1 }: Num
   }
 
   return (
-    <div className="flex items-center border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)] transition-all duration-150 field-control" style={{ borderRadius: 'var(--radius)' }}>
+    <div
+      className={`form-number-input ${s.wrapper}`}
+      style={{ borderRadius: 'var(--radius-sm)' }}
+    >
       <button
         type="button"
         onClick={() => onChange(clamp(value - step))}
         disabled={min !== undefined && value <= min}
-        className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-softer)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        className={`${s.btn}`}
       >
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14" /></svg>
+        <svg className={s.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14" /></svg>
       </button>
       <input
         type="number"
@@ -30,16 +44,16 @@ export default function NumberInput({ value, onChange, min, max, step = 1 }: Num
         min={min}
         max={max}
         step={step}
-        className="flex-1 text-center border-none bg-transparent shadow-none focus:shadow-none focus:outline-none px-0 text-[13px] text-[var(--text)]"
+        className={s.text}
         style={{ width: 0 }}
       />
       <button
         type="button"
         onClick={() => onChange(clamp(value + step))}
         disabled={max !== undefined && value >= max}
-        className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-softer)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        className={`${s.btn}`}
       >
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <svg className={s.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </button>
     </div>
   );

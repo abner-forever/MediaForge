@@ -30,7 +30,7 @@ const ARTICLE_TEMPLATES = [
 export default function ArticlePublish() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox, sidebarOpen, setSidebarOpen, chatMessages, addChatMessage, clearChatMessages } = useStore(useShallow(s => ({
+  const { addToast, articles, setArticles, currentArticle, setCurrentArticle, articleFilter, setArticleFilter, inspirationResults, setInspirationResults, openLightbox, sidebarOpen, setSidebarOpen, chatMessages, addChatMessage, updateChatMessage, removeChatMessage, clearChatMessages } = useStore(useShallow(s => ({
     addToast: s.addToast,
     articles: s.articles,
     setArticles: s.setArticles,
@@ -45,6 +45,8 @@ export default function ArticlePublish() {
     setSidebarOpen: s.setSidebarOpen,
     chatMessages: s.chatMessages,
     addChatMessage: s.addChatMessage,
+    updateChatMessage: s.updateChatMessage,
+    removeChatMessage: s.removeChatMessage,
     clearChatMessages: s.clearChatMessages,
   })));
 
@@ -73,6 +75,10 @@ export default function ArticlePublish() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
+  const aiMsgIdRef = useRef<string | null>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const chatInstructionRef = useRef('');
 
   /* ── UI 状态 ────────────────────────────────── */
   const [confirm, setConfirm] = useState<{ msg: string; onOk: () => void } | null>(null);
@@ -86,6 +92,9 @@ export default function ArticlePublish() {
   const [coverSearchLoading, setCoverSearchLoading] = useState(false);
   const [coverDownloading, setCoverDownloading] = useState(false);
   const [coverLoading, setCoverLoading] = useState(false);
+  const [coverPos, setCoverPos] = useState({ x: 50, y: 50 });
+  const coverDragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
   const [wechatAccounts, setWechatAccounts] = useState<WeChatAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [publishConfirm, setPublishConfirm] = useState<'draft' | 'publish' | null>(null);
@@ -180,12 +189,12 @@ export default function ArticlePublish() {
   };
 
   const selectCoverImage = async (img: CoverImage) => {
-    if (img.source === 'local') { setCover(img.path); setShowCoverSearch(false); setCoverLoading(true); return; }
+    if (img.source === 'local') { setCover(img.path); setCoverPos({ x: 50, y: 50 }); setShowCoverSearch(false); setCoverLoading(true); return; }
     try {
       setCoverDownloading(true);
       addToast('正在下载封面图片…', 'info');
       const res = await articleApi.coverDownload(img.path);
-      if (res.success && res.path) { setCover(res.path); setShowCoverSearch(false); setCoverLoading(true); addToast('封面已设置', 'success'); }
+      if (res.success && res.path) { setCover(res.path); setCoverPos({ x: 50, y: 50 }); setShowCoverSearch(false); setCoverLoading(true); addToast('封面已设置', 'success'); }
     } catch (e: any) { addToast(e.message || '下载封面失败', 'error');
     } finally { setCoverDownloading(false); }
   };
@@ -269,12 +278,13 @@ export default function ArticlePublish() {
     });
   };
 
-  const ensureArticleSaved = async (): Promise<string | null> => {
+  const ensureArticleSaved = async (allowEmpty = false): Promise<string | null> => {
     if (editingId) return editingId;
-    if (!title && !content) { addToast('请先输入标题或正文', 'info'); return null; }
+    if (!title && !content && !allowEmpty) { addToast('请先输入标题或正文', 'info'); return null; }
     try {
       const tags = tagsText.split(/[,，、\s]+/).filter(Boolean);
-      const res = await articleApi.create({ title, content, cover, source, tags, status: 'draft' });
+      const saveTitle = title || (allowEmpty ? '未命名文章' : '');
+      const res = await articleApi.create({ title: saveTitle, content, cover, source, tags, status: 'draft' });
       setEditingId(res.article.id); setCurrentArticle(res.article);
       loadArticles(articleFilter); return res.article.id;
     } catch (e: any) { addToast(e.message || '自动保存失败', 'error'); return null; }
@@ -360,44 +370,134 @@ export default function ArticlePublish() {
   const doChat = async () => {
     const instruction = chatInput.trim();
     if (!instruction) return;
+
+    setChatLoading(true);
+    setChatInput('');
+    chatInstructionRef.current = instruction;
+    const id = await ensureArticleSaved(true);
+    if (!id) { setChatLoading(false); return; }
+
+    // 添加用户消息
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: instruction,
+      created_at: new Date().toISOString(),
+    };
+    addChatMessage(id, userMsg);
+
+    // 创建占位 AI 消息（空内容，用于逐 token 填充）
+    const aiMsgId = crypto.randomUUID();
+    aiMsgIdRef.current = aiMsgId;
+    const aiMsg: ChatMessage = {
+      id: aiMsgId,
+      role: 'assistant',
+      content: '',
+      created_at: new Date().toISOString(),
+    };
+    addChatMessage(id, aiMsg);
+
+    const history = (chatMessages[id] || []).map(m => ({ role: m.role, content: m.content }));
+
+    // 双累积器：explanationText 更新聊天区，contentText 静默累积
+    let explanationText = '';
+    let contentText = '';
+    let hasContentEvents = false;
+    let lastUpdateTime = 0;
+    const THROTTLE_MS = 50;
+
+    const abortController = new AbortController();
+    chatAbortRef.current = abortController;
+
     try {
-      setChatLoading(true);
-      setChatInput('');
-      const id = await ensureArticleSaved();
-      if (!id) { setChatLoading(false); return; }
+      const result = await articleApi.chat(id, instruction, history, {
+        onMessage: (token) => {
+          explanationText += token;
+          const now = Date.now();
+          if (now - lastUpdateTime >= THROTTLE_MS) {
+            updateChatMessage(id, aiMsgId, explanationText);
+            lastUpdateTime = now;
+          }
+        },
+        onContent: (token) => {
+          contentText += token;
+          hasContentEvents = true;
+        },
+      }, abortController.signal);
 
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: instruction,
-        created_at: new Date().toISOString(),
-      };
-      addChatMessage(id, userMsg);
-
-      const history = (chatMessages[id] || []).map(m => ({ role: m.role, content: m.content }));
-      const res = await articleApi.chat(id, instruction, history);
-
-      if (res.content) {
-        const aiMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: res.content,
-          created_at: new Date().toISOString(),
-        };
-        addChatMessage(id, aiMsg);
-        setContent(res.content);
-        setContentDoc(plainToTiptap(res.content));
+      // 流完成：根据是否有 content 事件决定行为
+      if (hasContentEvents && contentText.trim()) {
+        // Agent 模式：解释在聊天区，内容更新编辑器
+        updateChatMessage(id, aiMsgId, explanationText || '文章已更新');
+        setContent(contentText);
+        setContentDoc(plainToTiptap(contentText));
+        addToast('文章已更新', 'success');
+      } else {
+        // 纯对话回复（总结/分析/提问等），不改编辑器
+        updateChatMessage(id, aiMsgId, explanationText);
       }
-    } catch (e: any) { addToast(e.message || '处理失败', 'error');
-    } finally { setChatLoading(false); }
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        updateChatMessage(id, aiMsgId, explanationText || '(已停止生成)');
+      } else {
+        addToast(e.message || '处理失败', 'error');
+        removeChatMessage(id, aiMsgId);
+      }
+    } finally {
+      setChatLoading(false);
+      chatAbortRef.current = null;
+      aiMsgIdRef.current = null;
+    }
   };
 
+  const stopChat = () => {
+    chatAbortRef.current?.abort();
+  };
+
+  // 根据用户指令推断 AI 正在做什么
+  const getTypingText = (instruction: string): string => {
+    if (/生成|写一篇|创作|撰写/.test(instruction)) return '正在生成文章...';
+    if (/标题|题目/.test(instruction)) return '正在生成标题...';
+    if (/润色|修改|优化|改善|提升/.test(instruction)) return '正在优化内容...';
+    if (/排版|格式|结构/.test(instruction)) return '正在优化排版...';
+    if (/去AI|去ai|自然|口语化/.test(instruction)) return '正在处理中...';
+    if (/缩写|精简|缩短|删减/.test(instruction)) return '正在精简内容...';
+    if (/扩写|扩展|充实|补充/.test(instruction)) return '正在扩展内容...';
+    return '正在思考...';
+  };
+
+  // 输入框自动高度
+  const resizeChatTextarea = useCallback(() => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(Math.max(el.scrollHeight, 36), 120) + 'px';
+  }, []);
+
+  useEffect(() => { resizeChatTextarea(); }, [chatInput, resizeChatTextarea]);
+
   // 自动滚动到最新消息
+  const scrollChatToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (chatMessagesRef.current) {
+        chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      }
+    });
+  }, []);
+
+  useEffect(() => { scrollChatToBottom(); }, [chatMessages, editingId, scrollChatToBottom]);
+
+  // 流式输出时，内容变化也要触发滚动
+  const lastMsgContentLen = useRef(0);
   useEffect(() => {
-    if (chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    const msgs = editingId ? (chatMessages[editingId] || []) : [];
+    const lastMsg = msgs[msgs.length - 1];
+    const len = lastMsg?.content?.length || 0;
+    if (len !== lastMsgContentLen.current) {
+      lastMsgContentLen.current = len;
+      scrollChatToBottom();
     }
-  }, [chatMessages, editingId]);
+  }, [chatMessages, editingId, scrollChatToBottom]);
 
   const switchFilter = (tab: TabKey) => { setArticleFilter(tab); loadArticles(tab); };
   const tpl = ARTICLE_TEMPLATES.find(t => t.id === templateId) || ARTICLE_TEMPLATES[0];
@@ -471,7 +571,7 @@ export default function ArticlePublish() {
             <p><b>3. 标题生成</b>：点击「生成标题」获取多个候选标题，可选择安全型、吸引点击型、温和型等不同风格。</p>
             <p><b>4. 封面与配图</b>：在「封面」区域选择或上传封面图，拖拽调整文章中的图片顺序。</p>
             <p><b>5. 保存与发布</b>：「保存草稿」存为本地草稿可继续编辑；「加入队列」进入发布队列等待发布；「直接发布」立即推送到公众号。</p>
-            <p><b>6. 效果追踪</b>：已发布的文章可录入阅读量、点赞等数据，后续在「效果分析」页面查看趋势。</p>
+            <p><b>6. 效果追踪</b>：已发布的文章可录入阅读量、点赞等数据，后续在「数据分析」页面查看趋势。</p>
           </HelpGuide>
 
           {/* 文章列表抽屉按钮 */}
@@ -545,6 +645,7 @@ export default function ArticlePublish() {
             {/* 模板 */}
             <div style={{ width: 140, flexShrink: 0 }}>
               <Select
+                size="sm"
                 value={templateId}
                 onChange={(v) => setTemplateId(v as typeof templateId)}
                 options={ARTICLE_TEMPLATES.map(t => ({ label: t.name, value: t.id }))}
@@ -588,16 +689,48 @@ export default function ArticlePublish() {
             />
           </div>
 
-          {/* 封面预览（单独一行） */}
+          {/* 封面预览（可拖拽平移） */}
           {cover && !showCoverSearch && (
-            <div style={{ flexShrink: 0, marginBottom: 8, position: 'relative' }}>
+            <div
+              ref={coverContainerRef}
+              style={{ flexShrink: 0, marginBottom: 8, position: 'relative', overflow: 'hidden', borderRadius: 8, border: '1px solid var(--border)', cursor: 'grab', maxHeight: 140 }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                coverDragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: coverPos.x, startPosY: coverPos.y };
+                const onMove = (ev: MouseEvent) => {
+                  const drag = coverDragRef.current;
+                  if (!drag || !coverContainerRef.current) return;
+                  const rect = coverContainerRef.current.getBoundingClientRect();
+                  const img = coverContainerRef.current.querySelector('img') as HTMLImageElement | null;
+                  if (!img || !img.naturalWidth) return;
+                  const scaleX = img.naturalWidth / rect.width;
+                  const scaleY = img.naturalHeight / rect.height;
+                  const dx = ((ev.clientX - drag.startX) / rect.width) * 100 * scaleX;
+                  const dy = ((ev.clientY - drag.startY) / rect.height) * 100 * scaleY;
+                  setCoverPos({
+                    x: Math.max(0, Math.min(100, drag.startPosX - dx)),
+                    y: Math.max(0, Math.min(100, drag.startPosY - dy)),
+                  });
+                };
+                const onUp = () => {
+                  coverDragRef.current = null;
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                  if (coverContainerRef.current) coverContainerRef.current.style.cursor = 'grab';
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                (e.currentTarget as HTMLElement).style.cursor = 'grabbing';
+              }}
+            >
               <img
                 key={cover}
                 src={coverImageUrl(cover)}
-                style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${coverPos.x}% ${coverPos.y}%`, display: 'block', pointerEvents: 'none', userSelect: 'none' }}
+                onLoad={() => { setCoverLoading(false); }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; setCoverLoading(false); }}
               />
-              <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4 }}>
+              <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'auto' }}>
                 <button onClick={() => setShowCoverSearch(true)} className="btn btn-sm"
                   style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', padding: '3px 8px', fontSize: 11 }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
@@ -801,7 +934,7 @@ export default function ArticlePublish() {
                     padding: '20px 8px', textAlign: 'center',
                     fontSize: 12, color: 'var(--text-muted)',
                   }}>
-                    输入指令优化文章，支持多轮对话
+                    输入指令优化文章，AI 助手会先解释再修改
                   </div>
                 )}
                 {currentChatMessages.map((msg) => (
@@ -820,14 +953,33 @@ export default function ArticlePublish() {
                       color: msg.role === 'user' ? 'var(--accent-foreground, #fff)' : 'var(--text)',
                       fontSize: 12, lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
                     }}>
-                      {msg.role === 'assistant'
-                        ? msg.content.slice(0, 200) + (msg.content.length > 200 ? '...' : '')
-                        : msg.content
-                      }
+                      {msg.content}
+                      {msg.role === 'assistant' && chatLoading && msg.id === aiMsgIdRef.current && !msg.content && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
+                          <span style={{
+                            width: 14, height: 14, borderRadius: '50%',
+                            border: '2px solid var(--border)', borderTopColor: 'var(--accent)',
+                            animation: 'spin 0.8s linear infinite',
+                            flexShrink: 0,
+                          }} />
+                          {getTypingText(chatInstructionRef.current)}
+                        </span>
+                      )}
+                      {msg.role === 'assistant' && chatLoading && msg.id === aiMsgIdRef.current && msg.content && (
+                        <span style={{
+                          display: 'inline-block',
+                          width: 2,
+                          height: '1em',
+                          background: 'var(--accent)',
+                          marginLeft: 2,
+                          animation: 'blink 1s infinite',
+                          verticalAlign: 'text-bottom',
+                        }} />
+                      )}
                     </div>
                   </div>
                 ))}
-                {chatLoading && (
+                {chatLoading && !aiMsgIdRef.current && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 6 }}>
                     <div style={{
                       padding: '5px 9px', borderRadius: '10px 10px 10px 2px',
@@ -842,25 +994,49 @@ export default function ArticlePublish() {
 
               {/* 输入区域 — 固定在底部 */}
               <div style={{
-                display: 'flex', gap: 6, padding: 6,
+                display: 'flex', gap: 6, padding: '8px 8px',
                 borderTop: '1px solid var(--border-subtle)', background: 'var(--bg)',
-                flexShrink: 0,
+                flexShrink: 0, alignItems: 'flex-end',
               }}>
-                <input
-                  placeholder="输入指令修改正文..."
+                <textarea
+                  ref={chatTextareaRef}
+                  placeholder="描述你想要的修改..."
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doChat(); } }}
-                  style={{ flex: 1, fontSize: 12, padding: '5px 8px', borderRadius: 6, height: 30, lineHeight: '18px' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!chatLoading) doChat();
+                    }
+                  }}
+                  disabled={chatLoading}
+                  rows={1}
+                  style={{
+                    flex: 1, fontSize: 12, padding: '7px 10px', borderRadius: 8,
+                    lineHeight: '18px', resize: 'none', overflow: 'auto',
+                    minHeight: 36, maxHeight: 120, fontFamily: 'inherit',
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                  }}
                 />
-                <button
-                  className="btn btn-sm"
-                  onClick={doChat}
-                  disabled={chatLoading || !chatInput.trim()}
-                  style={{ flexShrink: 0, padding: '5px 10px' }}
-                >
-                  {chatLoading ? <Loading size="xs" /> : '发送'}
-                </button>
+                {chatLoading ? (
+                  <button
+                    className="btn btn-sm"
+                    onClick={stopChat}
+                    style={{ flexShrink: 0, padding: '7px 12px', background: 'var(--danger, #ef4444)', color: '#fff', border: 'none', height: 36 }}
+                  >
+                    停止
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-sm"
+                    onClick={doChat}
+                    disabled={!chatInput.trim()}
+                    style={{ flexShrink: 0, padding: '7px 12px', height: 36 }}
+                  >
+                    发送
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { get, post, put, del } from './base';
+import { ssePost } from './sse';
 import type {
   ArticleItem, ArticleListResponse, ArticleResponse, ArticleContentResponse,
-  TitleCandidate, QueueItem, InspirationResponse, CoverImage,
+  TitleCandidate, QueueItem, InspirationResponse, CoverImage, ChatStreamEvent,
 } from '../types';
 
 export const articleApi = {
@@ -46,6 +47,38 @@ export const articleApi = {
     get<{ images: CoverImage[] }>(`/api/articles/cover-search?keyword=${encodeURIComponent(keyword)}`),
   coverDownload: (url: string) =>
     post<{ success: boolean; path: string }>('/api/articles/cover-download', { url }),
-  chat: (id: string, instruction: string, messages?: Array<{ role: 'user' | 'assistant'; content: string }>) =>
-    post<ArticleContentResponse>(`/api/articles/${id}/chat`, { instruction, messages: messages?.length ? messages : undefined }),
+  chat: (
+    id: string,
+    instruction: string,
+    messages?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    callbacks?: {
+      onMessage?: (token: string) => void;
+      onContent?: (token: string) => void;
+    },
+    signal?: AbortSignal,
+  ): Promise<{ content: string }> =>
+    ssePost<ChatStreamEvent, { content: string }>(
+      `/api/articles/${id}/chat`,
+      { instruction, messages: messages?.length ? messages : undefined },
+      (evt) => {
+        if (evt.type === 'message' && callbacks?.onMessage) {
+          callbacks.onMessage(evt.content);
+        }
+        if (evt.type === 'content' && callbacks?.onContent) {
+          callbacks.onContent(evt.content);
+        }
+        if (evt.type === 'token' && callbacks?.onMessage) {
+          callbacks.onMessage(evt.content);
+        }
+      },
+      {
+        signal,
+        extractResult: (evt) => {
+          if (evt.type === 'done' && evt.content) {
+            return { content: evt.content };
+          }
+          return null;
+        },
+      },
+    ),
 };

@@ -25,7 +25,7 @@ export default function ThemeSection() {
       </div>
       <div>
         <p className="text-xs text-text-muted mb-3">主题配色</p>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           {THEME_PRESETS.map(preset => (
             <button key={preset.id} onClick={() => setAccentId(preset.id)}
               className={`flex flex-col items-center gap-2 py-4 rounded-xl border transition-all ${

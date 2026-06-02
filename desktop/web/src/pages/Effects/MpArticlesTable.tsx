@@ -113,7 +113,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <input
           type="text"
-          className="text-sm w-52"
+          className="input-sm w-52"
           placeholder="搜索标题..."
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -121,6 +121,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
         {celebrities.length > 0 && (
           <div className="w-32">
             <Select
+              size="sm"
               value={celebFilter}
               onChange={setCelebFilter}
               options={[

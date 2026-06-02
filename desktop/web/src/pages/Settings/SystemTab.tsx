@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { SettingsData } from '../../api/client';
 import LLMSection from './LLMSection';
 import MediaSourceSection from './MediaSourceSection';
@@ -6,8 +5,7 @@ import WechatSection from './WechatSection';
 import WatermarkSection from './WatermarkSection';
 import MaterialsSection from './MaterialsSection';
 
-export default function SystemTab({ data, save, onReload }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload: () => Promise<void> }) {
-  const [subTab, setSubTab] = useState('llm');
+export default function SystemTab({ data, save, onReload, subTab, onSubTabChange }: { data: SettingsData; save: (u: Record<string, string>) => void; onReload: () => Promise<void>; subTab: string; onSubTabChange: (s: string) => void }) {
   const SUB_TABS = [
     { id: 'llm', label: '大模型配置' },
     { id: 'media-source', label: '媒体来源' },
@@ -19,7 +17,7 @@ export default function SystemTab({ data, save, onReload }: { data: SettingsData
     <div className="flex gap-6">
       <div className="w-44 shrink-0 flex flex-col gap-1">
         {SUB_TABS.map(t => (
-          <button key={t.id} onClick={() => setSubTab(t.id)}
+          <button key={t.id} onClick={() => onSubTabChange(t.id)}
             className={`relative flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
               subTab === t.id
                 ? 'bg-accent-soft text-accent shadow-sm'

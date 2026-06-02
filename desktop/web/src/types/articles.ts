@@ -23,6 +23,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+  contentUpdated?: boolean;
 }
 
 export interface InspirationTopic {
@@ -54,3 +55,10 @@ export interface TitleCandidate {
 export interface InspirationResponse {
   topics: InspirationTopic[];
 }
+
+export type ChatStreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'message'; content: string }
+  | { type: 'content'; content: string }
+  | { type: 'done'; content: string }
+  | { type: 'error'; message: string };

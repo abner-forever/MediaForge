@@ -155,6 +155,95 @@
   }
 }
 
+/* ── Notion 主题：温暖米白表面、中性阴影、编辑式圆角 ─── */
+[data-accent="notion"] {
+  --bg: #ffffff;
+  --bg-card: #ffffff;
+  --bg-secondary: #f6f5f4;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #fbfbfa;
+  --bg-sidebar-hover: #efefee;
+  --bg-inset: #f6f5f4;
+  --text: #37352f;
+  --text-secondary: #5d5b54;
+  --text-muted: #a4a097;
+  --border: #e5e3df;
+  --border-subtle: #ede9e4;
+  --shadow-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 15, 15, 0.08);
+  --shadow-lg: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+  --card-shadow: none;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --sidebar-text: #1a1a2e;
+  --sidebar-text-secondary: #475569;
+  --sidebar-text-muted: #64748b;
+  --sidebar-text-logo: #000000;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --status-ok: #10b981;
+  --status-error: #ef4444;
+}
+
+[data-theme="dark"][data-accent="notion"] {
+  --bg: #191919;
+  --bg-card: #202020;
+  --bg-secondary: #252525;
+  --bg-elevated: #2a2a2a;
+  --bg-sidebar: #1e1e1e;
+  --bg-sidebar-hover: #2c2c2c;
+  --bg-inset: #141414;
+  --text: #ebebea;
+  --text-secondary: #b0afa9;
+  --text-muted: #6b6b6b;
+  --border: #303030;
+  --border-subtle: #282828;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.15);
+  --shadow-md: 0 4px 12px rgba(15, 15, 15, 0.2);
+  --shadow-lg: 0 8px 24px rgba(15, 15, 15, 0.25);
+  --card-shadow: 0 1px 3px rgba(15, 15, 15, 0.12);
+  --sidebar-text: #ebebea;
+  --sidebar-text-secondary: #b0afa9;
+  --sidebar-text-muted: #6b6b6b;
+  --sidebar-text-logo: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --status-ok: #34d399;
+  --status-error: #fca5a5;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"][data-accent="notion"] {
+    --bg: #191919;
+    --bg-card: #202020;
+    --bg-secondary: #252525;
+    --bg-elevated: #2a2a2a;
+    --bg-sidebar: #1e1e1e;
+    --bg-sidebar-hover: #2c2c2c;
+    --bg-inset: #141414;
+    --text: #ebebea;
+    --text-secondary: #b0afa9;
+    --text-muted: #6b6b6b;
+    --border: #303030;
+    --border-subtle: #282828;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.15);
+    --shadow-md: 0 4px 12px rgba(15, 15, 15, 0.2);
+    --shadow-lg: 0 8px 24px rgba(15, 15, 15, 0.25);
+    --card-shadow: 0 1px 3px rgba(15, 15, 15, 0.12);
+    --sidebar-text: #ebebea;
+    --sidebar-text-secondary: #b0afa9;
+    --sidebar-text-muted: #6b6b6b;
+    --sidebar-text-logo: #ffffff;
+    --sidebar-border: rgba(255, 255, 255, 0.06);
+    --status-ok: #34d399;
+    --status-error: #fca5a5;
+  }
+}
+
 /* ── Base ─────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -196,21 +285,23 @@ input, textarea, [contenteditable="true"] {
 /* ── Form Elements ─────────────────────────── */
 input, select, textarea {
   width: 100%;
-  padding: 8px 12px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1;
   transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
   font-family: inherit;
   -webkit-font-smoothing: antialiased;
+  box-sizing: border-box;
 }
 
-input, select {
-  line-height: 1.2;
-}
+/* 尺寸变体：sm=28px / md=36px(默认) / lg=44px，与 Select / NumberInput 对齐 */
+.input-sm, select.input-sm { height: 28px; padding: 0 8px; font-size: 12px; }
+.input-lg, select.input-lg { height: 44px; padding: 0 16px; font-size: 16px; }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
@@ -224,7 +315,7 @@ input.title-input:focus {
   box-shadow: none;
 }
 
-textarea { resize: vertical; min-height: 60px; }
+textarea { resize: vertical; min-height: 60px; height: auto; line-height: 1.5; padding: 9px 12px; }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
@@ -312,7 +403,7 @@ label > .field-control {
   gap: 6px;
   padding: 8px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: 14px;
@@ -374,8 +465,13 @@ label > .field-control {
 }
 
 .btn-sm {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.btn-lg {
+  padding: 12px 20px;
+  font-size: 16px;
 }
 
 .btn-xs {
@@ -387,6 +483,28 @@ label > .field-control {
   background: transparent;
   border-color: transparent;
   color: var(--text-muted);
+}
+
+.btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn-text:hover {
+  background: var(--bg-secondary);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+.btn-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  padding-left: 0;
+  padding-right: 0;
+}
+.btn-link:hover {
+  text-decoration: underline;
 }
 
 .btn-ghost:hover {
@@ -563,7 +681,12 @@ label > .field-control {
   border-radius: 4px;
   white-space: nowrap;
   pointer-events: none;
-  animation: scaleIn 0.15s var(--ease-out) both;
+  animation: sliderTooltipIn 0.15s var(--ease-out) both;
+}
+
+@keyframes sliderTooltipIn {
+  from { opacity: 0; transform: translateX(-50%) scale(0.96); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 
 .slider-tooltip::after {
@@ -753,6 +876,15 @@ input[type="range"] { display: none; }
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .animate-in { animation: fadeIn 0.25s var(--ease-out) both; }
@@ -1007,6 +1139,13 @@ input[type="range"] { display: none; }
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: normal;
+}
+
+/* 垂直布局下取消 flex:1，保留 input/select 的显式高度 */
+.card .grid label:not(.toggle) > input,
+.card .grid label:not(.toggle) > select,
+.card .grid label:not(.toggle) > textarea {
+  flex: none;
 }
 
 /* ── Notion-style Editor ────────────────────────── */

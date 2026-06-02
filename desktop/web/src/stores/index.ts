@@ -31,3 +31,9 @@ export type { ThemePreset, ToastItem, LightboxState } from './types';
 applyThemeVars(localStorage.getItem('w2w-theme') || 'auto');
 // Sync native window appearance (fire-and-forget, may not be available in browser dev mode)
 settingsApi.setWindowAppearance(localStorage.getItem('w2w-theme') || 'auto').catch(() => {});
+// 系统配色变化时重新应用主题（PyWebView 外观切换有延迟，matchMedia 触发后才准确）
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (localStorage.getItem('w2w-theme') === 'auto') {
+    applyThemeVars('auto');
+  }
+});
