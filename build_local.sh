@@ -99,7 +99,6 @@ img = img.crop((left, top, left + size, top + size))
 os.makedirs('build/icon.iconset', exist_ok=True)
 
 def _padded_resize(src, target, ratio=0.82):
-    """缩放图片并添加透明内边距，使内容在 target×target 画布中占指定 ratio。"""
     canvas = Image.new('RGBA', (target, target), (0, 0, 0, 0))
     inner = int(target * ratio)
     resized = src.resize((inner, inner), Image.LANCZOS)

@@ -336,7 +336,7 @@ async def get_ai_balance(data: dict):
         return {"success": False, "balance": None, "message": "请前往 OpenAI 控制台查看余额"}
 
     guide_urls = {
-        "mimo": "https://xiaomimimo.com/",
+        "mimo": "https://mimo.mi.com/",
         "glm": "https://open.bigmodel.cn/usercenter/apikeys",
         "qwen": "https://bailian.console.aliyun.com/",
         "minimax": "https://platform.minimaxi.com/",

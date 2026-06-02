@@ -254,7 +254,12 @@ export default function Effects() {
       {/* 同步设置弹窗 */}
       <Modal open={syncModal} onClose={() => setSyncModal(false)} className="!p-0 !w-[380px]">
         <div style={{ padding: '20px 24px' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 20px' }}>同步公众号数据</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: 0 }}>同步公众号数据</h3>
+            <button onClick={() => setSyncModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)', lineHeight: 1 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>公众号账号</label>

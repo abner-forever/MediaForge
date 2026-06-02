@@ -15,7 +15,7 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
     keyName: 'MIMO_API_KEY',
     urlHint: '小米 Mimo OpenAI 兼容地址，Token Plan：https://token-plan-cn.xiaomimimo.com/v1',
-    guideUrl: 'https://xiaomimimo.com/',
+    guideUrl: 'https://platform.xiaomimimo.com/console/plan-manage',
     guide: '登录小米 MiMo 官网 → 控制台 → API 密钥 → 创建 API Key（Token Plan 需使用 tp- 前缀的密钥）',
   },
   deepseek: {

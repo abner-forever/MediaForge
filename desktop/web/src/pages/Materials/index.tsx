@@ -20,7 +20,7 @@ import LazyImage from '../Discovery/LazyImage';
 export default function Materials() {
   const {
     folderTree, currentPath, currentFolders, currentFiles, breadcrumb,
-    matSelected, viewMode,
+    matSelected, viewMode, expandedFolders,
     setFolderTree, setCurrentPath, setCurrentFolders, setCurrentFiles, setBreadcrumb,
     toggleFolderExpanded, matToggleSelect, matSelectAll, matSetSelection, matClearSelection, setViewMode,
     openLightbox, addToast,
@@ -32,6 +32,7 @@ export default function Materials() {
     breadcrumb: s.breadcrumb,
     matSelected: s.matSelected,
     viewMode: s.viewMode,
+    expandedFolders: s.expandedFolders,
     setFolderTree: s.setFolderTree,
     setCurrentPath: s.setCurrentPath,
     setCurrentFolders: s.setCurrentFolders,
@@ -583,7 +584,7 @@ export default function Materials() {
             items={folderTree}
             currentPath={currentPath}
             onNavigate={navigateTo}
-            expandedFolders={useStore.getState().expandedFolders}
+            expandedFolders={expandedFolders}
             onToggle={toggleFolderExpanded}
             onContextMenu={handleContextMenu}
             dragOverFolder={dragOverFolder}

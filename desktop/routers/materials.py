@@ -122,16 +122,18 @@ class MaterialsDeleteRequest(BaseModel):
 @router.delete("/api/materials")
 async def delete_materials(req: MaterialsDeleteRequest):
     """删除指定图片文件并清理空目录。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
     deleted = 0
     for p in req.paths:
-        fp = Path(p)
+        fp = (root / p).resolve()
+        if not str(fp).startswith(str(root)):
+            continue
         if fp.exists() and fp.is_file():
             fp.unlink()
             deleted += 1
             parent = fp.parent
-            img_root = DOWNLOAD_DIR.expanduser().resolve()
             for _ in range(3):
-                if parent == img_root or not parent.exists():
+                if parent == root or not parent.exists():
                     break
                 try:
                     next(parent.iterdir())
