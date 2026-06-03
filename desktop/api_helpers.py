@@ -77,7 +77,6 @@ def friendly_error_message(err: Exception | str) -> str:
     low = text.lower()
     rules = [
         (["weibo_cookie", "cookie 无效", "cookie失效"], "微博登录已失效，请到设置页重新扫码登录。"),
-        (["xhs_cookie", "xhs 登录", "小红书"], "小红书登录已失效，请到设置页重新登录。"),
         (["ai_base_url", "base url", "base_url"], "当前 AI 服务需要配置 Base URL，请到设置页补全后重试。"),
         (["api_key", "api key", "apikey", "unauthorized", "401"], "当前 AI 服务 API Key 不可用，请检查密钥配置。"),
         (["公众号未登录", "wechat", "mp.weixin", "login", "扫码"], "公众号账号未登录，请先在设置页完成扫码登录。"),

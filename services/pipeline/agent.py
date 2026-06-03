@@ -400,14 +400,6 @@ class PipelineAgent:
             else:
                 self._emit_decision(STEP_HEALTH, "头条登录有效",
                                     f"用户 {auth.get('screen_name', '未知')} 已登录")
-        elif platform == "xhs":
-            from utils.xhs_auth_store import read_xhs_auth
-            auth = read_xhs_auth()
-            if not auth.get("cookie"):
-                issues.append("小红书未登录")
-            else:
-                self._emit_decision(STEP_HEALTH, "小红书登录有效",
-                                    f"用户 {auth.get('screen_name', '未知')} 已登录")
 
         # AI API Key 检查
         from utils.api_key_store import read_api_keys

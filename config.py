@@ -77,16 +77,6 @@ def _resolve_toutiao_uid_from_store() -> str:
     return get_toutiao_uid()
 
 
-def _resolve_xhs_cookie_from_store() -> str:
-    from utils.xhs_auth_store import get_xhs_cookie
-    return get_xhs_cookie()
-
-
-def _resolve_xhs_uid_from_store() -> str:
-    from utils.xhs_auth_store import get_xhs_uid
-    return get_xhs_uid()
-
-
 @dataclass
 class Settings:
     weibo_cookie: str = field(default_factory=lambda: (
@@ -147,20 +137,6 @@ class Settings:
         default_factory=lambda: _csv_tuple(os.getenv("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"))
     )
     toutiao_keyword_pages: int = field(default_factory=lambda: int(os.getenv("TOUTIAO_KEYWORD_PAGES", "1")))
-    # ── 小红书 ──
-    xhs_cookie: str = field(default_factory=lambda: (
-        os.getenv("XHS_COOKIE", "")
-        or _resolve_xhs_cookie_from_store()
-    ))
-    xhs_uid: str = field(default_factory=lambda: (
-        os.getenv("XHS_UID", "")
-        or _resolve_xhs_uid_from_store()
-    ))
-    xhs_fetch_mode: str = field(default_factory=lambda: os.getenv("XHS_FETCH_MODE", "keyword"))
-    xhs_search_tags: Tuple[str, ...] = field(
-        default_factory=lambda: _csv_tuple(os.getenv("XHS_SEARCH_TAGS", "穿搭,美妆,明星"))
-    )
-    xhs_keyword_pages: int = field(default_factory=lambda: int(os.getenv("XHS_KEYWORD_PAGES", "1")))
 
 
 CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))

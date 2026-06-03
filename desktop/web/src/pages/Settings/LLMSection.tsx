@@ -18,6 +18,7 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
   const [fullKey, setFullKey] = useState('');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  const [testDetails, setTestDetails] = useState<{ url: string; status?: number; summary: string; detail: string }[]>([]);
   const [balance, setBalance] = useState<any>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceMessage, setBalanceMessage] = useState('');
@@ -120,6 +121,7 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
     setFullKey('');
     setTestState('idle');
     setTestMessage('');
+    setTestDetails([]);
     if (p !== prev && !data.ai_api_keys?.[p]) {
       settingsApi.getKey(p).then(({ key }) => {
         if (key) setApiKey(key);
@@ -136,6 +138,7 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
   async function testConnection() {
     setTestState('testing');
     setTestMessage('');
+    setTestDetails([]);
     try {
       const res = await settingsApi.testAiConnection({
         provider, model, base_url: baseUrl,
@@ -143,9 +146,11 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
       });
       setTestState(res.success ? 'success' : 'error');
       setTestMessage(res.message);
+      setTestDetails(res.errors || []);
     } catch (err: any) {
       setTestState('error');
       setTestMessage(err.message || '测试失败');
+      setTestDetails([]);
     }
   }
 
@@ -267,18 +272,46 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); })} disabled={saving}>
+        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); setTestDetails([]); })} disabled={saving}>
           {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}
         </button>
         <button className="btn" onClick={testConnection} disabled={testState === 'testing'}>
           {testState === 'testing' ? <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin mr-1" /> 测试中</> : '测试连接'}
         </button>
-        {testState !== 'idle' && (
-          <span className="text-xs" style={{ color: testState === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+        {testState === 'success' && (
+          <span className="text-xs text-[var(--success)] flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
             {testMessage}
           </span>
         )}
       </div>
+      {testState === 'error' && (
+        <div className="rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/5 p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-[var(--danger)] shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <span className="text-sm text-[var(--danger)]">{testMessage}</span>
+          </div>
+          {testDetails.length > 0 && (
+            <details className="text-xs text-text-muted group">
+              <summary className="cursor-pointer hover:text-text-secondary transition-colors select-none flex items-center gap-1">
+                <svg className="w-3 h-3 transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+                查看详情
+              </summary>
+              <div className="mt-2 space-y-2">
+                {testDetails.map((err, i) => (
+                  <div key={i} className="rounded bg-bg-secondary p-2 space-y-1">
+                    <div className="flex items-center gap-2 text-text-secondary">
+                      <code className="text-[11px] px-1 py-0.5 bg-bg rounded break-all">{err.url}</code>
+                      {err.status && <span className="text-[var(--danger)]">HTTP {err.status}</span>}
+                    </div>
+                    <pre className="text-[11px] text-text-muted whitespace-pre-wrap break-all max-h-32 overflow-auto m-0 bg-bg p-2 rounded">{err.detail}</pre>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -40,8 +40,6 @@ async def health_check():
         "platform_auth": platform_svc.check_auth() if platform_svc else False,
         "weibo_cookie": bool(settings.weibo_cookie),
         "weibo_uid_or_celebrities": bool(settings.weibo_uid or settings.weibo_celebrities),
-        "xhs_cookie": bool(settings.xhs_cookie),
-        "xhs_uid_or_tags": bool(settings.xhs_uid or settings.xhs_search_tags),
         "ai_api_key": bool(api_key),
         "ai_base_url": bool(base_url),
     }

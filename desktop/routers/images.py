@@ -93,11 +93,10 @@ async def serve_image(path: str):
 _PLATFORM_REFERERS = {
     "weibo": "https://weibo.com/",
     "toutiao": "https://www.toutiao.com/",
-    "xhs": "https://www.xiaohongshu.com/",
     "wechat": "https://mp.weixin.qq.com/",
 }
 
-_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10, "xhs": 10, "wechat": 15}
+_PROXY_TIMEOUTS = {"weibo": 10, "toutiao": 10, "wechat": 15}
 
 
 @router.get("/proxy")
@@ -117,12 +116,6 @@ async def proxy_image(url: str, platform: str = Query("weibo"), thumbnail: int =
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         "Referer": referer,
     }
-    if platform == "xhs" or any(d in url for d in ["xhscdn.com", "xiaohongshu.com"]):
-        xhs_cookie = settings.xhs_cookie
-        if xhs_cookie:
-            req_headers["Cookie"] = xhs_cookie
-        if platform != "xhs":
-            req_headers["Referer"] = "https://www.xiaohongshu.com/"
     try:
         resp = http_requests.get(url, timeout=timeout, headers=req_headers)
         resp.raise_for_status()

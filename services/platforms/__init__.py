@@ -19,8 +19,6 @@ def _ensure_registry() -> None:
 
     _PLATFORM_REGISTRY["weibo"] = WeiboService
     _PLATFORM_REGISTRY["toutiao"] = ToutiaoService
-    from services.platforms.xhs import XHSService
-    _PLATFORM_REGISTRY["xhs"] = XHSService
     _initialized = True
 
 

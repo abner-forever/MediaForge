@@ -48,8 +48,6 @@ async def discovery_search(req: SearchRequest):
         settings.weibo_celebrities = tuple(req.celebrities)
         settings.weibo_search_tags = tuple(req.search_tags)
         settings.weibo_super_topics = tuple(req.super_topics)
-        if req.platform == "xhs":
-            settings.xhs_search_tags = tuple(req.search_tags)
 
         posts = platform_svc.fetch_posts(
             mode=req.mode,

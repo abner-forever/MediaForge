@@ -15,7 +15,6 @@ export function toUserError(message: string): string {
   const text = String(message || '');
   const low = text.toLowerCase();
   if (low.includes('weibo_cookie') || text.includes('Cookie 无效')) return '微博登录已失效，请到设置页重新扫码登录。';
-  if (low.includes('xhs_cookie') || low.includes('小红书')) return '小红书登录已失效，请到设置页重新登录。';
   if (low.includes('base url') || low.includes('base_url')) return '当前 AI 服务需要配置 Base URL，请到设置页补全后重试。';
   if (low.includes('未配置') && (low.includes('api_key') || low.includes('api key'))) return '当前未配置大模型 API Key，请先在设置页配置大模型服务。';
   if (low.includes('api_key') || low.includes('api key') || low.includes('401')) return '当前 AI 服务 API Key 不可用，请检查密钥配置。';

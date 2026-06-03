@@ -45,7 +45,6 @@ export default function SearchParams({
   const showSuperTopicInput = platform === 'weibo' && mode === 'super_topic';
   const showTagInput = platform === 'weibo' && (mode === 'celebrities' || mode === 'mixed' || mode === 'keyword');
   const showToutiaoInput = platform === 'toutiao' && mode === 'keyword';
-  const showXhsInput = platform === 'xhs' && mode === 'keyword';
 
   return (
     <div className="card space-y-4">
@@ -126,12 +125,6 @@ export default function SearchParams({
               <div>
                 <label className="block text-sm font-medium text-text mb-1">搜索关键词</label>
                 <input type="text" className="input w-full" value={toutiaoKeywords} onChange={e => setToutiaoKeywords(e.target.value)} placeholder="时尚,明星,穿搭（逗号分隔）" />
-              </div>
-            )}
-            {showXhsInput && (
-              <div>
-                <label className="block text-sm font-medium text-text mb-1">搜索关键词</label>
-                <input type="text" className="input w-full" value={tags} onChange={e => setTags(e.target.value)} placeholder="穿搭,美妆,明星（逗号分隔）" />
               </div>
             )}
             <div className="flex justify-start pt-0.5">

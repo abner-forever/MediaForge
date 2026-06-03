@@ -1,4 +1,4 @@
-"""平台认证 API 路由（微博/头条/小红书的验证、清除、登录流）。"""
+"""平台认证 API 路由（微博/头条的验证、清除、登录流）。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from config import settings
 from desktop.sse_helpers import create_sse_response
 from services.toutiao_login import run_toutiao_login
 from services.weibo_login import run_weibo_login
-from services.xhs_login import run_xhs_login
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -67,30 +66,6 @@ async def toutiao_login_stream():
         if cookie:
             from utils.toutiao_auth_store import write_toutiao_auth
             write_toutiao_auth(
-                cookie=cookie,
-                uid=data.get("uid", ""),
-                screen_name=data.get("screen_name", ""),
-                avatar=data.get("avatar", ""),
-            )
-            from config import reload_settings
-            reload_settings()
-
-    return create_sse_response(_task, on_done=_on_done)
-
-
-@router.get("/api/settings/xhs-login-stream")
-async def xhs_login_stream():
-    """SSE 流：打开浏览器让用户登录小红书。"""
-
-    def _task(msg_queue):
-        run_xhs_login(msg_queue)
-
-    def _on_done(msg):
-        data = msg[1] if len(msg) > 1 and isinstance(msg[1], dict) else {}
-        cookie = data.get("cookie", "")
-        if cookie:
-            from utils.xhs_auth_store import write_xhs_auth
-            write_xhs_auth(
                 cookie=cookie,
                 uid=data.get("uid", ""),
                 screen_name=data.get("screen_name", ""),
@@ -300,157 +275,5 @@ async def clear_toutiao():
     from utils.toutiao_auth_store import clear_toutiao_auth
     from config import reload_settings
     clear_toutiao_auth()
-    reload_settings()
-    return {"success": True}
-
-
-@router.post("/api/settings/xhs-verify")
-async def xhs_verify(body: Dict[str, Any] | None = None):
-    """验证小红书 Cookie 是否有效，返回用户信息。"""
-    body = body or {}
-    cookie = body.get("cookie", "")
-    if not cookie:
-        cookie = settings.xhs_cookie
-
-    if not cookie:
-        return {"valid": False, "message": "未设置小红书 Cookie"}
-
-    def _verify():
-        try:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
-                ),
-                "Cookie": cookie,
-                "Referer": "https://www.xiaohongshu.com/",
-                "Accept": "application/json, text/plain, */*",
-            }
-
-            screen_name = ""
-            avatar = ""
-            uid = ""
-
-            # 从 cookie 中提取 uid
-            for part in cookie.split(";"):
-                kv = part.strip().split("=", 1)
-                if len(kv) == 2 and kv[0].strip() in ("uid", "user_id"):
-                    uid = kv[1].strip()
-
-            # 1) 尝试用户信息 API
-            try:
-                resp = http_requests.get(
-                    "https://www.xiaohongshu.com/api/sns/web/v1/user/self",
-                    headers=headers, timeout=10,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("success"):
-                        user_data = data.get("data", {})
-                        screen_name = user_data.get("nickname", "") or user_data.get("name", "")
-                        avatar = user_data.get("avatar", "") or user_data.get("image", "") or ""
-                        uid = user_data.get("user_id", "") or str(user_data.get("id", "")) or uid
-            except Exception as e:
-                logger.debug("小红书用户信息 API 失败: %s", e)
-
-            # 2) 从首页 SSR 提取用户信息
-            html = ""
-            if not screen_name:
-                try:
-                    page_headers = {
-                        "User-Agent": headers["User-Agent"],
-                        "Cookie": cookie,
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    }
-                    resp = http_requests.get(
-                        "https://www.xiaohongshu.com/",
-                        headers=page_headers, timeout=10,
-                    )
-                    if resp.status_code == 200:
-                        import json as _json
-                        html = resp.text
-                        init_match = re.search(
-                            r'window\.__INITIAL_STATE__\s*=\s*({.*?});\s*(?:\n|<)',
-                            html, re.DOTALL,
-                        )
-                        if init_match:
-                            try:
-                                state = _json.loads(init_match.group(1))
-                                user_data = (
-                                    state.get("user")
-                                    or state.get("userInfo")
-                                    or state.get("currentUser")
-                                    or {}
-                                )
-                                if user_data and isinstance(user_data, dict):
-                                    sn = user_data.get("nickname") or user_data.get("name") or ""
-                                    if sn:
-                                        screen_name = sn
-                                        avatar = user_data.get("avatar") or user_data.get("image") or ""
-                                        uid = user_data.get("userId") or str(user_data.get("id", "")) or uid
-                            except Exception as e:
-                                logger.debug("小红书 SSR JSON 解析失败: %s", e)
-                except Exception as e:
-                    logger.debug("小红书首页 SSR 提取失败: %s", e)
-
-            # 若缺头像，从首页 HTML 提取
-            if not avatar:
-                try:
-                    if not html:
-                        resp = http_requests.get(
-                            "https://www.xiaohongshu.com/",
-                            headers={**headers, "Accept": "text/html,*/*"}, timeout=10,
-                        )
-                        html = resp.text if resp.status_code == 200 else ""
-                    if html:
-                        av_match = re.search(r'"avatar"\s*:\s*"(https?://[^"]+)"', html)
-                        if av_match:
-                            avatar = av_match.group(1)
-                except Exception as e:
-                    logger.debug("小红书头像提取失败: %s", e)
-
-            # 3) 判断关键会话 cookie 是否存在
-            has_web_session = "web_session" in cookie
-            has_a1 = "a1=" in cookie
-
-            if screen_name:
-                from utils.xhs_auth_store import write_xhs_auth
-                write_xhs_auth(cookie=cookie, uid=uid, screen_name=screen_name, avatar=avatar)
-                return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar}
-
-            # 4) Cookie 有效但无法获取用户信息
-            if has_web_session and has_a1:
-                from utils.xhs_auth_store import read_xhs_auth
-                auth = read_xhs_auth()
-                if auth.get("screen_name"):
-                    screen_name = auth["screen_name"]
-                    uid = auth.get("uid", "") or uid
-                    avatar = auth.get("avatar", "") or avatar
-                    return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar, "message": "Cookie 有效"}
-                return {"valid": True, "uid": uid or "", "screen_name": "", "avatar": "", "message": "Cookie 有效，但受反爬限制无法获取用户信息（不影响使用）"}
-            if has_web_session or has_a1:
-                from utils.xhs_auth_store import read_xhs_auth
-                auth = read_xhs_auth()
-                if auth.get("screen_name"):
-                    screen_name = auth["screen_name"]
-                    uid = auth.get("uid", "") or uid
-                    avatar = auth.get("avatar", "") or avatar
-                    return {"valid": True, "uid": uid, "screen_name": screen_name, "avatar": avatar, "message": "Cookie 可能有效"}
-                return {"valid": True, "uid": uid or "", "screen_name": "", "avatar": "", "message": "Cookie 可能有效，但无法获取用户信息（不影响使用）"}
-
-            return {"valid": False, "message": "Cookie 无效或已过期"}
-        except Exception as exc:
-            return {"valid": False, "message": str(exc)}
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _verify)
-
-
-@router.post("/api/settings/xhs-clear")
-async def clear_xhs():
-    """清空小红书鉴权信息。"""
-    from utils.xhs_auth_store import clear_xhs_auth
-    from config import reload_settings
-    clear_xhs_auth()
     reload_settings()
     return {"success": True}

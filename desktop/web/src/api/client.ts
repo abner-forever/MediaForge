@@ -17,7 +17,6 @@ export type {
   DuplicateCheckResult,
   PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareItem, EffectCompareData, MpArticlesResponse,
   WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult,
-  XHSLoginEvent, XHSVerifyResult,
 } from '../types';
 
 export { platformApi } from './platform';

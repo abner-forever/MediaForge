@@ -1,7 +1,6 @@
 import type { SettingsData } from '../../api/client';
 import WeiboSection from './WeiboSection';
 import ToutiaoSection from './ToutiaoSection';
-import XiaoHongShuSection from './XiaoHongShuSection';
 
 export default function MediaSourceSection({
   data, save, onReload,
@@ -14,7 +13,6 @@ export default function MediaSourceSection({
     <div className="space-y-6">
       <WeiboSection data={data} save={save} onReload={onReload} />
       <ToutiaoSection data={data} save={save} onReload={onReload} />
-      <XiaoHongShuSection data={data} save={save} onReload={onReload} />
     </div>
   );
 }

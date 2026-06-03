@@ -11,10 +11,6 @@ describe('toUserError', () => {
     expect(toUserError('Cookie 无效')).toBe('微博登录已失效，请到设置页重新扫码登录。');
   });
 
-  it('小红书 Cookie 失效', () => {
-    expect(toUserError('xhs_cookie invalid')).toBe('小红书登录已失效，请到设置页重新登录。');
-  });
-
   it('API Key 未配置', () => {
     expect(toUserError('未配置 api_key')).toBe('当前未配置大模型 API Key，请先在设置页配置大模型服务。');
   });

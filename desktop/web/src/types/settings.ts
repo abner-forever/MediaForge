@@ -26,13 +26,6 @@ export interface SettingsData {
   toutiao_user_id: string;
   toutiao_fetch_mode: string;
   toutiao_search_tags: string;
-  xhs_cookie_set: boolean;
-  xhs_cookie: string;
-  xhs_uid: string;
-  xhs_screen_name: string;
-  xhs_avatar: string;
-  xhs_fetch_mode: string;
-  xhs_search_tags: string;
   post_limit: number;
   weibo_pages: number;
   publish_interval: number;

@@ -8,7 +8,6 @@ const SOURCE_PLATFORMS = [
   { value: '', label: '请选择' },
   { value: 'weibo', label: '微博' },
   { value: 'toutiao', label: '头条' },
-  { value: 'xhs', label: '小红书' },
   { value: 'douyin', label: '抖音' },
   { value: 'rss', label: 'RSS' },
   { value: 'other', label: '其他' },

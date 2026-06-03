@@ -91,7 +91,6 @@ export default function Discovery() {
         if (s.weibo_search_tags) setTags(s.weibo_search_tags);
         if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
         if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
-        if (s.xhs_search_tags && def === 'xhs') setTags(s.xhs_search_tags);
       }
       if (s.post_limit) setLimit(s.post_limit);
     }).catch(() => {});
@@ -102,9 +101,7 @@ export default function Discovery() {
     const meta = platforms[p];
     if (meta) setMode(meta.default_fetch_mode);
     setCelebs(''); setTags(''); setSuperTopics(''); setToutiaoKeywords('');
-    if (p === 'xhs') {
-      settingsApi.get().then(s => { if (s.xhs_search_tags) setTags(s.xhs_search_tags); });
-    } else if (p === 'weibo') {
+    if (p === 'weibo') {
       settingsApi.get().then(s => { if (s.weibo_search_tags) setTags(s.weibo_search_tags); });
     } else if (p === 'toutiao') {
       settingsApi.get().then(s => { if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags); });
@@ -309,7 +306,7 @@ export default function Discovery() {
           </p>
         </div>
         <HelpGuide title="图片发现 — 使用说明">
-          <p><b>1. 选择平台与模式</b>：顶部选择内容来源（微博/头条/小红书等），以及搜索模式（按艺人、标签、关键词等）。</p>
+          <p><b>1. 选择平台与模式</b>：顶部选择内容来源（微博/头条等），以及搜索模式（按艺人、标签、关键词等）。</p>
           <p><b>2. 设置筛选条件</b>：输入艺人名或关键词，可设置页数和每页数量。开启「过滤水印」可自动跳过带水印的图片。</p>
           <p><b>3. 搜索与浏览</b>：点击「搜索」后结果以帖子卡片展示，可切换「帖子」和「图片墙」两种视图。</p>
           <p><b>4. 选择图片</b>：勾选帖子或单张图片，底部操作栏可一键「AI 评分」「下载到本地」「加入发布队列」。</p>

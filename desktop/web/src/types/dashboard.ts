@@ -4,8 +4,6 @@ export interface HealthStatus {
   platform_auth: boolean;
   weibo_cookie: boolean;
   weibo_uid_or_celebrities: boolean;
-  xhs_cookie: boolean;
-  xhs_uid_or_tags: boolean;
   ai_api_key: boolean;
   ai_base_url: boolean;
 }

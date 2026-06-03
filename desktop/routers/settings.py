@@ -33,7 +33,6 @@ async def get_settings():
     from utils.settings_store import read_settings as read_json_settings
     from utils.toutiao_auth_store import read_toutiao_auth
     from utils.weibo_auth_store import read_weibo_auth
-    from utils.xhs_auth_store import read_xhs_auth
 
     store = read_json_settings()
     cfg = store
@@ -58,12 +57,6 @@ async def get_settings():
     toutiao_uid = toutiao_auth.get("uid", "") or cfg.get("TOUTIAO_USER_ID", "")
     toutiao_screen_name = toutiao_auth.get("screen_name", "")
     toutiao_avatar = toutiao_auth.get("avatar", "")
-
-    xhs_auth = read_xhs_auth()
-    xhs_cookie = xhs_auth.get("cookie", "") or cfg.get("XHS_COOKIE", "")
-    xhs_uid = xhs_auth.get("uid", "") or cfg.get("XHS_UID", "")
-    xhs_screen_name = xhs_auth.get("screen_name", "")
-    xhs_avatar = xhs_auth.get("avatar", "")
 
     return {
         "platform": cfg.get("PLATFORM", "weibo"),
@@ -91,13 +84,6 @@ async def get_settings():
         "toutiao_avatar": toutiao_avatar,
         "toutiao_fetch_mode": cfg.get("TOUTIAO_FETCH_MODE", "feed"),
         "toutiao_search_tags": cfg.get("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"),
-        "xhs_cookie_set": bool(xhs_cookie),
-        "xhs_cookie": xhs_cookie,
-        "xhs_uid": xhs_uid,
-        "xhs_screen_name": xhs_screen_name,
-        "xhs_avatar": xhs_avatar,
-        "xhs_fetch_mode": cfg.get("XHS_FETCH_MODE", "keyword"),
-        "xhs_search_tags": cfg.get("XHS_SEARCH_TAGS", "穿搭,美妆,明星"),
         "post_limit": int(cfg.get("POST_LIMIT", "3")),
         "weibo_pages": int(cfg.get("WEIBO_PAGES", "2")),
         "publish_interval": int(cfg.get("PUBLISH_INTERVAL_SECONDS", "10")),
@@ -174,22 +160,6 @@ async def save_settings(data: Dict[str, Any]):
             avatar=toutiao_auth.get("TOUTIAO_AVATAR", ""),
         )
 
-    # 小红书鉴权信息 → 写入独立存储
-    _XHS_AUTH_KEYS = {"XHS_COOKIE", "XHS_UID", "XHS_SCREEN_NAME", "XHS_AVATAR"}
-    xhs_auth = {}
-    for key in _XHS_AUTH_KEYS:
-        if key in updates:
-            xhs_auth[key] = updates.pop(key)
-
-    if xhs_auth:
-        from utils.xhs_auth_store import write_xhs_auth
-        write_xhs_auth(
-            cookie=xhs_auth.get("XHS_COOKIE", ""),
-            uid=xhs_auth.get("XHS_UID", ""),
-            screen_name=xhs_auth.get("XHS_SCREEN_NAME", ""),
-            avatar=xhs_auth.get("XHS_AVATAR", ""),
-        )
-
     # 其余配置项 → settings.json
     if updates:
         from utils.settings_store import write_settings
@@ -227,6 +197,46 @@ async def get_api_key(provider: str = Query("")):
     prov = (provider or store.get("AI_PROVIDER", "mimo")).lower()
     key = get_provider_key(store, prov)
     return {"key": key}
+
+
+def _extract_error_summary(status_code: int, body: str) -> str:
+    """从 AI 服务的错误响应中提取人类可读的摘要信息。"""
+    import json as _json
+    try:
+        data = _json.loads(body)
+    except (ValueError, TypeError):
+        # 非 JSON 响应，返回截断的原始文本
+        text = body.strip().replace("\n", " ")
+        return f"连接失败（{status_code}）: {text[:120]}"
+
+    # OpenAI / DeepSeek / 通义 等标准格式: {"error": {"message": "...", "type": "...", "code": "..."}}
+    err = data.get("error")
+    if isinstance(err, dict):
+        msg = err.get("message", "")
+        code = err.get("code", "")
+        err_type = err.get("type", "")
+        if code == "invalid_api_key":
+            return "API Key 无效，请检查是否正确"
+        if code == "model_not_found":
+            return f"模型不存在: {msg}"
+        if err_type == "authentication_error":
+            return f"认证失败: {msg}"
+        if msg:
+            # 截断过长的 message
+            return msg[:200] if len(msg) > 200 else msg
+        if code:
+            return f"错误 ({code})"
+
+    # Moonshot / 其他格式: {"error": "..."}
+    if isinstance(err, str):
+        return err[:200]
+
+    # 通用: 尝试 message 字段
+    msg = data.get("message") or data.get("msg") or data.get("detail")
+    if isinstance(msg, str) and msg:
+        return msg[:200]
+
+    return f"连接失败（{status_code}）"
 
 
 @router.post("/api/settings/ai-test")
@@ -278,16 +288,20 @@ async def test_ai_connection(data: dict):
             resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
             if resp.status_code == 200:
                 return {"success": True, "message": "连接成功"}
-            detail = resp.text[:300]
-            msg = f"[{url}] 连接失败（{resp.status_code}）: {detail}"
-            errors.append(msg)
-            _req_logger.warning("[AI测试] %s", msg)
+            # 尝试从 JSON 响应中提取关键错误信息
+            summary = _extract_error_summary(resp.status_code, resp.text)
+            detail = resp.text[:500]
+            errors.append({"url": url, "status": resp.status_code, "summary": summary, "detail": detail})
+            _req_logger.warning("[AI测试] [%s] 连接失败（%s）: %s", url, resp.status_code, summary)
         except Exception as e:
-            msg = f"[{url}] 连接失败: {str(e)}"
-            errors.append(msg)
-            _req_logger.warning("[AI测试] %s", msg)
+            errors.append({"url": url, "summary": f"连接异常: {str(e)}", "detail": str(e)})
+            _req_logger.warning("[AI测试] [%s] 连接失败: %s", url, e)
             continue
-    return {"success": False, "message": "\n".join(errors)}
+    if not errors:
+        return {"success": False, "message": "未知错误"}
+    # 优先展示第一个错误的摘要
+    primary = errors[0]
+    return {"success": False, "message": primary["summary"], "errors": errors}
 
 
 @router.post("/api/settings/ai-balance")

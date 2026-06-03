@@ -31,20 +31,3 @@ export interface ToutiaoVerifyResult {
   avatar?: string;
   message?: string;
 }
-
-export interface XHSLoginEvent {
-  type: 'progress' | 'done' | 'error';
-  message?: string;
-  cookie?: string;
-  uid?: string;
-  screen_name?: string;
-  avatar?: string;
-}
-
-export interface XHSVerifyResult {
-  valid: boolean;
-  uid?: string;
-  screen_name?: string;
-  avatar?: string;
-  message?: string;
-}

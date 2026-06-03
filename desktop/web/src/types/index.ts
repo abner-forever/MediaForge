@@ -8,4 +8,4 @@ export type { WeChatAccount, WeChatLoginEvent, PublishHistoryItem, EffectsSyncEv
 export type { PipelineConfig, PipelineEvent, PipelineSummary } from './pipeline';
 export type { DuplicateCheckResult } from './compliance';
 export type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareItem, EffectCompareData, MpArticlesResponse, TopArticle, ImageAnalysisItem } from './effects';
-export type { WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult, XHSLoginEvent, XHSVerifyResult } from './auth';
+export type { WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult } from './auth';
