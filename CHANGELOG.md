@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.20.1 (2026-06-03)
+
+### Bug Fixes
+
+- Remove XHS platform support and related authentication code
+  ([`fb318a4`](https://github.com/abner-forever/MediaForge/commit/fb318a46ef7cd13f096f42e0f3fdd0b30b8094f8))
+
+
 ## v1.20.0 (2026-06-02)
 
 ### Bug Fixes
