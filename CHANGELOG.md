@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.20.2 (2026-06-04)
+
+### Bug Fixes
+
+- Enhance AI analysis and task management
+  ([`9257586`](https://github.com/abner-forever/MediaForge/commit/925758605d45d88fea3d7c4639a79782ca044338))
+
+
 ## v1.20.1 (2026-06-03)
 
 ### Bug Fixes
