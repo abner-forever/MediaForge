@@ -62,11 +62,26 @@ def fetch_published_articles(
     try:
         _cleanup_stale_lock(profile_dir)
         with sync_playwright() as p:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                headless=True,
-                channel="chromium",
-            )
+            # 启动浏览器，遇到 SingletonLock 错误时重试一次
+            context = None
+            for attempt in range(2):
+                try:
+                    context = p.chromium.launch_persistent_context(
+                        user_data_dir=str(profile_dir),
+                        headless=True,
+                        channel="chromium",
+                    )
+                    break
+                except Exception as launch_err:
+                    if "ProcessSingleton" in str(launch_err) or "SingletonLock" in str(launch_err):
+                        logger.warning("浏览器启动失败（SingletonLock），重试清理: %s", launch_err)
+                        _cleanup_stale_lock(profile_dir)
+                        import time; time.sleep(0.5)
+                        continue
+                    raise
+            if context is None:
+                msg_queue.put(("error", "浏览器启动失败，锁文件无法清除，请手动关闭所有 Chrome 进程后重试"))
+                return
             browser_pages = context.pages
             page = browser_pages[0] if browser_pages else context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")

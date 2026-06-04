@@ -138,7 +138,7 @@ export default function SearchParams({
         )}
       </div>
 
-      {/* ── AI 推荐 ── */}
+      {/* ── 今日推荐 ── */}
       {(mode === 'celebrities' || mode === 'mixed' || mode === 'super_topic' || mode === 'keyword') && (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -146,12 +146,12 @@ export default function SearchParams({
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               <line x1="12" y1="2" x2="12" y2="17.77" /><line x1="2" y1="9.27" x2="22" y2="9.27" />
             </svg>
-            <span className="text-sm font-semibold text-text">AI 推荐</span>
+            <span className="text-sm font-semibold text-text">今日推荐</span>
             <button className="btn btn-sm btn-ghost" onClick={onAiRecommend} disabled={recommending}>
               {recommending ? (
-                <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin inline-block" /> 推荐中…</>
+                <><span className="w-3 h-3 border-2 border-text-muted/30 border-t-accent rounded-full animate-spin inline-block" /> 分析中…</>
               ) : (
-                `✨ ${recommendedCelebs.length ? '刷新推荐' : 'AI 推荐当前热门女星'}`
+                `✨ ${recommendedCelebs.length ? '刷新推荐' : '推荐当前发文流量最大的明星'}`
               )}
             </button>
           </div>

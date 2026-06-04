@@ -27,6 +27,7 @@ class AppState:
         self.run_log: str = ""
         self.publish_logs: List[str] = []
         self.publish_active: bool = False
+        self.active_tasks: set = set()
         self._publish_logs_map: Dict[str, List[str]] = {}
         self._publish_lock = threading.Lock()
         self._operations: List[Dict[str, Any]] = self._load_operations()

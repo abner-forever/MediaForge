@@ -68,7 +68,6 @@ export default function TrendChart({ data, days, onDaysChange }: {
 
   return (
     <div className="card p-4">
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>趋势分析</h3>
 
       <div style={{ display: 'flex', gap: 20, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>

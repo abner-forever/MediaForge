@@ -49,6 +49,11 @@ export interface AppState {
   progress: { current: number; total: number; detail: string } | null;
   setProgress: (p: { current: number; total: number; detail: string } | null) => void;
 
+  // Active tasks tracking (for close confirmation)
+  activeTasks: Set<string>;
+  registerTask: (name: string) => void;
+  unregisterTask: (name: string) => void;
+
   // Discovery
   discoveryPosts: Post[];
   selectedPosts: Set<number>;

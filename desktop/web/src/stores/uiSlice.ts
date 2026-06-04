@@ -17,6 +17,10 @@ export interface UISlice {
 
   progress: { current: number; total: number; detail: string } | null;
   setProgress: (p: { current: number; total: number; detail: string } | null) => void;
+
+  activeTasks: Set<string>;
+  registerTask: (name: string) => void;
+  unregisterTask: (name: string) => void;
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
@@ -50,4 +54,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   progress: null,
   setProgress: (p) => set({ progress: p }),
+
+  activeTasks: new Set(),
+  registerTask: (name) => set((s) => {
+    const next = new Set(s.activeTasks);
+    next.add(name);
+    return { activeTasks: next };
+  }),
+  unregisterTask: (name) => set((s) => {
+    const next = new Set(s.activeTasks);
+    next.delete(name);
+    return { activeTasks: next };
+  }),
 });

@@ -21,14 +21,30 @@ def _emit(msg: str, on_log: Optional[Callable[[str], None]] = None) -> None:
 
 
 def _cleanup_stale_lock(profile_dir: Path) -> None:
-    """清除 Chromium 遗留的 SingletonLock 文件，避免启动失败。"""
-    lock = profile_dir / "SingletonLock"
-    if lock.exists():
+    """清除 Chromium 遗留的 SingletonLock 文件，避免启动失败。
+
+    Chromium 使用 SingletonLock（符号链接或普通文件）防止多实例。
+    如果上次未正常退出，该文件会残留导致后续启动失败。
+    """
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        lock = profile_dir / name
+        if not lock.exists():
+            continue
         try:
+            # 如果是符号链接，unlink 不会删除目标
             lock.unlink()
             logger.info("已清除残留锁文件: %s", lock)
         except OSError as e:
-            logger.warning("清除锁文件失败: %s", e)
+            logger.warning("清除 %s 失败: %s，尝试强制删除", name, e)
+            try:
+                import subprocess
+                subprocess.run(["rm", "-f", str(lock)], check=False, capture_output=True)
+                if not lock.exists():
+                    logger.info("强制清除成功: %s", lock)
+                else:
+                    logger.error("强制清除仍然失败: %s", lock)
+            except Exception as e2:
+                logger.error("强制清除异常: %s", e2)
 
 
 def _human_sleep(base: float = 1.0, jitter: float = 0.8) -> None:

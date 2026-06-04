@@ -7,7 +7,7 @@ import { formatCount } from '../../utils/format';
 type SortKey = 'reads' | 'likes' | 'shares' | 'publish_time';
 type SortDir = 'asc' | 'desc';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZES = [10, 20, 50, 100];
 
 export default function MpArticlesTable({ onCleared }: { onCleared?: () => void }) {
   const [data, setData] = useState<MpArticlesResponse | null>(null);
@@ -19,6 +19,8 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
   const [sortKey, setSortKey] = useState<SortKey>('publish_time');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [jumpInput, setJumpInput] = useState('');
   const [clearing, setClearing] = useState(false);
 
   // 搜索防抖
@@ -34,7 +36,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
     try {
       const res = await effectsApi.mpArticles({
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
         search: debouncedSearch,
         celebrity: celebFilter,
         sort_key: sortKey,
@@ -47,17 +49,17 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
       setInitialLoading(false);
       setFetching(false);
     }
-  }, [page, debouncedSearch, celebFilter, sortKey, sortDir]);
+  }, [page, pageSize, debouncedSearch, celebFilter, sortKey, sortDir]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // 筛选变化时重置到第 1 页
-  useEffect(() => { setPage(1); }, [debouncedSearch, celebFilter]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, celebFilter, pageSize]);
 
   const articles = data?.articles ?? [];
   const total = data?.total ?? 0;
   const celebrities = data?.celebrities ?? [];
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -213,9 +215,45 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
       </div>
 
       {/* 分页 */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-          <span className="text-sm text-text-muted">第 {page}/{totalPages} 页</span>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted">每页</span>
+            <div style={{ width: 64 }}>
+              <Select
+                size="sm"
+                value={String(pageSize)}
+                onChange={v => setPageSize(Number(v))}
+                options={PAGE_SIZES.map(s => ({ label: String(s), value: String(s) }))}
+              />
+            </div>
+            <span className="text-xs text-text-muted">条</span>
+          </div>
+          {totalPages > 1 && (
+            <>
+              <span className="text-sm text-text-muted">第 {page}/{totalPages} 页</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  className="text-xs text-center"
+                  placeholder="跳转"
+                  value={jumpInput}
+                  onChange={e => setJumpInput(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && jumpInput) {
+                      const p = Math.max(1, Math.min(totalPages, Number(jumpInput)));
+                      setPage(p);
+                      setJumpInput('');
+                    }
+                  }}
+                  style={{ width: 48, height: 28, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)' }}
+                />
+                <span className="text-xs text-text-muted">页</span>
+              </div>
+            </>
+          )}
+        </div>
+        {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
             <PageBtn disabled={page <= 1} onClick={() => setPage(1)}>«</PageBtn>
             <PageBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</PageBtn>
@@ -239,8 +277,8 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
             <PageBtn disabled={page >= totalPages} onClick={() => setPage(page + 1)}>›</PageBtn>
             <PageBtn disabled={page >= totalPages} onClick={() => setPage(totalPages)}>»</PageBtn>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

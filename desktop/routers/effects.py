@@ -9,6 +9,9 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from desktop.app_state import app_state
+from desktop.sse_helpers import create_sse_response
+from services.ai.client import _call_ai_stream
+from services.ai.prompts import EFFECTS_ANALYSIS_TEMPLATE
 
 router = APIRouter(tags=["effects"])
 
@@ -293,6 +296,138 @@ async def image_analysis():
         key=lambda x: x["image_count"],
     )
     return {"items": result}
+
+
+def _build_data_summary(days: int) -> str:
+    """收集效果数据并构建结构化摘要文本，供 AI 分析使用。"""
+    effects = app_state.get_publish_effects()
+    if not effects:
+        return "暂无数据。"
+
+    cutoff = None
+    if days > 0:
+        cutoff = datetime.now() - timedelta(days=days)
+
+    # 按时间筛选
+    filtered = {}
+    for k, v in effects.items():
+        if cutoff:
+            dt = _parse_publish_time(v.get("publish_time"))
+            if not dt or dt < cutoff:
+                continue
+        filtered[k] = v
+
+    if not filtered:
+        return "所选时间范围内暂无数据。"
+
+    total = len(filtered)
+    total_reads = sum(v.get("reads", 0) or 0 for v in filtered.values())
+    total_likes = sum(v.get("likes", 0) or 0 for v in filtered.values())
+    total_shares = sum(v.get("shares", 0) or 0 for v in filtered.values())
+    total_favorites = sum(v.get("favorites", 0) or 0 for v in filtered.values())
+    total_comments = sum((v.get("comment_num") or v.get("comments") or 0) for v in filtered.values())
+
+    # 艺人数据
+    celeb_data: dict[str, list[int]] = defaultdict(list)
+    for item in filtered.values():
+        celeb = item.get("celebrity")
+        if celeb:
+            celeb_data[celeb].append(item.get("reads", 0) or 0)
+
+    celeb_lines = []
+    for name, vals in sorted(celeb_data.items(), key=lambda x: sum(x[1]) / len(x[1]) if x[1] else 0, reverse=True)[:10]:
+        avg = round(sum(vals) / len(vals)) if vals else 0
+        celeb_lines.append(f"  - {name}：{len(vals)} 篇，平均阅读 {avg}")
+
+    # 时段数据
+    hour_reads: dict[int, int] = defaultdict(int)
+    dow_reads: dict[int, int] = defaultdict(int)
+    for item in filtered.values():
+        dt = _parse_publish_time(item.get("publish_time"))
+        if dt:
+            hour_reads[dt.hour] += item.get("reads", 0) or 0
+            dow_reads[dt.weekday()] += item.get("reads", 0) or 0
+
+    dow_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    best_hours = sorted(hour_reads.items(), key=lambda x: x[1], reverse=True)[:3]
+    best_dows = sorted(dow_reads.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    hour_lines = [f"  - {h}时：{reads} 阅读" for h, reads in best_hours]
+    dow_lines = [f"  - {dow_names[d]}：{reads} 阅读" for d, reads in best_dows]
+
+    # 图片数量分析
+    img_groups: dict[int, list[int]] = defaultdict(list)
+    for item in filtered.values():
+        ic = item.get("image_count") or 0
+        reads = item.get("reads", 0) or 0
+        if reads > 0:
+            img_groups[ic].append(reads)
+    img_lines = []
+    for ic in sorted(img_groups):
+        vals = img_groups[ic]
+        avg = round(sum(vals) / len(vals)) if vals else 0
+        img_lines.append(f"  - {ic} 张图：{len(vals)} 篇，平均阅读 {avg}")
+
+    # 爆款文章 Top5
+    top5 = sorted(filtered.values(), key=lambda x: x.get("reads", 0) or 0, reverse=True)[:5]
+    top_lines = []
+    for item in top5:
+        title = item.get("title", "无标题")
+        reads = item.get("reads", 0) or 0
+        likes = item.get("likes", 0) or 0
+        top_lines.append(f"  - 《{title}》阅读 {reads}，点赞 {likes}")
+
+    # 互动率
+    engagement_rate = round((total_likes + total_shares + total_comments + total_favorites) / total_reads * 100, 2) if total_reads > 0 else 0
+    like_rate = round(total_likes / total_reads * 100, 2) if total_reads > 0 else 0
+    share_rate = round(total_shares / total_reads * 100, 2) if total_reads > 0 else 0
+
+    range_label = f"近 {days} 天" if days > 0 else "全部时间"
+
+    summary = f"""统计周期：{range_label}
+文章总数：{total} 篇
+总阅读量：{total_reads}
+总点赞数：{total_likes}
+总转发数：{total_shares}
+总收藏数：{total_favorites}
+总评论数：{total_comments}
+平均阅读：{round(total_reads / total) if total else 0}
+平均点赞：{round(total_likes / total) if total else 0}
+整体互动率：{engagement_rate}%（点赞率 {like_rate}%，转发率 {share_rate}%）
+
+## 艺人排行（按平均阅读）
+{chr(10).join(celeb_lines) if celeb_lines else "  无艺人数据"}
+
+## 最佳发布时段
+小时维度：
+{chr(10).join(hour_lines) if hour_lines else "  无数据"}
+星期维度：
+{chr(10).join(dow_lines) if dow_lines else "  无数据"}
+
+## 图片数量 vs 阅读量
+{chr(10).join(img_lines) if img_lines else "  无数据"}
+
+## 爆款文章 Top5
+{chr(10).join(top_lines) if top_lines else "  无数据"}"""
+
+    return summary
+
+
+@router.get("/api/effects/ai-analysis")
+async def ai_analysis(days: int = Query(0)):
+    """AI 智能分析：流式返回公众号运营建议（SSE）。"""
+    data_summary = _build_data_summary(days)
+    prompt = EFFECTS_ANALYSIS_TEMPLATE.format(data_summary=data_summary)
+
+    def task_fn(msg_queue):
+        try:
+            for chunk in _call_ai_stream(prompt, raise_on_fail=True):
+                msg_queue.put(("token", chunk))
+            msg_queue.put(("done",))
+        except Exception as e:
+            msg_queue.put(("error", str(e)))
+
+    return create_sse_response(task_fn)
 
 
 @router.get("/api/effects/export")

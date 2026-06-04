@@ -216,17 +216,33 @@ def optimize_layout(content: str) -> str:
     return _call_ai(prompt, content)
 
 
+def _is_valid_celebrity_name(name: str) -> bool:
+    """判断是否是合理的女明星姓名（2-4 个汉字，不含数字/日期等）。"""
+    if not (2 <= len(name) <= 4):
+        return False
+    # 过滤含数字、年月日等明显非人名的条目
+    if re.search(r'[0-9年月日最近]', name):
+        return False
+    # 必须全部是汉字
+    return bool(re.match(r'^[一-鿿]+$', name))
+
+
 def recommend_celebrities() -> list[str]:
     """AI 推荐当前热门女明星列表。"""
-    raw = _call_ai(TRENDING_CELEBRITIES_TEMPLATE, "")
+    from datetime import date
+    today = date.today().strftime("%Y年%m月%d日")
+    prompt = TRENDING_CELEBRITIES_TEMPLATE.format(date=today)
+    raw = _call_ai(prompt, "")
     try:
         data = json.loads(raw)
         if isinstance(data, list):
-            return [str(c).strip() for c in data if str(c).strip()][:10]
+            valid = [str(c).strip() for c in data if _is_valid_celebrity_name(str(c).strip())]
+            if valid:
+                return valid[:10]
     except Exception:
         pass
     # fallback: 尝试从文本中解析引号内的内容
-    matches = re.findall(r'"([^"]+)"', raw)
+    matches = [m for m in re.findall(r'"([^"]+)"', raw) if _is_valid_celebrity_name(m)]
     if matches:
         return matches[:10]
     # 硬编码兜底

@@ -85,3 +85,9 @@ export interface ImageAnalysisItem {
   avg_reads: number;
   count: number;
 }
+
+export interface AiAnalysisEvent {
+  type: 'token' | 'done' | 'error';
+  content?: string;
+  message?: string;
+}

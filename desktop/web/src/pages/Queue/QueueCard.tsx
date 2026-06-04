@@ -33,6 +33,17 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
   });
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const isPublished = item.status === 'published';
+
+  // 注册/注销进行中的发布任务
+  const registerTask = useStore(s => s.registerTask);
+  const unregisterTask = useStore(s => s.unregisterTask);
+  const taskName = publishingAction === 'draft' ? '队列存草稿' : publishingAction === 'publish' ? '队列发布文章' : null;
+  useEffect(() => {
+    if (taskName) {
+      registerTask(taskName);
+      return () => unregisterTask(taskName);
+    }
+  }, [taskName, registerTask, unregisterTask]);
   const { loading: generating, withLoading: withGenerating } = useLoading();
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -472,7 +483,7 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
           </div>
 
           <div className="flex gap-2 flex-wrap pt-1">
-            {!isPublished ? (
+            {!isPublished && (
               <>
                 <button className="btn btn-primary" onClick={async () => {
                   const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title, content: desc, cover, images });
@@ -498,12 +509,12 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                     批量去水印</>
                   )}
                 </button>
-                <button className="btn btn-ghost text-danger" onClick={async () => {
-                  const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
-                  if (confirmed) deleteItem(checkboxChecked);
-                }} disabled={!!publishingAction}>删除</button>
               </>
-            ) : null}
+            )}
+            <button className="btn btn-ghost text-danger" onClick={async () => {
+              const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+              if (confirmed) deleteItem(checkboxChecked);
+            }} disabled={!!publishingAction}>删除</button>
           </div>
 
           {(logs.length > 0 || publishingAction) && (

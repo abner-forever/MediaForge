@@ -258,7 +258,7 @@ async def discovery_score(req: ScoreRequest):
 
 @router.get("/api/discovery/trending-celebrities")
 async def get_trending_celebrities():
-    """AI 推荐当前热门女明星。"""
+    """今日推荐：分析当前发文流量最大的女明星。"""
     if not settings.ai_api_key:
         raise HTTPException(400, "当前未配置大模型 API Key，请先在设置页配置")
     try:

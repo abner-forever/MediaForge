@@ -281,7 +281,7 @@ export default function Discovery() {
     try {
       const res = await discoveryApi.trendingCelebrities();
       setRecommendedCelebs(res.celebrities);
-      addToast(recommendedCelebs.length ? '已刷新推荐' : 'AI 已推荐热门女星，点击名字即可搜索', 'success');
+      addToast(recommendedCelebs.length ? '已刷新今日推荐' : '已推荐当前发文流量最大的明星，点击即可搜索', 'success');
     } catch (err: any) {
       addToast(err.message || '推荐失败', 'error');
     }

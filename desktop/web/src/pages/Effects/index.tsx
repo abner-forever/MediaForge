@@ -10,6 +10,7 @@ import CelebrityRank from './CelebrityRank';
 import CompareChart from './CompareChart';
 import FunnelChart from './FunnelChart';
 import ImageAnalysis from './ImageAnalysis';
+import AiAnalysis from './AiAnalysis';
 import ArticleDataTabs from './ArticleDataTabs';
 import EmptyState from './EmptyState';
 import HelpGuide from '../../components/ui/HelpGuide';
@@ -36,6 +37,16 @@ export default function Effects() {
   const [logsExpanded, setLogsExpanded] = useState(true);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+
+  // 注册/注销同步任务
+  const registerTask = useStore(s => s.registerTask);
+  const unregisterTask = useStore(s => s.unregisterTask);
+  useEffect(() => {
+    if (syncing) {
+      registerTask('同步公众号数据');
+      return () => unregisterTask('同步公众号数据');
+    }
+  }, [syncing, registerTask, unregisterTask]);
 
   const load = useCallback(async () => {
     await withLoading(async () => {
@@ -109,30 +120,10 @@ export default function Effects() {
   const hasData = summary && summary.total_posts > 0;
 
   return (
-    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 32 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>数据分析</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>时间范围</span>
-            {[7, 14, 30, 0].map(d => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                style={{
-                  padding: '4px 14px', fontSize: 12, fontWeight: 600, borderRadius: 8,
-                  border: 'none', cursor: 'pointer',
-                  background: days === d ? 'var(--accent)' : 'var(--border)',
-                  color: days === d ? '#fff' : 'var(--text-muted)',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {d === 0 ? '全部' : `${d}天`}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 }}>数据分析</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
           {accounts.length > 0 && (
             <button
@@ -175,7 +166,8 @@ export default function Effects() {
             <p><b>4. 最佳时段</b>：热力图按「星期 × 小时」展示阅读量分布，深色区域代表高阅读量时段，帮你选择最佳发布时间。</p>
             <p><b>5. 艺人排行</b>：按平均阅读量降序排列各艺人，快速识别最受欢迎的内容方向。</p>
             <p><b>6. 多维对比</b>：按来源平台、内容类型、艺人三个维度对比阅读量，辅助内容策略决策。</p>
-            <p><b>7. 导出数据</b>：点击「导出 CSV」下载完整数据表格，可用 Excel 做进一步分析。</p>
+            <p><b>7. 智能分析</b>：点击「生成分析」，AI 将从内容策略、发布时段、互动率、图文配比等维度给出运营建议。</p>
+            <p><b>8. 导出数据</b>：点击「导出 CSV」下载完整数据表格，可用 Excel 做进一步分析。</p>
           </HelpGuide>
         </div>
       </div>
@@ -237,7 +229,31 @@ export default function Effects() {
       ) : (
         <>
           <OverviewCards summary={summary} />
-          <TrendChart data={trend} days={days} onDaysChange={setDays} />
+          <AiAnalysis days={days} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>趋势分析</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>时间范围</span>
+                {[7, 14, 30, 0].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDays(d)}
+                    style={{
+                      padding: '3px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+                      border: 'none', cursor: 'pointer',
+                      background: days === d ? 'var(--accent)' : 'var(--border)',
+                      color: days === d ? '#fff' : 'var(--text-muted)',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {d === 0 ? '全部' : `${d}天`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <TrendChart data={trend} days={days} onDaysChange={setDays} />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <FunnelChart days={days} />
             <HeatmapChart data={trend} />

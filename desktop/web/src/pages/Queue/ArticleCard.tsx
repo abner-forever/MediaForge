@@ -157,7 +157,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
               编辑
             </button>
-            {!isPublished ? (
+            {!isPublished && (
               <>
                 <button className="btn btn-sm" onClick={async () => {
                   const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'draft', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
@@ -167,12 +167,12 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
                   const { confirmed, headless: hl } = await Modal.publishConfirm({ action: 'publish', account: accounts.find(a => a.account_id === selectedAccountId) || null, title: item.title, content: item.content || item.desc, cover: item.cover, images: item.images });
                   if (confirmed) publish({ save_draft: false, headless: hl });
                 }}>直接发布</button>
-                <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
-                  const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
-                  if (confirmed) deleteItem(checkboxChecked);
-                }}>删除</button>
               </>
-            ) : null}
+            )}
+            <button className="btn btn-ghost btn-sm text-[var(--danger)]" onClick={async () => {
+              const { confirmed, checked: checkboxChecked } = await Modal.confirm({ title: '删除发布队列项', message: `确认删除《${item.title || '无标题'}》？`, confirmText: '删除', danger: true, checkboxLabel: '同时删除本地资源', defaultChecked: true });
+              if (confirmed) deleteItem(checkboxChecked);
+            }}>删除</button>
           </div>
         </div>
       </div>

@@ -5,17 +5,26 @@ import Toast from '../ui/Toast';
 import Lightbox from './Lightbox';
 import ProgressOverlay from './ProgressOverlay';
 import { useStore } from '../../stores';
+import { put } from '../../api/base';
 
 const isWin = typeof navigator !== 'undefined' && navigator.platform?.includes('Win');
 
 export default function Layout() {
   const syncTheme = useStore(s => s.syncTheme);
   const pipelineRunning = useStore(s => s.pipelineRunning);
+  const activeTasks = useStore(s => s.activeTasks);
   const sidebarWidthSynced = useStore(s => s.sidebarWidthSynced);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => { syncTheme(); }, [syncTheme]);
+
+  // 同步进行中的任务到后端（PyWebView 关闭时由 Python 侧检查）
+  useEffect(() => {
+    const tasks = [...activeTasks];
+    if (pipelineRunning) tasks.push('智能流水线');
+    put('/api/status/active-tasks', { tasks }).catch(() => {});
+  }, [activeTasks, pipelineRunning]);
 
   // 不在流水线页面时显示全局浮动指示器
   const showPipelineIndicator = pipelineRunning && location.pathname !== '/pipeline';

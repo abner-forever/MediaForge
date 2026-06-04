@@ -129,3 +129,11 @@ async def delete_operations(data: Dict[str, Any]):
     op_ids = data.get("ids", [])
     deleted = app_state.delete_operations_by_id(op_ids)
     return {"success": True, "deleted": deleted}
+
+
+@router.put("/api/status/active-tasks")
+async def update_active_tasks(data: Dict[str, Any]):
+    """前端同步进行中的任务列表到后端，用于关闭窗口时检查。"""
+    tasks = data.get("tasks", [])
+    app_state.active_tasks = set(tasks) if isinstance(tasks, list) else set()
+    return {"ok": True}

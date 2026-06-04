@@ -61,7 +61,9 @@ export default function CompareChart({ data }: {
 }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-      <BarGroup title="按内容类型" items={data.by_content_type} labelMap={CONTENT_TYPE_MAP} />
+      {data.by_content_type.length >= 2 && (
+        <BarGroup title="按内容类型" items={data.by_content_type} labelMap={CONTENT_TYPE_MAP} />
+      )}
       <BarGroup title="按艺人" items={data.by_celebrity} />
     </div>
   );

@@ -324,14 +324,18 @@ def _start_app() -> None:
     # 注册窗口关闭前检查
     def _before_close() -> bool:
         from desktop.app_state import app_state
-        if app_state.publish_active:
+        if app_state.publish_active or app_state.active_tasks:
             try:
                 from AppKit import NSAlert, NSApplication
                 NSApplication.sharedApplication()
                 alert = NSAlert.alloc().init()
                 alert.addButtonWithTitle_("退出")
                 alert.addButtonWithTitle_("取消")
-                alert.setMessageText_("正在发布公众号文章，确定要退出吗？")
+                if app_state.active_tasks:
+                    task_list = "、".join(sorted(app_state.active_tasks))
+                    alert.setMessageText_(f"以下任务正在进行中：{task_list}\n\n确定要退出吗？")
+                else:
+                    alert.setMessageText_("正在发布公众号文章，确定要退出吗？")
                 alert.setAlertStyle_(0)
                 if _app_icon_nsimage is not None:
                     alert.setIcon_(_app_icon_nsimage)

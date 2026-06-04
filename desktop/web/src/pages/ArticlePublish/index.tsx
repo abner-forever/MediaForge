@@ -78,6 +78,17 @@ export default function ArticlePublish() {
   const chatAbortRef = useRef<AbortController | null>(null);
   const aiMsgIdRef = useRef<string | null>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 注册/注销进行中的任务
+  const registerTask = useStore(s => s.registerTask);
+  const unregisterTask = useStore(s => s.unregisterTask);
+  useEffect(() => {
+    if (chatLoading) {
+      registerTask('AI 写文章');
+    } else {
+      unregisterTask('AI 写文章');
+    }
+  }, [chatLoading, registerTask, unregisterTask]);
   const chatInstructionRef = useRef('');
 
   /* ── UI 状态 ────────────────────────────────── */

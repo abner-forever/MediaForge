@@ -1,5 +1,6 @@
 import { get, post, del } from './base';
-import type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareData, MpArticlesResponse, TopArticle, ImageAnalysisItem } from '../types';
+import { sseGet } from './sse';
+import type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareData, MpArticlesResponse, TopArticle, ImageAnalysisItem, AiAnalysisEvent } from '../types';
 
 export const effectsApi = {
   list: () => get<{ effects: Record<string, PublishEffect> }>('/api/effects'),
@@ -50,6 +51,10 @@ export const effectsApi = {
   },
 
   clearMpArticles: () => del<{ success: boolean; deleted: number }>('/api/effects/mp-articles'),
+
+  /** AI 智能分析：流式返回公众号运营建议 */
+  aiAnalysis: (days: number = 0, onEvent: (evt: AiAnalysisEvent) => void, signal?: AbortSignal) =>
+    sseGet<AiAnalysisEvent>(`/api/effects/ai-analysis?days=${days}`, onEvent, { signal }),
 
   exportCsv: async () => {
     const { effects } = await get<{ effects: Record<string, PublishEffect> }>('/api/effects');
