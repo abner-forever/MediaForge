@@ -7,3 +7,4 @@ tenacity>=8.2.0
 fastapi
 uvicorn
 pywebview
+PyJWT

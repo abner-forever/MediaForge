@@ -104,6 +104,13 @@ async def get_settings():
         "sidebar_open": store.get("SIDEBAR_OPEN", "true"),
         "sidebar_width": store.get("SIDEBAR_WIDTH", "240"),
         "wechat_accounts": get_wechat_accounts_list(),
+        # SMTP 邮件配置
+        "smtp_host": cfg.get("SMTP_HOST", ""),
+        "smtp_port": int(cfg.get("SMTP_PORT", "465")),
+        "smtp_secure": cfg.get("SMTP_SECURE", "true").lower() == "true",
+        "smtp_user": cfg.get("SMTP_USER", ""),
+        "smtp_pass_set": bool(cfg.get("SMTP_PASS", "")),
+        "smtp_from": cfg.get("SMTP_FROM", ""),
     }
 
 

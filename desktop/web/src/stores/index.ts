@@ -9,6 +9,8 @@ import { createArticlesSlice } from './articlesSlice';
 import { createWechatSlice } from './wechatSlice';
 import { createPipelineSlice } from './pipelineSlice';
 import { createSidebarSlice } from './sidebarSlice';
+import { createCreditsSlice } from './creditsSlice';
+import { createUserSlice } from './userSlice';
 import { settingsApi } from '../api/client';
 
 export const useStore = create<AppState>()((...a) => ({
@@ -21,6 +23,8 @@ export const useStore = create<AppState>()((...a) => ({
   ...createWechatSlice(...a),
   ...createPipelineSlice(...a),
   ...createSidebarSlice(...a),
+  ...createCreditsSlice(...a),
+  ...createUserSlice(...a),
 }));
 
 // Re-export types and constants for backward compatibility

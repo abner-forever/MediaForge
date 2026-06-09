@@ -1,19 +1,10 @@
----
-name: frontend-dev-mediaforge
-description: MediaForge 前端项目开发规范。当在 desktop/web 目录下进行 React/TypeScript 开发时自动应用，约束 API 层、状态管理、组件、路由、Hooks 等最佳实践。
----
-
-# MediaForge 前端开发规范
-
-本规范适用于 `desktop/web/src/` 下的 React/TypeScript 前端项目。所有 AI 辅助开发必须遵循以下约束。
-
 ## 技术栈
 
 - React 18 + TypeScript（严格模式）
+- Vite 8 + pnpm
 - Zustand v4（单 store + slice 模式）
-- Tailwind CSS + CSS 变量设计令牌
+- Tailwind CSS + CSS 变量设计令牌 + less
 - react-router-dom v6（BrowserRouter + lazy 路由）
-- Vite 构建，pnpm 包管理
 
 ## 目录结构约束
 
@@ -26,6 +17,12 @@ src/
   utils/        # 工具函数
   components/   # 组件（ui/ layout/ feature/ 三个子目录）
   pages/        # 页面（每个页面一个目录）
+    demo/
+      index.tsx
+      components
+        DemoCard
+          index.tsx
+          style.less
   routes.tsx    # 路由配置
 ```
 
@@ -122,6 +119,48 @@ export const appRoutes: AppRoute[] = [
 
 新增 Hook 放在 `hooks/` 目录，以 `use` 前缀命名。
 
+## 构建命令
+
+```bash
+# 开发（热更新）
+pnpm run dev              # Vite dev server，端口 5173
+
+# 构建
+pnpm run build            # 生产构建到 dist/
+
+# 代码检查
+npx tsc --noEmit          # TypeScript 类型检查
+```
+
+## 路径别名
+
+配置了 `@` 别名指向 `src/` 目录，**禁止使用 `../../` 相对路径**。
+
+```typescript
+// vite.config.ts + tsconfig.json 已配置
+// @/ → src/
+
+// ✅ 正确
+import { dashboardApi } from '@/api/dashboard';
+import type { AppState } from '@/stores/types';
+import { Button } from '@/components/ui';
+
+// ❌ 错误
+import { dashboardApi } from '../../../api/dashboard';
+import type { AppState } from '../../stores/types';
+```
+
+### 别名使用场景
+
+| 场景 | 正确写法 |
+|------|----------|
+| 跨目录导入 | `@/api/xxx`、`@/stores/xxx`、`@/components/xxx` |
+| 页面间导入 | `@/pages/Dashboard/xxx` |
+| 类型导入 | `@/types/xxx` |
+| 工具导入 | `@/utils/xxx`、`@/hooks/xxx` |
+
+> 💡 同目录下的相对导入（`./xxx`、`./xxx/xxx`）可以保留。
+
 ## 代码风格
 
 - 语言：中文注释和文档，英文代码标识符
@@ -129,6 +168,7 @@ export const appRoutes: AppRoute[] = [
 - 工具/Hook 文件：camelCase（`useMyHook.ts`）
 - 类型文件：camelCase（`myDomain.ts`）
 - 导入顺序：React → 第三方库 → 本地模块（api/stores/hooks/utils/components）
+- 路径导入：使用 `@/` 别名，禁止 `../../` 相对路径
 - 禁止使用 `any` 类型（除非有充分理由并注释说明）
 - 禁止使用 `// @ts-ignore`（应修复类型问题）
 
@@ -139,12 +179,23 @@ export const appRoutes: AppRoute[] = [
 - 组件 Props：`XxxProps`（如 `LoadingProps`）
 - 页面组件：默认导出，文件名即组件名
 
-## 禁止事项
+## Never 规则（演进日志）
 
-1. 禁止在组件/store 中直接 `fetch()`，必须通过 `api/` 模块
-2. 禁止手动实现 SSE 读取逻辑，必须使用 `api/sse.ts`
-3. 禁止在 API 模块文件中定义 `interface`，类型必须在 `types/` 中
-4. 禁止创建多个 Zustand store，所有状态通过 `useStore` 访问
-5. 禁止将业务逻辑放在 `components/ui/` 中
-6. 禁止跨页面直接导入其他页面的组件（应提取到共享组件）
-7. 禁止在路由配置之外的地方使用 `React.lazy()`
+> 核心理念：每次 AI 犯错就追加一条规则，持续演进。
+> 一条 Never 规则，能避免一次灾难性的误操作。
+
+| 日期 | 规则 | 踩坑原因 |
+|------|------|----------|
+| — | 禁止直接 `fetch()` | 统一错误处理、认证注入、请求拦截 |
+| — | 禁止手动实现 SSE | 重复代码，容易遗漏 AbortController 清理 |
+| — | 禁止使用 `any` | 类型安全丢失，运行时 bug 难以追踪 |
+| — | 禁止 `@ts-ignore` | 掩盖类型问题，应修复根因 |
+| — | 禁止多个 Zustand store | 状态分散，跨域访问困难 |
+| — | 禁止跨页面导入组件 | 循环依赖，应提取到 `components/` |
+| — | 禁止在路由外用 `React.lazy()` | 统一代码分割点，便于预加载策略 |
+| — | 禁止硬编码颜色值 | 使用 CSS 变量，支持主题切换 |
+| — | 禁止省略列表 `key` | React 渲染性能和状态错乱 |
+| — | 禁止在渲染路径执行异步 | 阻塞渲染，导致卡顿 |
+| — | 禁止使用 `../../` 相对路径 | 使用 `@/` 别名，避免路径层级混乱 |
+
+> 💡 **如何使用**：每次修正 AI 错误后，在表格末尾追加一行，记录日期和原因。

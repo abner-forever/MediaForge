@@ -15,6 +15,9 @@ const Settings = lazy(() => import('./pages/Settings'));
 const ArticlePublish = lazy(() => import('./pages/ArticlePublish'));
 const Pipeline = lazy(() => import('./pages/Pipeline'));
 const Effects = lazy(() => import('./pages/Effects'));
+const Credits = lazy(() => import('./pages/Credits'));
+const Auth = lazy(() => import('./pages/Auth'));
+const UserCenter = lazy(() => import('./pages/UserCenter'));
 
 export const appRoutes: AppRoute[] = [
   { path: '/', element: Dashboard },
@@ -23,6 +26,9 @@ export const appRoutes: AppRoute[] = [
   { path: '/articles', element: ArticlePublish },
   { path: '/queue', element: Queue, errorBoundary: true },
   { path: '/effects', element: Effects },
+  { path: '/credits', element: Credits },
   { path: '/materials', element: Materials },
   { path: '/settings', element: Settings },
+  { path: '/auth', element: Auth },
+  { path: '/user', element: UserCenter },
 ];

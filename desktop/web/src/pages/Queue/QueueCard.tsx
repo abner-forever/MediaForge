@@ -8,6 +8,13 @@ import ArticleCard from './ArticleCard';
 import LazyImage from '../Discovery/LazyImage';
 import { Modal } from '../../components/modalApi.tsx';
 
+// 辅助函数：获取当前任务的发布状态
+function getPublishingAction(item: QueueItem, publishingTasks: Record<string, { action: string; status: string }>) {
+  const task = item.id ? publishingTasks[item.id] : null;
+  if (!task || task.status !== 'publishing') return null;
+  return task.action as 'draft' | 'publish' | null;
+}
+
 const MAX_VISIBLE_THUMBS = 3;
 
 function withCacheBust(url: string, versions: Record<string, number>, img: string): string {
@@ -24,8 +31,6 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
   const [title, setTitle] = useState(item.title);
   const [desc, setDesc] = useState(item.desc);
   const [cover, setCover] = useState(item.cover);
-  const [logs, setLogs] = useState<string[]>(() => item.publish_logs || []);
-  const [publishingAction, setPublishingAction] = useState<'draft' | 'publish' | null>(null);
   const [logsExpanded, setLogsExpanded] = useState(() => {
     const hasLogs = (item.publish_logs || []).length > 0;
     const isActive = ['publishing'].includes(item.status || '');
@@ -33,6 +38,16 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
   });
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
   const isPublished = item.status === 'published';
+
+  // 使用全局发布状态
+  const publishingTasks = useStore(s => s.publishingTasks);
+  const startPublishTask = useStore(s => s.startPublishTask);
+  const updatePublishTask = useStore(s => s.updatePublishTask);
+  const addPublishLog = useStore(s => s.addPublishLog);
+  const finishPublishTask = useStore(s => s.finishPublishTask);
+  const publishingAction = getPublishingAction(item, publishingTasks);
+  const currentTask = itemId ? publishingTasks[itemId] : null;
+  const logs = currentTask?.logs || item.publish_logs || [];
 
   // 注册/注销进行中的发布任务
   const registerTask = useStore(s => s.registerTask);
@@ -134,9 +149,10 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
     if (pollReceivedRef.current) return;
     const isTerminal = ['failed', 'saved_to_wechat', 'published'].includes(item.status || '');
     if ((!publishingAction || isTerminal) && item.publish_logs && item.publish_logs.length > logs.length) {
-      setLogs(item.publish_logs);
+      // 同步队列中的日志到全局状态
+      item.publish_logs.forEach(log => addPublishLog(itemId, log));
     }
-  }, [item.publish_logs, publishingAction, item.status]);
+  }, [item.publish_logs, publishingAction, item.status, logs.length, itemId, addPublishLog]);
 
   async function updateField(field: string, value: string) { await queueApi.update(itemId, { [field]: value } as any); }
 
@@ -203,13 +219,14 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
         const d = await publishLogsApi.get(offset, sid);
         if (d.logs.length) {
           pollReceivedRef.current = true;
-          setLogs(p => [...p, ...d.logs]);
+          // 使用全局状态存储日志
+          d.logs.forEach(log => addPublishLog(sid, log));
           offset = d.total;
         }
       } catch {}
       await new Promise(r => setTimeout(r, 2000));
     }
-  }, [logSessionId]);
+  }, [logSessionId, addPublishLog]);
 
   const publishRef = useRef(false);
 
@@ -223,7 +240,12 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
         if (updated) {
           if (updated.publish_logs && updated.publish_logs.length > 0) {
             const queueLogs = updated.publish_logs;
-            setLogs(prev => queueLogs.length > prev.length ? queueLogs : prev);
+            // 同步队列中的日志到全局状态
+            const currentTask = useStore.getState().publishingTasks[itemId];
+            if (currentTask && queueLogs.length > currentTask.logs.length) {
+              const newLogs = queueLogs.slice(currentTask.logs.length);
+              newLogs.forEach(log => addPublishLog(itemId, log));
+            }
           }
           if (updated.status === 'saved_to_wechat' || updated.status === 'published') return true;
           if (updated.status === 'failed') return false;
@@ -236,19 +258,41 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
 
   async function publish(opts: { dry_run?: boolean; save_draft?: boolean; headless?: boolean }) {
     const action = opts.dry_run ? '预览' : opts.save_draft === false ? '发布' : '保存草稿';
-    addToast(`正在${action}...`, 'info'); setLogs([]); setPublishingAction(opts.save_draft !== false ? 'draft' : 'publish'); setLogsExpanded(true); publishRef.current = true; pollReceivedRef.current = false;
+    const actionType = opts.save_draft !== false ? 'draft' as const : 'publish' as const;
+
+    addToast(`正在${action}...`, 'info');
+    setLogsExpanded(true);
+    publishRef.current = true;
+    pollReceivedRef.current = false;
+
+    // 使用全局状态管理发布任务
+    startPublishTask(itemId, actionType, title);
+
     const pubPromise = queueApi.publish(itemId, { ...opts, account_id: selectedAccountId || undefined });
     await new Promise(r => setTimeout(r, 300));
     const ac = new AbortController();
     pollLogs({ signal: ac.signal });
     let success = false;
     let started = false;
-    try { const r = await pubPromise; if (r.started) { started = true; } else { success = r.success; if (r.success) Modal.alert({ message: `${action}成功${r.message ? '：' + r.message : ''}` }); else addToast(`${action}失败：${r.message}`, 'error'); } } catch (err: any) { /* empty */ }
+    try {
+      const r = await pubPromise;
+      if (r.started) {
+        started = true;
+        updatePublishTask(itemId, { abortController: ac });
+      } else {
+        success = r.success;
+        if (r.success) Modal.alert({ message: `${action}成功${r.message ? '：' + r.message : ''}` });
+        else addToast(`${action}失败：${r.message}`, 'error');
+      }
+    } catch (err: any) {
+      /* empty */
+    }
     publishRef.current = false;
 
     if (started) {
       success = await pollUntilDone(ac.signal);
-      if (success) Modal.alert({ message: `${action}成功` }); else addToast('发布失败', 'error');
+      if (success) Modal.alert({ message: `${action}成功` });
+      else addToast('发布失败', 'error');
     } else {
       await new Promise(r => setTimeout(r, 800));
     }
@@ -259,7 +303,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
       if (!started) {
         const updatedItem = refreshed.queue.find(q => q.id === itemId);
         if (updatedItem?.publish_logs && !pollReceivedRef.current) {
-          setLogs(updatedItem.publish_logs);
+          // 同步队列中的日志到全局状态
+          updatedItem.publish_logs.forEach(log => addPublishLog(itemId, log));
         }
       }
     } catch {}
@@ -272,7 +317,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
         setQueue(newQueue);
       }
     }
-    setPublishingAction(null);
+    // 完成发布任务
+    finishPublishTask(itemId, success, success ? undefined : '发布失败');
   }
 
   const images = item.images || [];
@@ -361,6 +407,11 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
                 <svg className="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span className="font-medium text-text-secondary">{item.celebrity}</span>
               </>
+            )}
+            {publishingAction && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20" title={publishingAction === 'draft' ? '保存草稿中' : '发布中'}>
+                <span className="w-3 h-3 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
+              </span>
             )}
             {item.status === 'saved' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">保存成功</span>

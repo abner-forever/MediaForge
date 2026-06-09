@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
 interface ModalProps {
@@ -55,7 +56,8 @@ export default function Modal({ open, onClose, children, className = '' }: Modal
 
   if (!visible) return null;
 
-  return (
+  // 通过 Portal 挂载到 body，避免被父级 overflow:hidden 裁剪
+  return createPortal(
     <div
       className={`fixed inset-0 z-[9000] flex items-center justify-center bg-black/60 backdrop-blur-sm ${exiting ? 'animate-out' : 'animate-in'}`}
       onClick={handleClose}
@@ -66,6 +68,7 @@ export default function Modal({ open, onClose, children, className = '' }: Modal
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

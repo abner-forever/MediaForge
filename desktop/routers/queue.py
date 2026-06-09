@@ -283,6 +283,10 @@ def _run_queue_publish_background(
         updates["status"] = "saved_to_wechat" if save_draft else "published"
         updates["account_id"] = account_id or item_account_id
         updates["error"] = ""
+        # 发布成功后扣除积分（保存草稿不扣）
+        if not save_draft:
+            from desktop.app_state import PUBLISH_COST
+            app_state.spend_credits(PUBLISH_COST, "publish", f"发布文章「{title}」")
         for img in raw_images:
             app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
     else:
@@ -304,6 +308,16 @@ async def publish_from_queue(item_id: str, req: PublishRequest):
         raise_friendly(400, "没有图片")
     if not title:
         raise_friendly(400, "标题为空")
+
+    # 发布前检查积分（保存草稿不扣积分）
+    if not req.save_draft and not req.dry_run:
+        from desktop.app_state import PUBLISH_COST
+        balance = app_state.get_credits_balance()
+        if balance < PUBLISH_COST:
+            raise HTTPException(
+                402,
+                f"积分不足，当前余额 {balance} 积分，发布需要 {PUBLISH_COST} 积分。请先签到或获取积分。"
+            )
 
     publish_session_id = item.get("id", "")
     app_state.clear_publish_logs(session_id=publish_session_id)

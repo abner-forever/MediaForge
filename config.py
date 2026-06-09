@@ -137,6 +137,13 @@ class Settings:
         default_factory=lambda: _csv_tuple(os.getenv("TOUTIAO_SEARCH_TAGS", "时尚,明星,穿搭"))
     )
     toutiao_keyword_pages: int = field(default_factory=lambda: int(os.getenv("TOUTIAO_KEYWORD_PAGES", "1")))
+    # ── SMTP 邮件配置 ──
+    smtp_host: str = field(default_factory=lambda: os.getenv("SMTP_HOST", ""))
+    smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "465")))
+    smtp_secure: bool = field(default_factory=lambda: os.getenv("SMTP_SECURE", "true").lower() == "true")
+    smtp_user: str = field(default_factory=lambda: os.getenv("SMTP_USER", ""))
+    smtp_pass: str = field(default_factory=lambda: os.getenv("SMTP_PASS", ""))
+    smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", ""))
 
 
 CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))

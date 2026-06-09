@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
 
 const pyproject = readFileSync(resolve(__dirname, '../../pyproject.toml'), 'utf-8');
 const version = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1] || '0.0.0';
@@ -11,6 +11,11 @@ const buildTime = new Date().toISOString();
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version), __BUILD_TIME__: JSON.stringify(buildTime) },
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   build: {
     outDir: fileURLToPath(new URL('../static', import.meta.url)),
     emptyOutDir: true,

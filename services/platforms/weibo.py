@@ -148,9 +148,11 @@ def _get_json_single(url: str, params: dict, *, referer: Optional[str] = None) -
     resp = requests.get(url, params=params, headers=hdr, timeout=settings.request_timeout)
     resp.raise_for_status()
     payload = resp.json()
-    if isinstance(payload, dict) and payload.get("ok") in (0, "0"):
+    ok_val = payload.get("ok") if isinstance(payload, dict) else None
+    if isinstance(payload, dict) and (ok_val in (0, "0") or (isinstance(ok_val, int) and ok_val < 0)):
         logger.error(
-            "微博接口返回失败 msg=%s url=%s",
+            "微博接口返回失败 ok=%s msg=%s url=%s",
+            ok_val,
             payload.get("msg") or payload.get("errno"),
             resp.url,
         )
@@ -197,7 +199,7 @@ def resolve_uid_for_nickname(nickname: str) -> str:
         _save_uid_cache(cache)
         return uid
 
-    # 备选：网页端 side search（结构不稳定，仅兜底）
+    # 备选：网页端 side search（返回热搜建议，通常不含 UID，仅做日志参考）
     try:
         payload = _get_json_single(
             "https://weibo.com/ajax/side/search",
@@ -206,7 +208,23 @@ def resolve_uid_for_nickname(nickname: str) -> str:
         )
         uid = _first_uid_from_side_payload(payload, nickname)
     except Exception as err:
-        logger.error("网页侧用户检索失败(%s)：%s", nickname, err)
+        logger.debug("网页侧用户检索失败(%s)：%s", nickname, err)
+
+    if uid:
+        cache[nickname] = uid
+        _save_uid_cache(cache)
+        return uid
+
+    # 备选：通过关键词搜索帖子，从结果的 user 对象中提取 UID
+    try:
+        payload = _get_json_single(
+            "https://weibo.com/ajax/statuses/search",
+            {"q": nickname, "page": 1},
+            referer=f"https://s.weibo.com/weibo?q={quote(nickname, safe='')}",
+        )
+        uid = _first_uid_from_search_posts(payload, nickname)
+    except Exception as err:
+        logger.debug("帖子搜索提取 UID 失败(%s)：%s", nickname, err)
 
     if uid:
         cache[nickname] = uid
@@ -247,14 +265,78 @@ def _first_uid_from_side_payload(payload: dict, nickname: str) -> str:
             continue
         for item in items:
             if isinstance(item, dict):
+                has_name_key = "screen_name" in item or "name" in item
                 sid = (
-                    item.get("id") or item.get("idstr") or item.get("uid")
-                    if "screen_name" in item or "name" in item
+                    (item.get("id") or item.get("idstr") or item.get("uid"))
+                    if has_name_key
                     else None
                 )
                 name = item.get("screen_name") or item.get("name") or ""
                 if sid and (nickname == name or (name and nickname in name)):
                     return str(sid)
+
+    # 兜底：对整个 payload 做正则匹配（结构可能嵌套更深）
+    blob = json.dumps(payload, ensure_ascii=False)
+    for pattern in (
+        r'"screen_name"\s*:\s*"%s"[^}]{0,300}?"id"\s*:\s*"?(\d+)' % re.escape(nickname),
+        r'"screen_name"\s*:\s*"%s"[^}]{0,300}?"idstr"\s*:\s*"(\d+)' % re.escape(nickname),
+    ):
+        m = re.search(pattern, blob)
+        if m:
+            return m.group(1).strip()
+
+    # 调试：打印 data 结构帮助排查
+    data = payload.get("data")
+    if isinstance(data, dict):
+        logger.debug("side/search data 键: %s", list(data.keys()))
+    elif isinstance(data, list):
+        logger.debug("side/search data 为列表，长度 %d", len(data))
+        if data:
+            logger.debug("首个元素键: %s", list(data[0].keys()) if isinstance(data[0], dict) else type(data[0]))
+    return ""
+
+
+def _first_uid_from_search_posts(payload: dict, nickname: str) -> str:
+    """从微博帖子搜索结果的 user 对象中提取匹配昵称的 UID。"""
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return ""
+
+    # data 可能直接是列表，也可能在 cards/data/statuses 键下
+    items: List = []
+    if isinstance(data, list):
+        items = data
+    else:
+        for key in ("cards", "data", "statuses"):
+            val = data.get(key)
+            if isinstance(val, list):
+                items = val
+                break
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        # 帖子搜索结果里 user 嵌在 mblog.user 中
+        user = item.get("user")
+        if not isinstance(user, dict):
+            mblog = item.get("mblog")
+            if isinstance(mblog, dict):
+                user = mblog.get("user")
+        if not isinstance(user, dict):
+            continue
+        screen = user.get("screen_name") or user.get("name") or ""
+        if nickname == screen or (screen and nickname in screen):
+            return str(user.get("id") or user.get("idstr") or "").strip()
+
+    # 兜底：正则从整个响应中提取
+    blob = json.dumps(payload, ensure_ascii=False)
+    for pattern in (
+        r'"screen_name"\s*:\s*"%s"[^}]{0,300}?"id"\s*:\s*"?(\d+)' % re.escape(nickname),
+        r'"screen_name"\s*:\s*"%s"[^}]{0,300}?"idstr"\s*:\s*"(\d+)' % re.escape(nickname),
+    ):
+        m = re.search(pattern, blob)
+        if m:
+            return m.group(1).strip()
     return ""
 
 

@@ -14,6 +14,9 @@ from .articles import router as articles_router
 from .effects import router as effects_router
 from .logs import router as logs_router
 from .pipeline import router as pipeline_router
+from .credits import router as credits_router
+from .sync import router as sync_router
+from .user import router as user_router
 
 api_router = APIRouter()
 api_router.include_router(settings_router)
@@ -28,3 +31,6 @@ api_router.include_router(articles_router)
 api_router.include_router(effects_router)
 api_router.include_router(logs_router)
 api_router.include_router(pipeline_router)
+api_router.include_router(credits_router)
+api_router.include_router(sync_router)
+api_router.include_router(user_router)

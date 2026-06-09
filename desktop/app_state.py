@@ -4,16 +4,24 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from config import DATA_DIR, QUEUE_CACHE_PATH
 from utils.file import read_json, write_json
+from services.cloud_sync import get_cloud_sync
 
 OPLOG_CACHE_PATH = DATA_DIR / "state" / "operations.json"
 ARTICLES_CACHE_PATH = DATA_DIR / "state" / "articles.json"
 MATERIALS_META_PATH = DATA_DIR / "state" / "materials_meta.json"
 PUBLISH_EFFECTS_PATH = DATA_DIR / "state" / "publish_effects.json"
+CREDITS_CACHE_PATH = DATA_DIR / "state" / "credits.json"
+
+# 积分配置
+INITIAL_CREDITS = 100          # 首次启用赠送积分
+PUBLISH_COST = 10              # 每次发布消耗积分
+CHECKIN_REWARDS = [5, 10, 15, 20, 25, 30, 50]  # 连续签到7天的奖励
+MAX_CREDIT_HISTORY = 500       # 积分流水保留条数
 
 
 class AppState:
@@ -386,6 +394,253 @@ class AppState:
 
     def get_image_scores(self) -> Dict[str, Dict[str, Any]]:
         return dict(self.image_scores)
+
+    # ── 积分系统 ──────────────────────────────────────
+
+    @staticmethod
+    def _load_credits() -> Dict[str, Any]:
+        raw = read_json(CREDITS_CACHE_PATH, default={})
+        if not isinstance(raw, dict):
+            raw = {}
+        # 首次使用赠送初始积分
+        if "balance" not in raw:
+            raw["balance"] = INITIAL_CREDITS
+            raw["transactions"] = [{
+                "id": str(uuid.uuid4()),
+                "type": "earn",
+                "source": "gift",
+                "amount": INITIAL_CREDITS,
+                "balance_after": INITIAL_CREDITS,
+                "description": "新用户赠送积分",
+                "created_at": datetime.now().isoformat(),
+            }]
+            raw["daily_checkin"] = {"last_date": "", "streak": 0}
+            raw["checkin_history"] = {}
+            write_json(CREDITS_CACHE_PATH, raw)
+        # 确保 checkin_history 字段存在（兼容旧数据）
+        if "checkin_history" not in raw:
+            raw["checkin_history"] = {}
+        return raw
+
+    def _ensure_credits(self) -> Dict[str, Any]:
+        if not hasattr(self, '_credits'):
+            self._credits = self._load_credits()
+        return self._credits
+
+    def _save_credits(self) -> None:
+        write_json(CREDITS_CACHE_PATH, self._credits)
+        # 异步同步到云端（不阻塞主线程）
+        try:
+            cloud_sync = get_cloud_sync()
+            if cloud_sync.is_configured():
+                import threading
+                threading.Thread(
+                    target=cloud_sync.sync_credits,
+                    args=(self._credits.copy(),),
+                    daemon=True
+                ).start()
+        except Exception:
+            pass  # 同步失败不影响本地操作
+
+    def get_credits_balance(self) -> int:
+        """获取当前积分余额。"""
+        credits = self._ensure_credits()
+        return int(credits.get("balance", 0))
+
+    def get_checkin_status(self) -> Dict[str, Any]:
+        """获取今日签到状态。"""
+        credits = self._ensure_credits()
+        checkin = credits.get("daily_checkin", {})
+        last_date = checkin.get("last_date", "")
+        streak = checkin.get("streak", 0)
+        today = datetime.now().strftime("%Y-%m-%d")
+        can_checkin = last_date != today
+
+        # 如果断签（最后签到不是今天也不是昨天），重置 streak 为 0
+        yesterday = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                     - timedelta(days=1)).strftime("%Y-%m-%d")
+        if last_date not in (today, yesterday):
+            streak = 0
+
+        # 计算今日签到可获得的积分
+        if can_checkin:
+            day_index = min(streak, len(CHECKIN_REWARDS) - 1)
+            today_earned = CHECKIN_REWARDS[day_index]
+        else:
+            today_earned = 0
+        return {
+            "can_checkin": can_checkin,
+            "streak": streak,
+            "today_earned": today_earned,
+        }
+
+    def checkin(self) -> Dict[str, Any]:
+        """执行每日签到，返回签到结果。"""
+        credits = self._ensure_credits()
+        checkin = credits.get("daily_checkin", {"last_date": "", "streak": 0})
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        if checkin.get("last_date") == today:
+            return {"success": False, "message": "今日已签到"}
+
+        # 计算连续天数和积分
+        yesterday = (datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                     - timedelta(days=1)).strftime("%Y-%m-%d")
+        if checkin.get("last_date") == yesterday:
+            streak = checkin.get("streak", 0) + 1
+        else:
+            streak = 1
+
+        # 连续7天后重置
+        if streak > 7:
+            streak = 1
+
+        day_index = min(streak - 1, len(CHECKIN_REWARDS) - 1)
+        earned = CHECKIN_REWARDS[day_index]
+
+        # 更新余额和签到状态
+        credits["balance"] = credits.get("balance", 0) + earned
+        credits["daily_checkin"] = {"last_date": today, "streak": streak}
+
+        # 记录签到历史（用于日历展示）
+        if "checkin_history" not in credits:
+            credits["checkin_history"] = {}
+        credits["checkin_history"][today] = {
+            "earned": earned,
+            "streak": streak,
+        }
+
+        # 记录交易
+        if "transactions" not in credits:
+            credits["transactions"] = []
+        credits["transactions"].append({
+            "id": str(uuid.uuid4()),
+            "type": "earn",
+            "source": "checkin",
+            "amount": earned,
+            "balance_after": credits["balance"],
+            "description": f"连续签到第{streak}天",
+            "created_at": datetime.now().isoformat(),
+        })
+        # 截断历史记录
+        credits["transactions"] = credits["transactions"][-MAX_CREDIT_HISTORY:]
+        self._save_credits()
+
+        return {
+            "success": True,
+            "earned": earned,
+            "streak": streak,
+            "balance": credits["balance"],
+        }
+
+    def get_checkin_history(self, year: int, month: int) -> Dict[str, Any]:
+        """获取指定月份的签到历史记录。"""
+        credits = self._ensure_credits()
+        checkin_history = credits.get("checkin_history", {})
+
+        # 计算当月第一天和最后一天
+        first_day = datetime(year, month, 1)
+        if month == 12:
+            last_day = datetime(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            last_day = datetime(year, month + 1, 1) - timedelta(days=1)
+
+        # 提取当月签到记录
+        records = {}
+        current = first_day
+        while current <= last_day:
+            date_str = current.strftime("%Y-%m-%d")
+            if date_str in checkin_history:
+                records[date_str] = checkin_history[date_str]
+            current += timedelta(days=1)
+
+        # 计算当月统计
+        total_days = last_day.day
+        checked_days = len(records)
+        total_earned = sum(r.get("earned", 0) for r in records.values())
+
+        # 计算当前连续签到天数
+        checkin = credits.get("daily_checkin", {})
+        current_streak = checkin.get("streak", 0)
+
+        # 计算当月最长连续签到
+        max_streak = 0
+        current_streak_in_month = 0
+        current = first_day
+        while current <= last_day:
+            date_str = current.strftime("%Y-%m-%d")
+            if date_str in records:
+                current_streak_in_month += 1
+                max_streak = max(max_streak, current_streak_in_month)
+            else:
+                current_streak_in_month = 0
+            current += timedelta(days=1)
+
+        return {
+            "year": year,
+            "month": month,
+            "records": records,
+            "total_days": total_days,
+            "checked_days": checked_days,
+            "total_earned": total_earned,
+            "current_streak": current_streak,
+            "max_streak_in_month": max_streak,
+        }
+
+    def spend_credits(self, amount: int, source: str, description: str) -> bool:
+        """扣除积分。余额不足时返回 False。"""
+        credits = self._ensure_credits()
+        balance = credits.get("balance", 0)
+        if balance < amount:
+            return False
+        credits["balance"] = balance - amount
+        if "transactions" not in credits:
+            credits["transactions"] = []
+        credits["transactions"].append({
+            "id": str(uuid.uuid4()),
+            "type": "spend",
+            "source": source,
+            "amount": -amount,
+            "balance_after": credits["balance"],
+            "description": description,
+            "created_at": datetime.now().isoformat(),
+        })
+        credits["transactions"] = credits["transactions"][-MAX_CREDIT_HISTORY:]
+        self._save_credits()
+        return True
+
+    def add_credits(self, amount: int, source: str, description: str) -> int:
+        """增加积分，返回增加后的余额。"""
+        credits = self._ensure_credits()
+        credits["balance"] = credits.get("balance", 0) + amount
+        if "transactions" not in credits:
+            credits["transactions"] = []
+        credits["transactions"].append({
+            "id": str(uuid.uuid4()),
+            "type": "earn",
+            "source": source,
+            "amount": amount,
+            "balance_after": credits["balance"],
+            "description": description,
+            "created_at": datetime.now().isoformat(),
+        })
+        credits["transactions"] = credits["transactions"][-MAX_CREDIT_HISTORY:]
+        self._save_credits()
+        return credits["balance"]
+
+    def get_credits_history(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """获取积分流水，按时间倒序。"""
+        credits = self._ensure_credits()
+        transactions = list(reversed(credits.get("transactions", [])))
+        total = len(transactions)
+        start = (page - 1) * page_size
+        end = start + page_size
+        return {
+            "transactions": transactions[start:end],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
 
 # 全局单例

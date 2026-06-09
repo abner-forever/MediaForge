@@ -1,4 +1,5 @@
-import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary } from '../types';
+import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary, CheckinStatus, UserProfile } from '../types';
+import type { PublishTaskState } from './queueSlice';
 
 /* ── Theme Presets ──────────────────────────── */
 export interface ThemePreset {
@@ -101,6 +102,15 @@ export interface AppState {
   queue: QueueItem[];
   setQueue: (q: QueueItem[]) => void;
 
+  // Queue publishing tasks (global, persists across page navigation)
+  publishingTasks: Record<string, PublishTaskState>;
+  startPublishTask: (id: string, action: 'draft' | 'publish', title: string) => void;
+  updatePublishTask: (id: string, updates: Partial<PublishTaskState>) => void;
+  addPublishLog: (id: string, log: string) => void;
+  finishPublishTask: (id: string, success: boolean, error?: string) => void;
+  removePublishTask: (id: string) => void;
+  getActiveTaskCount: () => number;
+
   // Articles
   articles: ArticleItem[];
   currentArticle: ArticleItem | null;
@@ -167,4 +177,21 @@ export interface AppState {
   sidebarWidth: number;
   sidebarWidthSynced: boolean;
   setSidebarWidth: (w: number) => void;
+
+  // Credits
+  creditsBalance: number;
+  checkinStatus: CheckinStatus;
+  setCreditsBalance: (balance: number) => void;
+  setCheckinStatus: (status: CheckinStatus) => void;
+
+  // User
+  isAuthenticated: boolean;
+  user: UserProfile | null;
+  token: string | null;
+  setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
+  setAuthenticated: (isAuthenticated: boolean) => void;
+  login: (user: UserProfile, token: string) => void;
+  logout: () => void;
+  updateUserInfo: (updates: Partial<UserProfile>) => void;
 }

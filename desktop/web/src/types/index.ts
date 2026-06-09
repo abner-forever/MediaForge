@@ -9,3 +9,6 @@ export type { PipelineConfig, PipelineEvent, PipelineSummary } from './pipeline'
 export type { DuplicateCheckResult } from './compliance';
 export type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareItem, EffectCompareData, MpArticlesResponse, TopArticle, ImageAnalysisItem, AiAnalysisEvent } from './effects';
 export type { WeiboLoginEvent, WeiboVerifyResult, ToutiaoLoginEvent, ToutiaoVerifyResult } from './auth';
+export type { CreditsInfo, CheckinStatus, CheckinResult, CreditTransaction, CreditsHistory, CheckinRecord, CheckinHistory } from './credits';
+export type { SyncStatus, SyncConfigRequest, SyncResult, DeviceInfo } from './sync';
+export type { UserProfile, LoginResponse, RegisterResponse, SendCodeResponse, UserState, LoginRequest, LoginWithCodeRequest, RegisterRequest, ResetPasswordRequest, ChangePasswordRequest } from './user';

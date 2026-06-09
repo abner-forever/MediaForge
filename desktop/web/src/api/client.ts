@@ -33,3 +33,6 @@ export { articleApi } from './articles';
 export { complianceApi } from './compliance';
 export { effectsApi } from './effects';
 export { pipelineApi } from './pipeline';
+export { creditsApi } from './credits';
+export { syncApi } from './sync';
+export { userApi } from './user';

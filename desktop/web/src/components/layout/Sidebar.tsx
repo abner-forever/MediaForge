@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { wechatAccountApi, type WeChatAccount } from '../../api/client';
 import { useStore } from '../../stores';
@@ -26,7 +26,9 @@ const ICONS = {
   list: (<Icon><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></Icon>),
   image: (<Icon><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></Icon>),
   effects: (<Icon><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></Icon>),
+  credits: (<Icon><circle cx="12" cy="12" r="10" /><path d="M12 6v12" /><path d="M15.5 9.5a3.5 3.5 0 0 0-3.5-1c-2.5 0-3.5 1.5-3.5 3s1 2.5 3.5 3c2.5.5 3.5 1.5 3.5 3s-1 3-3.5 3a3.5 3.5 0 0 1-3.5-1" /></Icon>),
   settings: (<Icon className="w-4 h-4"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.51-1 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1.51 1 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></Icon>),
+  user: (<Icon><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>),
 } as const;
 
 const NAV_ITEMS = [
@@ -46,6 +48,10 @@ export default function Sidebar() {
   const width = useStore(s => s.sidebarWidth);
   const setWidth = useStore(s => s.setSidebarWidth);
   const pipelineRunning = useStore(s => s.pipelineRunning);
+  const publishingTasks = useStore(s => s.publishingTasks);
+  const isAuthenticated = useStore(s => s.isAuthenticated);
+  const user = useStore(s => s.user);
+  const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [hoverHandle, setHoverHandle] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
@@ -53,6 +59,9 @@ export default function Sidebar() {
   const startWidthRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const startupCheckDone = useRef(false);
+
+  // 计算活跃的发布任务数
+  const activePublishCount = Object.values(publishingTasks).filter(t => t.status === 'publishing').length;
 
   const collapsed = width <= NARROW_WIDTH + 10;
   const effectiveWidth = collapsed ? NARROW_WIDTH : width;
@@ -172,6 +181,7 @@ export default function Sidebar() {
       <nav style={{ flex: 1, padding: collapsed ? '0 6px' : '0 10px' }}>
         {NAV_ITEMS.map((item) => {
           const isPipelineRunning = item.path === '/pipeline' && pipelineRunning;
+          const isQueuePublishing = item.path === '/queue' && activePublishCount > 0;
           return (
             <NavLink
               key={item.path}
@@ -189,7 +199,7 @@ export default function Sidebar() {
             >
               <div style={{ position: 'relative' }}>
                 {item.icon}
-                {isPipelineRunning && (
+                {(isPipelineRunning || isQueuePublishing) && (
                   <div style={{
                     position: 'absolute',
                     top: -2,
@@ -214,6 +224,13 @@ export default function Sidebar() {
                 }}>
                   运行中
                 </span>
+              )}
+              {isQueuePublishing && !collapsed && (
+                <span
+                  className="inline-block w-3 h-3 border-2 border-accent/30 border-t-accent rounded-full animate-spin"
+                  style={{ marginLeft: 'auto' }}
+                  title={`${activePublishCount} 个任务发布中`}
+                />
               )}
             </NavLink>
           );
@@ -245,6 +262,41 @@ export default function Sidebar() {
             </div>
           </NavLink>
         )}
+        {/* 用户中心/登录按钮 */}
+        {isAuthenticated ? (
+          <NavLink
+            to="/user"
+            className={({ isActive }) =>
+              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium ${
+                isActive
+                  ? 'nav-active'
+                  : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
+              }`
+            }
+            style={{ textDecoration: 'none' }}
+            title={collapsed ? user?.nickname || '用户中心' : undefined}
+          >
+            {ICONS.user}
+            {!collapsed && <span>{user?.nickname || '用户中心'}</span>}
+          </NavLink>
+        ) : (
+          <NavLink
+            to="/auth"
+            className={({ isActive }) =>
+              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-[10px] rounded-lg text-sm font-medium ${
+                isActive
+                  ? 'nav-active'
+                  : 'text-[var(--sidebar-text-muted)] hover:text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover)]'
+              }`
+            }
+            style={{ textDecoration: 'none' }}
+            title={collapsed ? '登录' : undefined}
+          >
+            {ICONS.user}
+            {!collapsed && <span>登录</span>}
+          </NavLink>
+        )}
+
         <NavLink
           to="/settings"
           end

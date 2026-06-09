@@ -601,6 +601,10 @@ def _run_article_publish_background(
         app_state.update_article(article_id, {"status": status})
         action = "保存草稿" if save_draft else "发布"
         app_state.add_operation(action, f"文章「{title}」")
+        # 发布成功后扣除积分（保存草稿不扣）
+        if not save_draft:
+            from desktop.app_state import PUBLISH_COST
+            app_state.spend_credits(PUBLISH_COST, "publish", f"发布文章「{title}」")
         for img in raw_images:
             app_state.update_materials_meta(img, {"used_count": (app_state.get_materials_meta(img) or {}).get("used_count", 0) + 1})
     else:
@@ -623,6 +627,16 @@ async def publish_article_endpoint(article_id: str, req: ArticlePublishRequest):
     if not title:
         from desktop.api_helpers import raise_friendly
         raise_friendly(400, "标题为空")
+
+    # 发布前检查积分（保存草稿不扣积分）
+    if not req.save_draft and not req.dry_run:
+        from desktop.app_state import PUBLISH_COST
+        balance = app_state.get_credits_balance()
+        if balance < PUBLISH_COST:
+            raise HTTPException(
+                402,
+                f"积分不足，当前余额 {balance} 积分，发布需要 {PUBLISH_COST} 积分。请先签到或获取积分。"
+            )
 
     content_html = build_html(content, images)
     abs_images = [str(DOWNLOAD_DIR / img) if not Path(img).is_absolute() else img for img in images]

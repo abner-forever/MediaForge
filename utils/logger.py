@@ -80,3 +80,7 @@ def get_logger(name: str = "MediaForge") -> logging.Logger:
     handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(handler)
     return logger
+
+
+# 模块级默认 logger，供 `from utils.logger import log` 使用
+log = get_logger()

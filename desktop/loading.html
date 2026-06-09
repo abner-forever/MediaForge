@@ -741,6 +741,10 @@
       <div class="progress-bar"></div>
     </div>
 
+    <!-- 错误提示 -->
+    <div id="error" style="display:none;margin-top:24px;font-size:14px;color:#ff6b6b;text-align:center;"></div>
+    <button id="retryBtn" style="display:none;margin:12px auto 0;padding:8px 24px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(255,255,255,0.1);color:#fff;font-size:14px;cursor:pointer;" onclick="window.location.reload()">重试</button>
+
   </div>
 
   <script>
@@ -779,13 +783,6 @@
       particles.appendChild(particle);
     }
     (function () {
-      var dots = document.querySelector('.dots');
-      var dotCount = 0;
-      setInterval(function () {
-        dotCount = (dotCount + 1) % 4;
-        dots.textContent = '.'.repeat(dotCount);
-      }, 500);
-
       var retries = 0, maxRetries = 90, target = '__TARGET_URL__';
       var errorEl = document.getElementById('error');
       var retryBtn = document.getElementById('retryBtn');
@@ -796,9 +793,11 @@
         img.onerror = function () {
           if (++retries < maxRetries) setTimeout(check, 2000);
           else {
-            errorEl.style.display = 'block';
-            errorEl.textContent = '服务启动超时，请检查日志后重启应用';
-            retryBtn.style.display = 'inline-block';
+            if (errorEl) {
+              errorEl.style.display = 'block';
+              errorEl.textContent = '服务启动超时，请检查日志后重启应用';
+            }
+            if (retryBtn) retryBtn.style.display = 'inline-block';
           }
         };
         img.src = target + '/static/logo-icon.png?_=' + Date.now();
