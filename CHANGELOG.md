@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.21.0 (2026-06-09)
+
+### Features
+
+- 添加用户系统、积分体系与云同步功能
+  ([`793a3a9`](https://github.com/abner-forever/MediaForge/commit/793a3a9a8171769c137e401a941d9a233247ddd6))
+
+
 ## v1.20.2 (2026-06-04)
 
 ### Bug Fixes
