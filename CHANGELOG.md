@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.0 (2026-06-15)
+
+### Features
+
+- Enhance content generation with web search capabilities
+  ([`83a0030`](https://github.com/abner-forever/MediaForge/commit/83a00302ca5bbd0b8a1650d0d85f002da9c6a651))
+
+
 ## v1.21.0 (2026-06-09)
 
 ### Features
