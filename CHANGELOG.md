@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.1 (2026-06-15)
+
+### Bug Fixes
+
+- Enhance PDF and text previews, improve article card loading effects, and add AI caption polishing
+  ([`4b78d70`](https://github.com/abner-forever/MediaForge/commit/4b78d708febdf2073299c1df3a5e7d4155d53f8d))
+
+
 ## v1.22.0 (2026-06-15)
 
 ### Features
