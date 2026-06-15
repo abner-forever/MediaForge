@@ -3,7 +3,7 @@
 import csv
 import io
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -299,118 +299,281 @@ async def image_analysis():
 
 
 def _build_data_summary(days: int) -> str:
-    """收集效果数据并构建结构化摘要文本，供 AI 分析使用。"""
+    """增强版数据摘要：含多周期对比、逐日趋势、环比变化、艺人效率变化。"""
     effects = app_state.get_publish_effects()
     if not effects:
         return "暂无数据。"
 
-    cutoff = None
-    if days > 0:
-        cutoff = datetime.now() - timedelta(days=days)
+    today = datetime.now().date()
 
-    # 按时间筛选
-    filtered = {}
-    for k, v in effects.items():
-        if cutoff:
+    # ── 辅助：按日期范围筛选 ────────────────────────────
+    def _filter_in_range(start: date | None, end: date | None) -> dict:
+        """筛选 publish_time 在 [start, end) 范围内的记录。"""
+        result = {}
+        for k, v in effects.items():
             dt = _parse_publish_time(v.get("publish_time"))
-            if not dt or dt < cutoff:
+            if not dt:
                 continue
-        filtered[k] = v
+            d = dt.date()
+            if start and d < start:
+                continue
+            if end and d >= end:
+                continue
+            result[k] = v
+        return result
 
-    if not filtered:
+    def _aggregate(items: dict) -> dict:
+        """对一组效果记录做聚合统计。"""
+        total = len(items)
+        total_reads = sum(v.get("reads", 0) or 0 for v in items.values())
+        total_likes = sum(v.get("likes", 0) or 0 for v in items.values())
+        total_shares = sum(v.get("shares", 0) or 0 for v in items.values())
+        total_favorites = sum(v.get("favorites", 0) or 0 for v in items.values())
+        total_comments = sum((v.get("comment_num") or v.get("comments") or 0) for v in items.values())
+        avg_reads = round(total_reads / total) if total else 0
+        engagement = round(
+            (total_likes + total_shares + total_comments + total_favorites) / total_reads * 100, 2
+        ) if total_reads > 0 else 0
+        return {
+            "posts": total, "reads": total_reads, "likes": total_likes,
+            "shares": total_shares, "favorites": total_favorites, "comments": total_comments,
+            "avg_reads": avg_reads, "engagement": engagement,
+        }
+
+    def _fmt(n: int) -> str:
+        """数字格式化，千位加逗号。"""
+        return f"{n:,}"
+
+    def _pct_str(v: float) -> str:
+        """百分比字符串，带方向箭头。"""
+        prefix = "+" if v > 0 else ""
+        return f"{prefix}{v:.1f}% {'↑' if v > 0 else '↓' if v < 0 else '→'}"
+
+    # ── 确定时间范围 ────────────────────────────────────
+    main_start: date | None = None
+    prev_start: date | None = None
+    main_end: date = today + timedelta(days=1)  # 包含今天
+    main_days = days if days > 0 else 9999
+
+    if days > 0:
+        main_start = today - timedelta(days=days)
+        prev_start = main_start - timedelta(days=days)
+
+    # ── 本期数据 ────────────────────────────────────────
+    main_items = _filter_in_range(main_start, main_end)
+    if not main_items:
         return "所选时间范围内暂无数据。"
 
-    total = len(filtered)
-    total_reads = sum(v.get("reads", 0) or 0 for v in filtered.values())
-    total_likes = sum(v.get("likes", 0) or 0 for v in filtered.values())
-    total_shares = sum(v.get("shares", 0) or 0 for v in filtered.values())
-    total_favorites = sum(v.get("favorites", 0) or 0 for v in filtered.values())
-    total_comments = sum((v.get("comment_num") or v.get("comments") or 0) for v in filtered.values())
+    main_agg = _aggregate(main_items)
+    range_label = f"近 {days} 天" if days > 0 else "全部时间"
 
-    # 艺人数据
-    celeb_data: dict[str, list[int]] = defaultdict(list)
-    for item in filtered.values():
-        celeb = item.get("celebrity")
-        if celeb:
-            celeb_data[celeb].append(item.get("reads", 0) or 0)
+    lines = []
+    lines.append(f"统计周期：{range_label}")
+    lines.append(f"文章总数：{main_agg['posts']} 篇")
+    lines.append(f"总阅读量：{_fmt(main_agg['reads'])}")
+    lines.append(f"总点赞数：{_fmt(main_agg['likes'])}")
+    lines.append(f"总评论数：{_fmt(main_agg['comments'])}")
+    lines.append(f"总转发数：{_fmt(main_agg['shares'])}")
+    lines.append(f"总收藏数：{_fmt(main_agg['favorites'])}")
+    lines.append(f"平均阅读/篇：{_fmt(main_agg['avg_reads'])}")
+    lines.append(f"整体互动率：{main_agg['engagement']}%")
+    lines.append(f"日均发布：{main_agg['posts'] / max(days, 1 if main_agg['posts'] else 1):.1f} 篇")
+    lines.append("")
 
-    celeb_lines = []
-    for name, vals in sorted(celeb_data.items(), key=lambda x: sum(x[1]) / len(x[1]) if x[1] else 0, reverse=True)[:10]:
-        avg = round(sum(vals) / len(vals)) if vals else 0
-        celeb_lines.append(f"  - {name}：{len(vals)} 篇，平均阅读 {avg}")
+    # ── 上一周期对比 ────────────────────────────────────
+    prev_items: dict = {}
+    if prev_start and days > 0:
+        prev_items = _filter_in_range(prev_start, main_start)
+        if prev_items:
+            prev_agg = _aggregate(prev_items)
+            delta_avg = ((main_agg['avg_reads'] - prev_agg['avg_reads']) / max(prev_agg['avg_reads'], 1)) * 100
+            delta_posts = ((main_agg['posts'] - prev_agg['posts']) / max(prev_agg['posts'], 1)) * 100
+            delta_reads = ((main_agg['reads'] - prev_agg['reads']) / max(prev_agg['reads'], 1)) * 100
+            lines.append(f"=== 与上期对比（此前{main_days}天）===")
+            lines.append(f"上期文章：{prev_agg['posts']} 篇（{_pct_str(delta_posts)}）")
+            lines.append(f"上期总阅读：{_fmt(prev_agg['reads'])}（{_pct_str(delta_reads)}）")
+            lines.append(f"上期平均阅读：{_fmt(prev_agg['avg_reads'])}（{_pct_str(delta_avg)}）")
+            lines.append(f"上期互动率：{prev_agg['engagement']}%（当前 {main_agg['engagement']}%）")
+            lines.append("")
 
-    # 时段数据
+    # ── 周期内分段的补充对比（7天/14天/30天互相嵌套） ──
+    # 如果周期 > 14，额外对比最近 7 天 vs 再之前 7 天
+    # 如果周期 > 30，额外对比最近 14 天 vs 再之前 14 天
+    if days > 14:
+        last7 = _filter_in_range(today - timedelta(days=6), main_end)
+        prev7 = _filter_in_range(today - timedelta(days=13), today - timedelta(days=6))
+        if last7 and prev7:
+            a7 = _aggregate(last7)
+            b7 = _aggregate(prev7)
+            d7 = ((a7['avg_reads'] - b7['avg_reads']) / max(b7['avg_reads'], 1)) * 100
+            lines.append(f"近 7 天 vs 前 7 天：平均阅读 {_fmt(a7['avg_reads'])} vs {_fmt(b7['avg_reads'])}（{_pct_str(d7)}）")
+            lines.append(f"  近 7 天日均 {a7['posts']/7:.1f} 篇 | 前 7 天日均 {b7['posts']/7:.1f} 篇")
+            lines.append("")
+
+    if days > 28:
+        last14 = _filter_in_range(today - timedelta(days=13), main_end)
+        prev14 = _filter_in_range(today - timedelta(days=27), today - timedelta(days=13))
+        if last14 and prev14:
+            a14 = _aggregate(last14)
+            b14 = _aggregate(prev14)
+            d14 = ((a14['avg_reads'] - b14['avg_reads']) / max(b14['avg_reads'], 1)) * 100
+            lines.append(f"近 14 天 vs 前 14 天：平均阅读 {_fmt(a14['avg_reads'])} vs {_fmt(b14['avg_reads'])}（{_pct_str(d14)}）")
+            lines.append("")
+
+    # ── 逐日趋势（只显示最近 14 天，或整个周期 < 14 天） ──
+    from datetime import timedelta as td
+    daily_window = min(days, 14) if days > 0 else 14
+    trend_start = today - td(days=daily_window - 1)
+    daily_raw: dict[str, list] = defaultdict(list)
+    for item in effects.values():
+        dt = _parse_publish_time(item.get("publish_time"))
+        if not dt:
+            continue
+        d = dt.date()
+        if d < trend_start:
+            continue
+        daily_raw[d.isoformat()].append(item)
+
+    if daily_raw:
+        lines.append("=== 逐日数据（最近 {} 天）===".format(daily_window))
+        lines.append(f"{'日期':<12} {'篇数':>4} {'阅读':>7} {'点赞':>5} {'分享':>5} {'互动率':>8} {'环比阅读变化':<14}")
+        lines.append("-" * 60)
+        sorted_dates = sorted(daily_raw.keys())
+        prev_reads = None
+        for d_str in sorted_dates:
+            items = daily_raw[d_str]
+            reads = sum(v.get("reads", 0) or 0 for v in items)
+            likes = sum(v.get("likes", 0) or 0 for v in items)
+            shares = sum(v.get("shares", 0) or 0 for v in items)
+            comments = sum((v.get("comment_num") or v.get("comments") or 0) for v in items)
+            posts = len(items)
+            engage = round((likes + shares + comments) / reads * 100, 1) if reads > 0 else 0
+            if prev_reads is not None and prev_reads > 0:
+                chg = ((reads - prev_reads) / prev_reads) * 100
+                chg_str = f"{chg:+.1f}% {'↑' if chg > 0 else '↓'}"
+            else:
+                chg_str = "-"
+            lines.append(f"{d_str:<12} {posts:>4} {reads:>7} {likes:>5} {shares:>5} {engage:>7.1f}% {chg_str:<14}")
+            prev_reads = reads
+        lines.append("")
+
+    # ── 艺人效率分析（含上期对比） ──────────────────────
+    def _celeb_stats(items: dict) -> dict[str, dict]:
+        stats: dict[str, dict] = defaultdict(lambda: {"reads": [], "likes": [], "posts": 0})
+        for v in items.values():
+            celeb = v.get("celebrity")
+            if not celeb:
+                continue
+            stats[celeb]["reads"].append(v.get("reads", 0) or 0)
+            stats[celeb]["likes"].append(v.get("likes", 0) or 0)
+            stats[celeb]["posts"] += 1
+        return stats
+
+    main_celeb = _celeb_stats(main_items)
+    if prev_start and days > 0:
+        prev_celeb = _celeb_stats(prev_items)
+    else:
+        prev_celeb = {}
+
+    if main_celeb:
+        lines.append("=== 艺人效率排行 ===")
+        lines.append(f"{'排名':>4} {'艺人':<8} {'篇数':>4} {'总阅读':>7} {'平均阅读':>8} {'最高':>6} {'上期平均':>8} {'变化':<10}")
+        lines.append("-" * 65)
+        ranked = sorted(
+            main_celeb.items(),
+            key=lambda x: sum(x[1]["reads"]) / max(len(x[1]["reads"]), 1),
+            reverse=True,
+        )[:15]
+        for i, (name, stats) in enumerate(ranked, 1):
+            avg_r = round(sum(stats["reads"]) / len(stats["reads"])) if stats["reads"] else 0
+            max_r = max(stats["reads"]) if stats["reads"] else 0
+            prev_avg = round(sum(prev_celeb.get(name, {}).get("reads", [])) / max(len(prev_celeb.get(name, {}).get("reads", [])), 1)) if prev_celeb else None
+            if prev_avg and prev_avg > 0:
+                ce_delta = ((avg_r - prev_avg) / prev_avg) * 100
+                ce_str = _pct_str(ce_delta)
+            elif prev_avg is not None:
+                ce_str = "新艺人 ↑"
+            else:
+                ce_str = "-"
+            lines.append(f"{i:>4} {name:<8} {stats['posts']:>4} {_fmt(sum(stats['reads'])):>7} {_fmt(avg_r):>8} {_fmt(max_r):>6} {_fmt(prev_avg) if prev_avg else 'N/A':>8} {ce_str:<10}")
+        lines.append("")
+
+    # ── 异常检测：环比下降最大的几天 ────────────────────
+    if len(sorted_dates) >= 3:
+        drops = []
+        for i in range(1, len(sorted_dates)):
+            prev_d = sorted_dates[i - 1]
+            cur_d = sorted_dates[i]
+            prev_r = sum(v.get("reads", 0) or 0 for v in daily_raw[prev_d])
+            cur_r = sum(v.get("reads", 0) or 0 for v in daily_raw[cur_d])
+            if prev_r > 0 and cur_r < prev_r * 0.5:  # 下降超过 50%
+                drops.append((cur_d, prev_d, prev_r, cur_r, (cur_r - prev_r) / prev_r * 100))
+
+        if drops:
+            lines.append("=== 异常波动检测（阅读量单日下降超 50%） ===")
+            for cur_d, prev_d, prev_r, cur_r, pct in drops[:5]:
+                lines.append(f"  {cur_d}：{_fmt(cur_r)}（较 {prev_d} 的 {_fmt(prev_r)} 下降 {abs(pct):.0f}%）")
+            lines.append("")
+
+    # ── 最佳发布时段 ────────────────────────────────────
     hour_reads: dict[int, int] = defaultdict(int)
     dow_reads: dict[int, int] = defaultdict(int)
-    for item in filtered.values():
+    for item in main_items.values():
         dt = _parse_publish_time(item.get("publish_time"))
         if dt:
             hour_reads[dt.hour] += item.get("reads", 0) or 0
             dow_reads[dt.weekday()] += item.get("reads", 0) or 0
 
     dow_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-    best_hours = sorted(hour_reads.items(), key=lambda x: x[1], reverse=True)[:3]
-    best_dows = sorted(dow_reads.items(), key=lambda x: x[1], reverse=True)[:3]
 
-    hour_lines = [f"  - {h}时：{reads} 阅读" for h, reads in best_hours]
-    dow_lines = [f"  - {dow_names[d]}：{reads} 阅读" for d, reads in best_dows]
+    lines.append("=== 最佳发布时段 ===")
+    lines.append("小时维度（Top 5）：")
+    for h, r in sorted(hour_reads.items(), key=lambda x: x[1], reverse=True)[:5]:
+        lines.append(f"  {h:02d}:00 — {_fmt(r)} 阅读")
+    lines.append("星期维度：")
+    for d, r in sorted(dow_reads.items(), key=lambda x: x[1], reverse=True):
+        lines.append(f"  {dow_names[d]} — {_fmt(r)} 阅读")
+    lines.append("")
 
-    # 图片数量分析
+    # ── 图片数量分析 ────────────────────────────────────
     img_groups: dict[int, list[int]] = defaultdict(list)
-    for item in filtered.values():
+    for item in main_items.values():
         ic = item.get("image_count") or 0
         reads = item.get("reads", 0) or 0
         if reads > 0:
             img_groups[ic].append(reads)
-    img_lines = []
-    for ic in sorted(img_groups):
-        vals = img_groups[ic]
-        avg = round(sum(vals) / len(vals)) if vals else 0
-        img_lines.append(f"  - {ic} 张图：{len(vals)} 篇，平均阅读 {avg}")
+    if img_groups:
+        lines.append("=== 图片数量 vs 阅读量 ===")
+        for ic in sorted(img_groups):
+            vals = img_groups[ic]
+            avg = round(sum(vals) / len(vals)) if vals else 0
+            lines.append(f"  {ic} 张图：{len(vals)} 篇，平均阅读 {_fmt(avg)}")
+        lines.append("")
 
-    # 爆款文章 Top5
-    top5 = sorted(filtered.values(), key=lambda x: x.get("reads", 0) or 0, reverse=True)[:5]
-    top_lines = []
-    for item in top5:
-        title = item.get("title", "无标题")
-        reads = item.get("reads", 0) or 0
-        likes = item.get("likes", 0) or 0
-        top_lines.append(f"  - 《{title}》阅读 {reads}，点赞 {likes}")
+    # ── 爆款文章 Top5 ──────────────────────────────────
+    top5 = sorted(main_items.values(), key=lambda x: x.get("reads", 0) or 0, reverse=True)[:5]
+    if top5:
+        lines.append("=== 爆款文章 Top5 ===")
+        for item in top5:
+            title = item.get("title", "无标题")[:45]
+            reads = item.get("reads", 0) or 0
+            likes = item.get("likes", 0) or 0
+            celeb = item.get("celebrity", "")
+            lines.append(f"  - 《{title}》（{celeb}）阅读 {_fmt(reads)}，点赞 {likes}")
+        lines.append("")
 
-    # 互动率
-    engagement_rate = round((total_likes + total_shares + total_comments + total_favorites) / total_reads * 100, 2) if total_reads > 0 else 0
-    like_rate = round(total_likes / total_reads * 100, 2) if total_reads > 0 else 0
-    share_rate = round(total_shares / total_reads * 100, 2) if total_reads > 0 else 0
+    # ── 低质文章 Top5（阅读最低且刚发布的） ────────────
+    low5 = sorted(main_items.values(), key=lambda x: x.get("reads", 0) or 0)[:5]
+    if low5 and any((v.get("reads", 0) or 0) < 100 for v in low5):
+        lines.append("=== 低质文章（阅读 < 100） ===")
+        for item in low5:
+            title = item.get("title", "无标题")[:40]
+            reads = item.get("reads", 0) or 0
+            celeb = item.get("celebrity", "")
+            lines.append(f"  - 《{title}》（{celeb}）阅读 {reads}")
+        lines.append("")
 
-    range_label = f"近 {days} 天" if days > 0 else "全部时间"
-
-    summary = f"""统计周期：{range_label}
-文章总数：{total} 篇
-总阅读量：{total_reads}
-总点赞数：{total_likes}
-总转发数：{total_shares}
-总收藏数：{total_favorites}
-总评论数：{total_comments}
-平均阅读：{round(total_reads / total) if total else 0}
-平均点赞：{round(total_likes / total) if total else 0}
-整体互动率：{engagement_rate}%（点赞率 {like_rate}%，转发率 {share_rate}%）
-
-## 艺人排行（按平均阅读）
-{chr(10).join(celeb_lines) if celeb_lines else "  无艺人数据"}
-
-## 最佳发布时段
-小时维度：
-{chr(10).join(hour_lines) if hour_lines else "  无数据"}
-星期维度：
-{chr(10).join(dow_lines) if dow_lines else "  无数据"}
-
-## 图片数量 vs 阅读量
-{chr(10).join(img_lines) if img_lines else "  无数据"}
-
-## 爆款文章 Top5
-{chr(10).join(top_lines) if top_lines else "  无数据"}"""
-
-    return summary
+    return "\n".join(lines)
 
 
 @router.get("/api/effects/ai-analysis")

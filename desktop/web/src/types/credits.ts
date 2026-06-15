@@ -52,3 +52,50 @@ export interface CheckinHistory {
   current_streak: number;
   max_streak_in_month: number;
 }
+
+/* ── 任务/视频类型 ──────────────────────────── */
+
+/** 可观看的视频元数据 */
+export interface VideoTask {
+  id: string;
+  title: string;
+  filename: string;
+  duration_seconds: number;
+  reward: number;
+  description: string;
+  thumbnail?: string;
+}
+
+/** 每日任务进度 */
+export interface DailyTask {
+  id: string;
+  type: 'video' | 'checkin' | 'invite' | 'profile';
+  label: string;
+  description: string;
+  current: number;
+  target: number;
+  completed: boolean;
+  reward: string;
+  icon: string;
+}
+
+/** 观看视频领取结果 */
+export interface WatchVideoResult {
+  success: boolean;
+  earned: number;
+  daily_count: number;
+  daily_limit: number;
+  balance: number;
+  message?: string;
+}
+
+/** 今日任务列表 */
+export interface DailyTasksResult {
+  tasks: DailyTask[];
+  today_earned: number;
+}
+
+/** 视频列表结果 */
+export interface VideoListResult {
+  videos: VideoTask[];
+}

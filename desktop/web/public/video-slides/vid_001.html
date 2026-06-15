@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自媒体运营技巧 — MediaForge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background: #0f0c29;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  }
+  .slide-container {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    padding: 60px;
+  }
+  .slide.active { opacity: 1; }
+  .slide-title {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .slide-subtitle {
+    font-size: 24px;
+    color: #c4b5fd;
+    margin-bottom: 10px;
+  }
+  .slide-emoji { font-size: 64px; margin-bottom: 20px; }
+  .slide-items {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 700px;
+  }
+  .slide-item {
+    background: rgba(255,255,255,0.06);
+    border-left: 4px solid #6366f1;
+    border-radius: 10px;
+    padding: 16px 20px;
+    font-size: 20px;
+    color: #e2e8f0;
+    line-height: 1.5;
+  }
+  .slide-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #64748b;
+    font-size: 14px;
+  }
+  .controls {
+    position: absolute;
+    bottom: 20px;
+    right: 30px;
+    display: flex;
+    gap: 12px;
+  }
+  .controls button {
+    padding: 8px 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #c4b5fd;
+    font-size: 14px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: all 0.2s;
+  }
+  .controls button:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+  }
+  .progress-dots {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: all 0.3s;
+  }
+  .dot.active { background: #818cf8; width: 24px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="slide-container">
+  <div id="slides"></div>
+  <div class="progress-dots" id="dots"></div>
+  <div class="controls">
+    <button onclick="prevSlide()">◀ 上一页</button>
+    <button onclick="nextSlide()">下一页 ▶</button>
+  </div>
+</div>
+<script>
+const slides = [{"type": "title", "title": "自媒体运营技巧", "subtitle": "提升内容质量，打造个人品牌", "emoji": "🚀"}, {"type": "content", "title": "明确账号定位", "items": ["🎯 确定目标受众 — 谁在看你的内容", "📌 找到垂直领域 — 专注才有深度", "💡 打造个人IP — 让粉丝记住你", "📊 分析竞品账号 — 取长补短"]}, {"type": "content", "title": "内容创作策略", "items": ["✍️ 保持高频更新 — 每周至少 3-5 篇", "🎨 图文并茂 — 提升阅读体验", "📈 数据驱动选题 — 用数据说话", "🔁 系列化内容 — 提升粉丝粘性"]}, {"type": "content", "title": "发布与推广", "items": ["⏰ 把握黄金发布时间", "📱 多平台同步分发", "🤝 社群互动运营", "💰 合理利用付费推广"]}, {"type": "content", "title": "数据分析优化", "items": ["📊 关注阅读量、点赞、评论、转发", "🔍 分析用户画像与兴趣偏好", "🔄 A/B 测试标题和封面", "📝 定期复盘总结方法论"]}, {"type": "summary", "title": "总结", "items": ["✅ 明确定位 + 优质内容", "✅ 持续输出 + 数据驱动", "✅ 善用工具 — MediaForge 助你一臂之力"], "emoji": "🌟"}];
+let current = 0;
+
+function render() {
+  const container = document.getElementById('slides');
+  const dots = document.getElementById('dots');
+  container.innerHTML = slides.map((s, i) => `
+    <div class="slide ${i === 0 ? 'active' : ''}" data-index="${i}">
+      ${s.type === 'title' ? `
+        <div class="slide-emoji">${s.emoji || ''}</div>
+        <div class="slide-title">${s.title}</div>
+        <div class="slide-subtitle">${s.subtitle || ''}</div>
+      ` : s.type === 'summary' ? `
+        <div class="slide-emoji">${s.emoji || '✅'}</div>
+        <div class="slide-title">${s.title}</div>
+        <div class="slide-items">${(s.items || []).map(item => `<div class="slide-item">${item}</div>`).join('')}</div>
+      ` : `
+        <div class="slide-title">${s.title}</div>
+        <div class="slide-items" style="margin-top:20px">${(s.items || []).map(item => `<div class="slide-item">${item}</div>`).join('')}</div>
+      `}
+    </div>
+  `).join('');
+  dots.innerHTML = slides.map((_, i) => `<div class="dot ${i === 0 ? 'active' : ''}"></div>`).join('');
+}
+
+function showSlide(idx) {
+  document.querySelectorAll('.slide').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.dot').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  current = idx;
+}
+
+function nextSlide() { showSlide((current + 1) % slides.length); }
+function prevSlide() { showSlide((current - 1 + slides.length) % slides.length); }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+});
+
+render();
+</script>
+</body>
+</html>

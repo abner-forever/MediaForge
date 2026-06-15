@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # 确保项目根目录在 sys.path 中
@@ -18,16 +19,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import DOWNLOAD_DIR
 from desktop.app_state import app_state
-from desktop.api_helpers import IMAGE_EXT, ScoreRequest, img_rel
+from desktop.api_helpers import IMAGE_EXT, MATERIAL_EXT, ScoreRequest, img_rel
 from services.extensions import score_images_batch
 
 router = APIRouter(tags=["materials"])
 
 
-def _count_images(dir_path: Path) -> int:
+def _count_items(dir_path: Path) -> int:
     count = 0
     for f in dir_path.rglob("*"):
-        if f.is_file() and f.suffix.lower() in IMAGE_EXT:
+        if f.is_file() and f.suffix.lower() in MATERIAL_EXT:
             count += 1
     return count
 
@@ -47,12 +48,14 @@ def _build_tree_node(dir_path: Path, root: Path) -> Optional[dict]:
             if node:
                 children.append(node)
                 item_count += node["item_count"]
-        elif child.suffix.lower() in IMAGE_EXT:
+        elif child.suffix.lower() in MATERIAL_EXT:
             item_count += 1
             files.append({
                 "name": child.name,
                 "path": str(child.relative_to(root).as_posix()),
                 "type": "file",
+                "size": child.stat().st_size,
+                "suffix": child.suffix.lower(),
             })
     return {
         "name": name,
@@ -185,14 +188,15 @@ async def materials_browse(path: str = Query("")):
                 "name": child.name,
                 "path": child.relative_to(root).as_posix(),
                 "type": "folder",
-                "item_count": _count_images(child),
+                "item_count": _count_items(child),
             })
-        elif child.suffix.lower() in IMAGE_EXT:
+        elif child.suffix.lower() in MATERIAL_EXT:
             files.append({
                 "name": child.name,
                 "path": child.relative_to(root).as_posix(),
                 "type": "file",
                 "size": child.stat().st_size,
+                "suffix": child.suffix.lower(),
             })
 
     rel_path = target.relative_to(root)
@@ -339,6 +343,75 @@ async def materials_move_items(req: MoveItemsRequest):
         fp.rename(dest_path)
         moved += 1
     return {"success": True, "moved": moved}
+
+
+# ── 素材文件服务与上传 ───────────────────────────────────
+
+
+@router.get("/api/materials/file/{path:path}")
+async def serve_material_file(path: str):
+    """提供素材文件（图片/文本）的二进制内容。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    fp = (root / path).resolve()
+    if not str(fp).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+    if not fp.exists() or not fp.is_file():
+        raise HTTPException(404, "文件不存在")
+
+    # 根据后缀设置 media_type
+    suffix = fp.suffix.lower()
+    mime_map = {
+        ".md": "text/markdown; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }
+    media_type = mime_map.get(suffix, "application/octet-stream")
+    return FileResponse(str(fp), media_type=media_type)
+
+
+@router.post("/api/materials/upload")
+async def materials_upload(
+    file: UploadFile = File(...),
+    parent_path: str = Form(""),
+):
+    """上传文件到素材目录。支持图片和文本文件。"""
+    root = DOWNLOAD_DIR.expanduser().resolve()
+    dest_dir = (root / parent_path).resolve() if parent_path else root
+    if not dest_dir.exists() or not dest_dir.is_dir():
+        raise HTTPException(404, f"目标文件夹不存在: {parent_path}")
+    if not str(dest_dir).startswith(str(root)):
+        raise HTTPException(403, "路径越界")
+
+    # 校验文件后缀
+    suffix = Path(file.filename).suffix.lower() if file.filename else ""
+    if suffix not in MATERIAL_EXT:
+        raise HTTPException(400, f"不支持的文件类型: {suffix}，仅支持 {', '.join(MATERIAL_EXT)}")
+
+    # 防路径穿越：清理文件名
+    safe_name = Path(file.filename).name if file.filename else f"unnamed{suffix}"
+    dest_path = dest_dir / safe_name
+    if dest_path.exists():
+        stem = dest_path.stem
+        from datetime import datetime
+        dest_path = dest_dir / f"{stem}_{datetime.now().strftime('%H%M%S')}{suffix}"
+
+    # 流式写入
+    content = await file.read()
+    dest_path.write_bytes(content)
+
+    rel_path = dest_path.relative_to(root).as_posix()
+    return {
+        "success": True,
+        "path": rel_path,
+        "name": dest_path.name,
+        "size": dest_path.stat().st_size,
+        "suffix": suffix,
+    }
 
 
 # ── 素材评分与元数据 ───────────────────────────────────

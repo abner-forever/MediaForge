@@ -35,4 +35,17 @@ export const materialsApi = {
     put<{ success: boolean }>('/api/materials/sort-order', { path, order }),
   getSortOrder: (path: string) =>
     get<{ path: string; order: string[] }>(`/api/materials/sort-order?path=${encodeURIComponent(path)}`),
+
+  // 文件上传
+  upload: async (file: File, parentPath = '') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('parent_path', parentPath);
+    const resp = await fetch('/api/materials/upload', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: '上传失败' }));
+      throw new Error(err.detail || '上传失败');
+    }
+    return resp.json() as Promise<{ success: boolean; path: string; name: string; size: number; suffix: string }>;
+  },
 };

@@ -7,15 +7,24 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 # 确保项目根目录在 sys.path 中
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from desktop.app_state import app_state
+from desktop.app_state import app_state, VIDEOS_DIR
 
 router = APIRouter(tags=["credits"])
+
+
+# ── 请求模型 ──────────────────────────────────────────
+
+class WatchVideoRequest(BaseModel):
+    video_id: str
+    watch_duration: int
 
 
 @router.get("/api/credits")
@@ -65,3 +74,39 @@ async def checkin():
         raise HTTPException(400, result["message"])
     app_state.add_operation("每日签到", f"获得 {result['earned']} 积分（连续第{result['streak']}天）")
     return result
+
+
+# ── 视频看片赚积分 ──────────────────────────────────────
+
+@router.post("/api/credits/watch-video")
+async def watch_video(req: WatchVideoRequest):
+    """观看视频获取积分。验证观看时长和每日上限。"""
+    result = app_state.earn_video_reward(req.video_id, req.watch_duration)
+    if not result["success"]:
+        raise HTTPException(400, result.get("message", "领取失败"))
+    app_state.add_operation("看视频赚积分", f"获得 {result['earned']} 积分（今日第{result['daily_count']}次）")
+    return result
+
+
+@router.get("/api/credits/tasks")
+async def get_tasks():
+    """获取今日任务列表及完成状态含今日已赚积分。"""
+    return app_state.get_daily_tasks()
+
+
+# ── 视频文件服务 ──────────────────────────────────────
+
+@router.get("/api/videos/list")
+async def get_video_list():
+    """获取所有可观看视频的元数据列表。"""
+    videos = app_state.get_video_list()
+    return {"videos": videos}
+
+
+@router.get("/api/videos/play/{video_id}")
+async def play_video(video_id: str):
+    """播放视频文件（返回 MP4 文件流）。"""
+    video_path = VIDEOS_DIR / f"{video_id}.mp4"
+    if not video_path.exists():
+        raise HTTPException(404, "视频文件不存在")
+    return FileResponse(str(video_path), media_type="video/mp4")

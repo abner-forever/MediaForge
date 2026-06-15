@@ -12,6 +12,7 @@ from utils.logger import get_logger
 
 from services.ai.client import _call_ai, _normalize_model_name, _resolve_chat_url_candidates, strip_emoji
 from services.ai.prompts import (
+    ARTICLE_CHAT_CONVERSATION_TEMPLATE,
     ARTICLE_CHAT_TEMPLATE,
     ARTICLE_DEAI_TEMPLATE,
     ARTICLE_GENERATE_TEMPLATE,
@@ -85,7 +86,7 @@ def generate_content(text: str) -> Tuple[str, str]:
     return "今日美图分享", ""
 
 
-def _build_chat_prompt(content: str, instruction: str, messages: list | None = None, *, title: str = "", tags: list | None = None) -> str:
+def _build_chat_prompt(content: str, instruction: str, messages: list | None = None, *, title: str = "", tags: list | None = None, web_context: str = "", write_mode: bool = True) -> str:
     """构建 chat prompt 文本，供同步和流式调用共用。"""
     history_lines: list[str] = []
     if messages:
@@ -109,17 +110,24 @@ def _build_chat_prompt(content: str, instruction: str, messages: list | None = N
         context_parts.append(f"标签：{', '.join(tags)}")
     context = "\n".join(context_parts) + "\n\n" if context_parts else ""
 
-    return ARTICLE_CHAT_TEMPLATE.format(
+    # 联网搜索结果注入
+    web = ""
+    if web_context:
+        web = f"以下是从互联网获取的参考信息（用户请求联网获取）：\n{web_context}\n\n请根据需要结合这些信息来回复用户。\n\n"
+
+    template = ARTICLE_CHAT_TEMPLATE if write_mode else ARTICLE_CHAT_CONVERSATION_TEMPLATE
+    return template.format(
         content=content[:3000] or "(空)",
         chat_history=chat_history,
         instruction=instruction,
         context=context,
+        web_context=web,
     )
 
 
-def chat_article(content: str, instruction: str, messages: list | None = None) -> str:
-    """根据用户指令修改或生成文章正文，支持多轮对话上下文。"""
-    prompt = _build_chat_prompt(content, instruction, messages)
+def chat_article(content: str, instruction: str, messages: list | None = None, web_context: str = "") -> str:
+    """根据用户指令修改或生成文章正文，支持多轮对话上下文和联网搜索结果。"""
+    prompt = _build_chat_prompt(content, instruction, messages, web_context=web_context)
     return _call_ai(prompt, instruction)
 
 

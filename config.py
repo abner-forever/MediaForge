@@ -29,6 +29,7 @@ if _materials_override:
     DOWNLOAD_DIR = Path(_materials_override)
 else:
     DOWNLOAD_DIR = DATA_DIR / "images"
+TEXT_DIR = DOWNLOAD_DIR / "text"
 POSTS_CACHE_PATH = DATA_DIR / "posts.json"
 QUEUE_CACHE_PATH = DATA_DIR / "queue.json"
 WECHAT_STATE_PATH = DATA_DIR / "state" / "wechat.json"
@@ -144,6 +145,8 @@ class Settings:
     smtp_user: str = field(default_factory=lambda: os.getenv("SMTP_USER", ""))
     smtp_pass: str = field(default_factory=lambda: os.getenv("SMTP_PASS", ""))
     smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", ""))
+    # ── Tavily 联网搜索 ──
+    tavily_api_key: str = field(default_factory=lambda: os.getenv("TAVILY_API_KEY", ""))
 
 
 CELEBRITY_NAMES = _csv_tuple(os.getenv("WEIBO_CELEBRITIES", ""))
@@ -185,6 +188,7 @@ def resolve_weibo_fetch_mode() -> str:
 
 def ensure_dirs() -> None:
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    TEXT_DIR.mkdir(parents=True, exist_ok=True)
     WECHAT_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     WEIBO_UID_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)

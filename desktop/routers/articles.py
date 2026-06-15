@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import DOWNLOAD_DIR, settings
+from config import DOWNLOAD_DIR, TEXT_DIR, settings
 from desktop.app_state import app_state
 from desktop.api_helpers import (
     ArticleChatRequest,
@@ -334,7 +334,66 @@ async def delete_article(article_id: str):
     raise HTTPException(404, "文章不存在")
 
 
-@router.post("/api/articles/{article_id}/generate")
+@router.post("/api/articles/{article_id}/save-to-materials")
+async def save_article_to_materials(article_id: str):
+    """将文章保存为素材文件（.md 格式）。"""
+    article = app_state.get_article(article_id)
+    if not article:
+        raise HTTPException(404, "文章不存在")
+
+    title = article.get("title", "") or "无标题"
+    content = article.get("content", "") or ""
+    cover = article.get("cover", "") or ""
+    tags = article.get("tags", []) or []
+
+    # 标题转文件名 slug
+    slug = re.sub(r'[^\w一-鿿\-]', '_', title)[:60]
+    slug = slug.strip('_') or f"article_{article_id[:8]}"
+
+    # 确保目录存在
+    articles_dir = TEXT_DIR / "articles"
+    articles_dir.mkdir(parents=True, exist_ok=True)
+
+    # 构建 Markdown 文件内容（含 YAML front matter）
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = ["---"]
+    lines.append(f"title: {title}")
+    lines.append(f"created_at: {now_str}")
+    lines.append(f"source: article_{article_id[:8]}")
+    if tags:
+        tags_str = ", ".join(tags)
+        lines.append(f"tags: [{tags_str}]")
+    if cover:
+        lines.append(f"cover: {cover}")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# {title}")
+    lines.append("")
+    lines.append(content)
+
+    md_path = articles_dir / f"{slug}.md"
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+
+    # 拷贝封面图片
+    cover_path_rel = ""
+    if cover:
+        cover_src = (DOWNLOAD_DIR / cover).resolve()
+        cover_dest_dir = articles_dir / "covers"
+        cover_dest_dir.mkdir(parents=True, exist_ok=True)
+        if cover_src.exists() and str(cover_src).startswith(str(DOWNLOAD_DIR.resolve())):
+            cover_dest = cover_dest_dir / cover_src.name
+            import shutil
+            shutil.copy2(str(cover_src), str(cover_dest))
+            cover_path_rel = f"text/articles/covers/{cover_src.name}"
+
+    rel_path = f"text/articles/{slug}.md"
+    app_state.add_operation("保存到素材", f"文章「{title}」")
+    return {
+        "success": True,
+        "path": rel_path,
+        "cover_path": cover_path_rel,
+    }
 async def generate_article_content(article_id: str, req: ArticleGenerateRequest):
     """AI 根据话题/标题生成正文。"""
     if not settings.ai_api_key:
@@ -470,9 +529,45 @@ async def chat_article_content(article_id: str, req: ArticleChatRequest):
 
     # 在进入线程前构建 prompt（req 对象不能跨线程）
     msg_dicts = [m.model_dump() for m in req.messages] if req.messages else None
+
+    # === 联网搜索处理 ===
+    from services.ai.web_search import extract_urls, has_search_intent, search_web, fetch_url_content
+    web_context = ""
+    urls = extract_urls(instruction)
+    if urls:
+        _req_logger.info("检测到 %d 个 URL，开始提取内容", len(urls))
+        fetched = []
+        for url in urls[:3]:  # 最多处理 3 个 URL
+            content = fetch_url_content(url)
+            if content:
+                fetched.append(content)
+        if fetched:
+            web_context += "用户提供了以下链接的内容：\n\n" + "\n\n---\n\n".join(fetched)
+
+    if has_search_intent(instruction):
+        # 从指令中提取搜索关键词（去掉 URL 和已知的引导词）
+        search_query = instruction
+        for url in urls:
+            search_query = search_query.replace(url, "")
+        for prefix in ["搜索", "查一下", "查查", "搜一下", "帮我找", "找找", "search", "look up"]:
+            search_query = search_query.replace(prefix, "")
+        search_query = search_query.strip().strip(":：，,。、").strip() or instruction[:100]
+
+        _req_logger.info("检测到搜索意图，搜索: %s", search_query[:60])
+        search_result = search_web(search_query)
+        if search_result:
+            if web_context:
+                web_context += "\n\n"
+            web_context += "用户要求搜索以下内容：\n\n" + search_result
+
+    # 如果只有 URL 提取无搜索结果，加个引导说明
+    if web_context:
+        web_context = f"用户{'提供了链接' if urls else ''}{'并要求搜索' if has_search_intent(instruction) else ''}，以下是获取到的信息：\n\n{web_context}"
+
     prompt = _build_chat_prompt(
         article.get("content", ""), instruction, messages=msg_dicts,
         title=article.get("title", ""), tags=article.get("tags"),
+        web_context=web_context, write_mode=req.write_mode,
     )
 
     def _task(msg_queue):
@@ -523,7 +618,7 @@ async def chat_article_content(article_id: str, req: ArticleChatRequest):
                 sep_idx = buffer.find(SEPARATOR)
                 final_content = buffer[sep_idx + len(SEPARATOR):].strip()
 
-            if final_content:
+            if final_content and req.write_mode:
                 app_state.update_article(article_id, {"content": final_content, "ai_generated": True})
                 app_state.add_operation("AI 对话", f"「{instruction[:30]}」")
             msg_queue.put(("done", {"content": final_content}))

@@ -70,6 +70,7 @@ export default function ArticlePublish() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [queueLoading, setQueueLoading] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [saveToMaterialsLoading, setSaveToMaterialsLoading] = useState(false);
 
   /* ── 对话输入 ────────────────────────────────── */
   const [chatInput, setChatInput] = useState('');
@@ -78,6 +79,7 @@ export default function ArticlePublish() {
   const chatAbortRef = useRef<AbortController | null>(null);
   const aiMsgIdRef = useRef<string | null>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [writeMode, setWriteMode] = useState(true);
 
   // 注册/注销进行中的任务
   const registerTask = useStore(s => s.registerTask);
@@ -233,6 +235,36 @@ export default function ArticlePublish() {
       loadArticles(articleFilter);
     } catch (e: any) { addToast(e.message || '保存失败', 'error');
     } finally { setSaveLoading(false); }
+  };
+
+  const doSaveToMaterials = async () => {
+    if (!editingId && !title && !content) {
+      addToast('请先输入内容', 'info');
+      return;
+    }
+    try {
+      setSaveToMaterialsLoading(true);
+      // 先确保文章已保存
+      let id = editingId;
+      if (!id) {
+        try {
+          const res = await articleApi.create({ title, content, status: 'draft' });
+          if (res.article?.id) {
+            id = res.article.id;
+            setEditingId(id);
+            setCurrentArticle(res.article);
+          }
+        } catch { /* fall through */ }
+      }
+      if (!id) { addToast('保存失败', 'error'); return; }
+
+      const res = await articleApi.saveToMaterials(id);
+      addToast(`文章已保存到素材: ${res.path}`, 'success');
+    } catch (e: any) {
+      addToast(e.message || '保存到素材失败', 'error');
+    } finally {
+      setSaveToMaterialsLoading(false);
+    }
   };
 
   const doQueue = async () => {
@@ -410,12 +442,14 @@ export default function ArticlePublish() {
 
     const history = (chatMessages[id] || []).map(m => ({ role: m.role, content: m.content }));
 
-    // 双累积器：explanationText 更新聊天区，contentText 静默累积
+    // explanationText 更新聊天区，contentText 打字机效果更新编辑器
     let explanationText = '';
     let contentText = '';
     let hasContentEvents = false;
     let lastUpdateTime = 0;
+    let lastContentUpdateTime = 0;
     const THROTTLE_MS = 50;
+    const CONTENT_THROTTLE_MS = 100;
 
     const abortController = new AbortController();
     chatAbortRef.current = abortController;
@@ -433,16 +467,34 @@ export default function ArticlePublish() {
         onContent: (token) => {
           contentText += token;
           hasContentEvents = true;
+          if (writeMode) {
+            // 打字机效果：增量更新编辑器
+            const now = Date.now();
+            if (now - lastContentUpdateTime >= CONTENT_THROTTLE_MS) {
+              setContent(contentText);
+              setContentDoc(plainToTiptap(contentText));
+              lastContentUpdateTime = now;
+            }
+          }
         },
-      }, abortController.signal);
+      }, abortController.signal, writeMode);
 
-      // 流完成：根据是否有 content 事件决定行为
+      // 流完成：根据 writeMode 决定是否写入编辑器
       if (hasContentEvents && contentText.trim()) {
-        // Agent 模式：解释在聊天区，内容更新编辑器
-        updateChatMessage(id, aiMsgId, explanationText || '文章已更新');
-        setContent(contentText);
-        setContentDoc(plainToTiptap(contentText));
-        addToast('文章已更新', 'success');
+        if (writeMode) {
+          // 写文章模式：解释在聊天区，内容更新编辑器
+          updateChatMessage(id, aiMsgId, explanationText || '文章已更新');
+          setContent(contentText);
+          setContentDoc(plainToTiptap(contentText));
+          addToast('文章已更新', 'success');
+        } else {
+          // 纯对话模式：完整回复显示在聊天区，不修改编辑器
+          const fullResponse = explanationText
+            ? explanationText + '\n\n---\n\n' + contentText
+            : contentText;
+          updateChatMessage(id, aiMsgId, fullResponse);
+          addToast('已生成回答（写文章模式已关闭）', 'info');
+        }
       } else {
         // 纯对话回复（总结/分析/提问等），不改编辑器
         updateChatMessage(id, aiMsgId, explanationText);
@@ -931,38 +983,110 @@ export default function ArticlePublish() {
               border: '1px solid var(--border)', borderRadius: 8,
               overflow: 'hidden', display: 'flex', flexDirection: 'column',
               flex: 1, minHeight: 0,
+              background: 'var(--bg-card)',
             }}>
+              {/* Chat 顶部工具栏：写文章开关 + 清空 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '4px 8px',
+                borderBottom: '1px solid var(--border-subtle)',
+                background: 'var(--bg-secondary)', flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {/* 自定义 toggle 开关 */}
+                  <div
+                    onClick={() => setWriteMode(!writeMode)}
+                    style={{
+                      width: 30, height: 17, borderRadius: 9,
+                      background: writeMode ? 'var(--accent)' : 'var(--bg-inset, #e5e7eb)',
+                      border: '1px solid ' + (writeMode ? 'var(--accent)' : 'var(--border)'),
+                      cursor: 'pointer', position: 'relative', flexShrink: 0,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{
+                      width: 13, height: 13, borderRadius: '50%',
+                      background: '#fff', position: 'absolute',
+                      top: 1, left: writeMode ? 15 : 1,
+                      transition: 'left 0.2s',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                    }} />
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 500,
+                    color: writeMode ? 'var(--accent)' : 'var(--text-muted)',
+                    transition: 'color 0.2s', userSelect: 'none',
+                  }}>
+                    写文章
+                  </span>
+                </div>
+                {editingId && currentChatMessages.length > 0 && (
+                  <button
+                    onClick={() => clearChatMessages(editingId)}
+                    style={{
+                      fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none',
+                      cursor: 'pointer', padding: '1px 6px', borderRadius: 'var(--radius-sm)',
+                      lineHeight: 1,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+                  >
+                    清空对话
+                  </button>
+                )}
+              </div>
+
               {/* 消息区域 — 可滚动 */}
               <div
                 ref={chatMessagesRef}
                 style={{
                   flex: 1, minHeight: 0, overflowY: 'auto',
-                  padding: currentChatMessages.length > 0 ? 8 : 0,
+                  padding: currentChatMessages.length > 0 ? '10px 10px 4px' : 0,
+                  userSelect: 'text', WebkitUserSelect: 'text',
+                  scrollBehavior: 'smooth',
                 }}
               >
                 {currentChatMessages.length === 0 && (
                   <div style={{
-                    padding: '20px 8px', textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', minHeight: 160,
+                    padding: '20px 16px', textAlign: 'center',
                     fontSize: 12, color: 'var(--text-muted)',
                   }}>
-                    输入指令优化文章，AI 助手会先解释再修改
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3, marginBottom: 8 }}>
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>输入指令让 AI 优化文章</span>
+                    <span style={{ color: 'var(--text-muted)', opacity: 0.6, marginTop: 2 }}>
+                      {writeMode ? 'AI 会先解释再直接修改编辑器' : 'AI 仅回复对话，不会修改文章'}
+                    </span>
                   </div>
                 )}
                 {currentChatMessages.map((msg) => (
                   <div
                     key={msg.id}
                     style={{
-                      display: 'flex',
-                      justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                      marginBottom: 6,
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                      marginBottom: 8,
                     }}
                   >
+                    {msg.role === 'assistant' && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 600, color: 'var(--text-muted)',
+                        marginBottom: 2, marginLeft: 2, letterSpacing: '0.5px',
+                        textTransform: 'uppercase', opacity: 0.6,
+                      }}>
+                        AI
+                      </span>
+                    )}
                     <div style={{
-                      maxWidth: '85%', padding: '5px 9px',
+                      maxWidth: '88%', padding: '6px 10px',
                       borderRadius: msg.role === 'user' ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
                       background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)',
                       color: msg.role === 'user' ? 'var(--accent-foreground, #fff)' : 'var(--text)',
-                      fontSize: 12, lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+                      fontSize: 12, lineHeight: 1.55, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+                      boxShadow: msg.role === 'assistant' ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
                     }}>
                       {msg.content}
                       {msg.role === 'assistant' && chatLoading && msg.id === aiMsgIdRef.current && !msg.content && (
@@ -979,8 +1103,7 @@ export default function ArticlePublish() {
                       {msg.role === 'assistant' && chatLoading && msg.id === aiMsgIdRef.current && msg.content && (
                         <span style={{
                           display: 'inline-block',
-                          width: 2,
-                          height: '1em',
+                          width: 2, height: '1em',
                           background: 'var(--accent)',
                           marginLeft: 2,
                           animation: 'blink 1s infinite',
@@ -993,7 +1116,7 @@ export default function ArticlePublish() {
                 {chatLoading && !aiMsgIdRef.current && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 6 }}>
                     <div style={{
-                      padding: '5px 9px', borderRadius: '10px 10px 10px 2px',
+                      padding: '6px 10px', borderRadius: '10px 10px 10px 2px',
                       background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-muted)',
                       display: 'flex', alignItems: 'center', gap: 4,
                     }}>
@@ -1011,7 +1134,7 @@ export default function ArticlePublish() {
               }}>
                 <textarea
                   ref={chatTextareaRef}
-                  placeholder="描述你想要的修改..."
+                  placeholder={writeMode ? '描述你想要的修改...' : '有什么想问的？'}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1028,13 +1151,19 @@ export default function ArticlePublish() {
                     minHeight: 36, maxHeight: 120, fontFamily: 'inherit',
                     background: 'var(--bg-card)', border: '1px solid var(--border)',
                     color: 'var(--text)',
+                    transition: 'border-color 0.15s',
                   }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
                 />
                 {chatLoading ? (
                   <button
                     className="btn btn-sm"
                     onClick={stopChat}
-                    style={{ flexShrink: 0, padding: '7px 12px', background: 'var(--danger, #ef4444)', color: '#fff', border: 'none', height: 36 }}
+                    style={{
+                      flexShrink: 0, padding: '7px 12px', height: 36,
+                      background: 'var(--danger, #ef4444)', color: '#fff', border: 'none',
+                    }}
                   >
                     停止
                   </button>
@@ -1043,7 +1172,11 @@ export default function ArticlePublish() {
                     className="btn btn-sm"
                     onClick={doChat}
                     disabled={!chatInput.trim()}
-                    style={{ flexShrink: 0, padding: '7px 12px', height: 36 }}
+                    style={{
+                      flexShrink: 0, padding: '7px 12px', height: 36,
+                      opacity: chatInput.trim() ? 1 : 0.5,
+                      transition: 'opacity 0.15s',
+                    }}
                   >
                     发送
                   </button>
@@ -1077,6 +1210,9 @@ export default function ArticlePublish() {
           <EffectEntry itemId={currentArticle.id} title={currentArticle.title} />
         ) : (
           <>
+            <button className="btn btn-ghost" onClick={doSaveToMaterials} disabled={saveToMaterialsLoading}>
+              {saveToMaterialsLoading ? <Loading size="xs" /> : null} 保存到素材
+            </button>
             <button className="btn btn-primary" onClick={doSave} disabled={saveLoading}>
               {saveLoading ? <Loading size="xs" /> : null} 保存草稿
             </button>

@@ -160,6 +160,13 @@ export default function RichTextEditor({
           changes: { from: 0, to: view.state.doc.length, insert: text },
           selection: { anchor: text.length },
         });
+        // 打字机型内容更新时自动滚动到底部
+        requestAnimationFrame(() => {
+          const scroller = editorContainerRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
+          if (scroller) {
+            scroller.scrollTop = scroller.scrollHeight;
+          }
+        });
       }
     }
   }, [value]);

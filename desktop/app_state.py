@@ -16,12 +16,19 @@ ARTICLES_CACHE_PATH = DATA_DIR / "state" / "articles.json"
 MATERIALS_META_PATH = DATA_DIR / "state" / "materials_meta.json"
 PUBLISH_EFFECTS_PATH = DATA_DIR / "state" / "publish_effects.json"
 CREDITS_CACHE_PATH = DATA_DIR / "state" / "credits.json"
+VIDEO_META_PATH = DATA_DIR / "state" / "video_tasks.json"
+VIDEOS_DIR = DATA_DIR / "videos"
 
 # 积分配置
 INITIAL_CREDITS = 100          # 首次启用赠送积分
 PUBLISH_COST = 10              # 每次发布消耗积分
 CHECKIN_REWARDS = [5, 10, 15, 20, 25, 30, 50]  # 连续签到7天的奖励
 MAX_CREDIT_HISTORY = 500       # 积分流水保留条数
+
+# 视频看片赚积分
+VIDEO_REWARD_AMOUNT = 3       # 每次看视频奖励积分
+DAILY_VIDEO_LIMIT = 10        # 每日看视频次数上限
+VIDEO_MIN_WATCH_SECONDS = 30  # 最少观看秒数（防刷）
 
 
 class AppState:
@@ -640,6 +647,124 @@ class AppState:
             "total": total,
             "page": page,
             "page_size": page_size,
+        }
+
+    # ── 视频看片赚积分 ──────────────────────────────────────
+
+    def get_video_list(self) -> List[Dict[str, Any]]:
+        """获取所有可观看的视频列表。"""
+        raw = read_json(VIDEO_META_PATH, default={"videos": []})
+        return raw.get("videos", [])
+
+    def earn_video_reward(self, video_id: str, watch_duration: int) -> Dict[str, Any]:
+        """观看视频获取积分。验证观看时长并检查每日上限。"""
+        if watch_duration < VIDEO_MIN_WATCH_SECONDS:
+            return {
+                "success": False,
+                "earned": 0,
+                "daily_count": 0,
+                "daily_limit": DAILY_VIDEO_LIMIT,
+                "balance": self.get_credits_balance(),
+                "message": f"观看时间不足，至少需要{VIDEO_MIN_WATCH_SECONDS}秒",
+            }
+
+        credits = self._ensure_credits()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # 初始化/检查今日视频观看记录
+        daily_video = credits.get("daily_video", {"date": "", "count": 0, "earned": 0})
+        if daily_video.get("date") != today:
+            daily_video = {"date": today, "count": 0, "earned": 0}
+
+        if daily_video["count"] >= DAILY_VIDEO_LIMIT:
+            return {
+                "success": False,
+                "earned": 0,
+                "daily_count": daily_video["count"],
+                "daily_limit": DAILY_VIDEO_LIMIT,
+                "balance": credits.get("balance", 0),
+                "message": f"今日观看次数已达上限（{DAILY_VIDEO_LIMIT}次）",
+            }
+
+        # 发放积分
+        earned = VIDEO_REWARD_AMOUNT
+        daily_video["count"] += 1
+        daily_video["earned"] += earned
+        credits["daily_video"] = daily_video
+        credits["balance"] = credits.get("balance", 0) + earned
+
+        # 记录交易流水
+        if "transactions" not in credits:
+            credits["transactions"] = []
+        credits["transactions"].append({
+            "id": str(uuid.uuid4()),
+            "type": "earn",
+            "source": "ad_watch",
+            "amount": earned,
+            "balance_after": credits["balance"],
+            "description": f"观看视频获取积分（今日第{daily_video['count']}次）",
+            "created_at": datetime.now().isoformat(),
+        })
+        credits["transactions"] = credits["transactions"][-MAX_CREDIT_HISTORY:]
+        self._save_credits()
+
+        return {
+            "success": True,
+            "earned": earned,
+            "daily_count": daily_video["count"],
+            "daily_limit": DAILY_VIDEO_LIMIT,
+            "balance": credits["balance"],
+        }
+
+    def get_daily_tasks(self) -> Dict[str, Any]:
+        """获取今日任务列表及完成状态，含今日已赚积分汇总。"""
+        credits = self._ensure_credits()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # 视频任务进度
+        daily_video = credits.get("daily_video", {})
+        video_count = daily_video.get("count", 0) if daily_video.get("date") == today else 0
+        video_earned = daily_video.get("earned", 0) if daily_video.get("date") == today else 0
+        video_completed = video_count >= DAILY_VIDEO_LIMIT
+
+        # 签到任务进度
+        checkin = credits.get("daily_checkin", {})
+        checkin_done = checkin.get("last_date") == today
+
+        tasks = [
+            {
+                "id": "watch_video",
+                "type": "video",
+                "label": "观看视频",
+                "description": "观看短视频赚取积分，每日上限10次",
+                "current": video_count,
+                "target": DAILY_VIDEO_LIMIT,
+                "completed": video_completed,
+                "reward": f"{VIDEO_REWARD_AMOUNT}/次",
+                "icon": "play_circle",
+            },
+            {
+                "id": "daily_checkin",
+                "type": "checkin",
+                "label": "每日签到",
+                "description": "每日签到领取积分奖励，连续签到奖励递增",
+                "current": 1 if checkin_done else 0,
+                "target": 1,
+                "completed": checkin_done,
+                "reward": "5~50",
+                "icon": "calendar_check",
+            },
+        ]
+
+        # 计算今日总赚取积分
+        checkin_today = 0
+        checkin_history = credits.get("checkin_history", {})
+        if today in checkin_history:
+            checkin_today = checkin_history[today].get("earned", 0)
+
+        return {
+            "tasks": tasks,
+            "today_earned": video_earned + checkin_today,
         }
 
 

@@ -96,6 +96,8 @@ def raise_friendly(status_code: int, err: Exception | str) -> None:
 
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+TEXT_EXT = {".md", ".txt", ".pdf"}
+MATERIAL_EXT = IMAGE_EXT | TEXT_EXT
 
 
 # ── Pydantic 请求模型 ──────────────────────────────────
@@ -191,6 +193,7 @@ class ArticleChatMessage(BaseModel):
 class ArticleChatRequest(BaseModel):
     instruction: str
     messages: Optional[List[ArticleChatMessage]] = None
+    write_mode: bool = True
 
 
 class ArticlePublishRequest(BaseModel):

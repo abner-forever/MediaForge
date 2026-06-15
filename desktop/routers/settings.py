@@ -33,9 +33,11 @@ async def get_settings():
     from utils.settings_store import read_settings as read_json_settings
     from utils.toutiao_auth_store import read_toutiao_auth
     from utils.weibo_auth_store import read_weibo_auth
+    from utils.api_key_store import read_api_keys as read_ak_store
 
     store = read_json_settings()
     cfg = store
+    ak_store = read_ak_store()
 
     provider = cfg.get("AI_PROVIDER", "mimo").lower()
     current_key = get_provider_key(cfg, provider)
@@ -66,6 +68,8 @@ async def get_settings():
         "ai_api_key_set": bool(current_key),
         "ai_api_key_masked": mask_key(current_key) if current_key else "",
         "ai_api_keys": all_keys,
+        "tavily_api_key_set": bool(cfg.get("TAVILY_API_KEY", "") or ak_store.get("tavily", "")),
+        "tavily_api_key_masked": mask_key(cfg.get("TAVILY_API_KEY", "") or ak_store.get("tavily", "")),
         "weibo_uid": weibo_uid,
         "weibo_cookie_set": bool(weibo_cookie),
         "weibo_cookie": weibo_cookie,

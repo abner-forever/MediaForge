@@ -22,6 +22,8 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
   const [balance, setBalance] = useState<any>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceMessage, setBalanceMessage] = useState('');
+  const [tavilyApiKey, setTavilyApiKey] = useState('');
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
   const current = PROVIDERS[provider];
 
   useEffect(() => {
@@ -223,6 +225,22 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
             </div>
           </div>
         </label>
+        <label className="col-span-2">联网搜索 API Key (Tavily)
+          <div className="relative">
+            <input
+              type={showTavilyKey ? 'text' : 'password'}
+              value={tavilyApiKey}
+              onChange={e => setTavilyApiKey(e.target.value)}
+              placeholder={data.tavily_api_key_set ? '已配置（输入新值可覆盖）' : '输入 Tavily API Key'}
+              className="w-full pr-12"
+            />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+              <button type="button" onClick={() => setShowTavilyKey(!showTavilyKey)} className="p-1 text-text-muted hover:text-text-secondary transition-colors" title={showTavilyKey ? '隐藏' : '显示'}>
+                <EyeIcon visible={showTavilyKey} />
+              </button>
+            </div>
+          </div>
+        </label>
       </div>
       <div className="bg-bg-secondary rounded-xl p-3 space-y-2">
         <p className="text-xs text-text-muted leading-relaxed">Base URL 请填写 OpenAI 兼容地址，以 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/v1</code> 结尾。系统自动拼接 <code className="px-1 py-0.5 bg-bg rounded text-[11px]">/chat/completions</code>。</p>
@@ -272,7 +290,7 @@ export default function LLMSection({ data, save }: { data: SettingsData; save: (
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; await save(u); setTestState('idle'); setTestMessage(''); setTestDetails([]); })} disabled={saving}>
+        <button className="btn btn-primary" onClick={() => withSave(async () => { const u: Record<string, string> = { AI_PROVIDER: provider, AI_MODEL: model, AI_BASE_URL: baseUrl }; if (apiKey) u[current?.keyName || 'AI_API_KEY'] = apiKey; if (tavilyApiKey) u['TAVILY_API_KEY'] = tavilyApiKey; await save(u); setTestState('idle'); setTestMessage(''); setTestDetails([]); })} disabled={saving}>
           {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存模型配置'}
         </button>
         <button className="btn" onClick={testConnection} disabled={testState === 'testing'}>

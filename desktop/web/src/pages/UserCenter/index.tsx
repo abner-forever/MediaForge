@@ -1,6 +1,6 @@
 /**
  * 用户中心页面
- * 整合个人信息、积分中心、绑定设备、签到日历
+ * 整合个人信息、积分中心、绑定设备、签到日历、任务中心
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -19,10 +19,21 @@ import SecuritySection from './components/SecuritySection'
 import CheckinRulesModal from './components/CheckinRulesModal'
 import EditNicknameModal from './components/EditNicknameModal'
 import ChangePasswordModal from './components/ChangePasswordModal'
+import TaskCenter from './components/TaskCenter'
+
+type TabKey = 'account' | 'tasks'
+
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'account', label: '账户', icon: '🔒' },
+  { key: 'tasks', label: '任务中心', icon: '🎯' },
+]
 
 export default function UserCenter() {
   const navigate = useNavigate()
   const { isAuthenticated, user, logout, updateUserInfo, addToast } = useStore()
+
+  // Tab 状态
+  const [activeTab, setActiveTab] = useState<TabKey>('account')
 
   // 弹窗状态
   const [showEditNickname, setShowEditNickname] = useState(false)
@@ -251,53 +262,83 @@ export default function UserCenter() {
       {/* 页面标题 */}
       <div>
         <h1 className="text-2xl font-bold text-text tracking-tight">用户中心</h1>
-        <p className="text-sm text-text-secondary mt-1">管理账户信息、积分和绑定设备</p>
+        <p className="text-sm text-text-secondary mt-1">管理账户信息、积分和任务</p>
       </div>
 
-      {/* 顶部：用户信息 + 积分余额 */}
+      {/* 顶部：用户信息 + 积分余额（所有 Tab 共用） */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
         <UserProfileCard user={user} onEditNickname={() => setShowEditNickname(true)} />
         <CreditsBalanceCard balance={balance} checkinStatus={checkinStatus} />
       </div>
 
-      {/* 签到日历 + 积分明细 并排 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <CheckinCalendar
-          checkinStatus={checkinStatus}
-          checkinLoading={checkinLoading}
-          justChecked={justChecked}
-          checkinHistory={checkinHistory}
-          historyLoading={historyLoading}
-          calendarYear={calendarYear}
-          calendarMonth={calendarMonth}
-          onCheckin={handleCheckin}
-          onMonthChange={handleMonthChange}
-          onBackToToday={handleBackToToday}
-          onShowRules={() => setShowCalendarInfo(true)}
-        />
-        <TransactionList
-          transactions={transactions}
-          txTotal={txTotal}
-          txLoading={txLoading}
-          onLoadMore={() => loadTransactions(txPage + 1)}
-        />
+      {/* Tab 导航 */}
+      <div className="flex gap-1 border-b border-border">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'text-accent'
+                : 'text-text-muted hover:text-text'
+            }`}
+          >
+            <span className="text-base leading-none">{tab.icon}</span>
+            <span>{tab.label}</span>
+            {activeTab === tab.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* 绑定设备 + 修改密码 并排 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <DeviceList devices={devices} onUnbind={handleUnbindDevice} />
-        <SecuritySection onChangePassword={() => setShowChangePwd(true)} />
-      </div>
+      {/* Tab 内容 */}
+      {activeTab === 'account' && (
+        <>
+          {/* 签到日历 + 积分明细 并排 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <CheckinCalendar
+              checkinStatus={checkinStatus}
+              checkinLoading={checkinLoading}
+              justChecked={justChecked}
+              checkinHistory={checkinHistory}
+              historyLoading={historyLoading}
+              calendarYear={calendarYear}
+              calendarMonth={calendarMonth}
+              onCheckin={handleCheckin}
+              onMonthChange={handleMonthChange}
+              onBackToToday={handleBackToToday}
+              onShowRules={() => setShowCalendarInfo(true)}
+            />
+            <TransactionList
+              transactions={transactions}
+              txTotal={txTotal}
+              txLoading={txLoading}
+              onLoadMore={() => loadTransactions(txPage + 1)}
+            />
+          </div>
 
-      {/* 退出登录 */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleLogout}
-          className="btn btn-sm btn-danger"
-        >
-          退出登录
-        </button>
-      </div>
+          {/* 绑定设备 + 修改密码 并排 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <DeviceList devices={devices} onUnbind={handleUnbindDevice} />
+            <SecuritySection onChangePassword={() => setShowChangePwd(true)} />
+          </div>
+
+          {/* 退出登录 */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleLogout}
+              className="btn btn-sm btn-danger"
+            >
+              退出登录
+            </button>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'tasks' && (
+        <TaskCenter />
+      )}
 
       {/* 弹窗 */}
       <CheckinRulesModal

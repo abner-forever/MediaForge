@@ -16,6 +16,8 @@ export const articleApi = {
   update: (id: string, data: Partial<ArticleItem>) =>
     put<{ success: boolean; article: ArticleItem }>(`/api/articles/${id}`, data),
   delete: (id: string) => del<{ success: boolean }>(`/api/articles/${id}`),
+  saveToMaterials: (id: string) =>
+    post<{ success: boolean; path: string; cover_path?: string }>(`/api/articles/${id}/save-to-materials`),
   generate: (id: string, params: {
     topic?: string;
     title?: string;
@@ -56,10 +58,11 @@ export const articleApi = {
       onContent?: (token: string) => void;
     },
     signal?: AbortSignal,
+    writeMode?: boolean,
   ): Promise<{ content: string }> =>
     ssePost<ChatStreamEvent, { content: string }>(
       `/api/articles/${id}/chat`,
-      { instruction, messages: messages?.length ? messages : undefined },
+      { instruction, messages: messages?.length ? messages : undefined, write_mode: writeMode ?? true },
       (evt) => {
         if (evt.type === 'message' && callbacks?.onMessage) {
           callbacks.onMessage(evt.content);

@@ -36,6 +36,7 @@ export interface BrowseFile {
   path: string;
   type: 'file';
   size: number;
+  suffix: string;
 }
 
 export interface BrowseResult {

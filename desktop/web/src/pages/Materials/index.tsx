@@ -14,8 +14,13 @@ import { imgSrc, lightboxSrc, formatSize } from './utils';
 import FolderTree from './FolderTree';
 import FolderCard from './FolderCard';
 import ImageCard from './ImageCard';
+import FileCard from './FileCard';
+import TextPreview from './TextPreview';
+import PdfPreview from './PdfPreview';
+import UploadModal from './UploadModal';
 import TagEditorModal from './TagEditorModal';
 import LazyImage from '../Discovery/LazyImage';
+import { isImageFile, isTextFile, isPdfFile } from '../../utils/file';
 
 export default function Materials() {
   const {
@@ -73,7 +78,10 @@ export default function Materials() {
   const [filterCelebrity, setFilterCelebrity] = useState('');
   const [filterScene, setFilterScene] = useState('');
   const [filterUsage, setFilterUsage] = useState<'all' | 'used' | 'unused'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'images' | 'text'>('all');
   const [tagEditorTarget, setTagEditorTarget] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<BrowseFile | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
 
   // Box selection
   const gridRef = useRef<HTMLDivElement>(null);
@@ -157,6 +165,8 @@ export default function Materials() {
     if (filterScene && m?.scene !== filterScene) return false;
     if (filterUsage === 'used' && !m?.used_count) return false;
     if (filterUsage === 'unused' && m?.used_count) return false;
+    if (filterType === 'images' && !isImageFile(f.suffix || '.jpg')) return false;
+    if (filterType === 'text' && isImageFile(f.suffix || '.jpg')) return false;
     return true;
   });
 
@@ -365,6 +375,12 @@ export default function Materials() {
     const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
     await navigateTo(parent);
     const files = useStore.getState().currentFiles;
+    // 非图片文件 → 使用对应的预览组件（TextPreview/PdfPreview）
+    const file = files.find(f => f.path === path);
+    if (file && !isImageFile(file.suffix)) {
+      setPreviewFile(file);
+      return;
+    }
     const all = files.map(f => f.path);
     const idx = all.indexOf(path);
     if (idx >= 0) {
@@ -418,14 +434,24 @@ export default function Materials() {
         { label: '删除文件夹', danger: true, onClick: () => setShowDeleteFolderConfirm(target) },
       ];
     }
-    return [
-      { label: '查看大图', onClick: () => openLightboxFor(target) },
-      { label: '编辑标签', onClick: () => setTagEditorTarget(target) },
+    const isImage = isImageFile(target.split('.').pop() || '');
+    const items: MenuItem[] = [];
+    if (isImage) {
+      items.push({ label: '查看大图', onClick: () => openLightboxFor(target) });
+      items.push({ label: '编辑标签', onClick: () => setTagEditorTarget(target) });
+    } else {
+      items.push({ label: '预览', onClick: () => {
+        const found = currentFiles.find(f => f.path === target);
+        if (found) setPreviewFile(found);
+      }});
+    }
+    items.push(
       { label: '重命名', onClick: () => { setRenameTarget({ path: target, name, type: 'file' }); setRenameValue(name); } },
       { label: '加入发布队列', onClick: async () => { try { await queueApi.add({ title: '', desc: '', images: [target], cover: target }); addToast('已加入发布队列', 'success'); } catch (err: any) { addToast(err.message, 'error'); } } },
       { label: name, disabled: true },
-      { label: '删除此图片', danger: true, onClick: async () => { try { await materialsApi.delete([target]); addToast('已删除', 'success'); await refreshCurrent(); const t = await materialsApi.tree(); setFolderTree(t.tree); } catch (err: any) { addToast(err.message, 'error'); } } },
-    ];
+      { label: isImage ? '删除此图片' : '删除此文件', danger: true, onClick: async () => { try { await materialsApi.delete([target]); addToast('已删除', 'success'); await refreshCurrent(); const t = await materialsApi.tree(); setFolderTree(t.tree); } catch (err: any) { addToast(err.message, 'error'); } } },
+    );
+    return items;
   };
 
   // Box selection: pointerdown on grid
@@ -570,8 +596,17 @@ export default function Materials() {
                 { label: '未使用', value: 'unused' },
               ]} />
           </div>
-          {(filterTag || filterCelebrity || filterScene || filterUsage !== 'all') && (
-            <button className="text-xs text-accent hover:underline" onClick={() => { setFilterTag(''); setFilterCelebrity(''); setFilterScene(''); setFilterUsage('all'); }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted">类型</span>
+            <Select size="sm" value={filterType} onChange={v => setFilterType(v as any)}
+              options={[
+                { label: '全部', value: 'all' },
+                { label: '图片', value: 'images' },
+                { label: '文本', value: 'text' },
+              ]} />
+          </div>
+          {(filterTag || filterCelebrity || filterScene || filterUsage !== 'all' || filterType !== 'all') && (
+            <button className="text-xs text-accent hover:underline" onClick={() => { setFilterTag(''); setFilterCelebrity(''); setFilterScene(''); setFilterUsage('all'); setFilterType('all'); }}>
               清除筛选
             </button>
           )}
@@ -611,6 +646,11 @@ export default function Materials() {
             <button className="toolbar-item" onClick={() => { setNewFolderName(''); setShowNewFolder(true); }}>
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               <span>新建文件夹</span>
+            </button>
+
+            <button className="toolbar-item" onClick={() => setShowUpload(true)}>
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>上传</span>
             </button>
 
             <div className="w-px h-4 bg-border mx-1.5 shrink-0" />
@@ -676,15 +716,25 @@ export default function Materials() {
                       onDragEnd={handleGridDragEnd}
                       className={dragIndex !== null && idx !== dragIndex ? 'opacity-50' : ''}
                     >
-                      <ImageCard
-                        file={file}
-                        selected={matSelected.has(file.path)}
-                        onToggleSelect={() => matToggleSelect(file.path)}
-                        onOpenLightbox={() => openLightboxFor(file.path)}
-                        onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
-                        scoreInfo={scoreMap[file.path] || null}
-                        meta={metaMap[file.path] || null}
-                      />
+                      {isImageFile(file.suffix) ? (
+                        <ImageCard
+                          file={file}
+                          selected={matSelected.has(file.path)}
+                          onToggleSelect={() => matToggleSelect(file.path)}
+                          onOpenLightbox={() => openLightboxFor(file.path)}
+                          onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                          scoreInfo={scoreMap[file.path] || null}
+                          meta={metaMap[file.path] || null}
+                        />
+                      ) : (
+                        <FileCard
+                          file={file}
+                          selected={matSelected.has(file.path)}
+                          onToggleSelect={() => matToggleSelect(file.path)}
+                          onOpenPreview={() => setPreviewFile(file)}
+                          onContextMenu={(e) => handleContextMenu(e, file.path, 'file')}
+                        />
+                      )}
                       {dropIndex === idx && dragIndex !== null && dragIndex !== idx && (
                         <div className="absolute inset-0 rounded-xl border-2 border-accent pointer-events-none z-10" />
                       )}
@@ -727,6 +777,7 @@ export default function Materials() {
                     {filteredFiles.map(file => {
                       const s = scoreMap[file.path];
                       const m = metaMap[file.path];
+                      const isImage = isImageFile(file.suffix);
                       return (
                         <tr key={file.path}
                           className={`border-b border-border/50 hover:bg-bg-base/50 ${matSelected.has(file.path) ? 'bg-accent/5' : ''}`}
@@ -736,7 +787,13 @@ export default function Materials() {
                         >
                           <td className="py-2 px-3 flex items-center gap-2">
                             <Checkbox checked={matSelected.has(file.path)} onChange={() => matToggleSelect(file.path)} />
-                            <LazyImage src={imgSrc(file.path)} alt="" className="w-8 h-8 rounded shrink-0" />
+                            {isImage ? (
+                              <LazyImage src={imgSrc(file.path)} alt="" className="w-8 h-8 rounded shrink-0" />
+                            ) : (
+                              <span className="w-8 h-8 rounded shrink-0 flex items-center justify-center text-[18px] bg-bg-secondary">
+                                {file.suffix === '.pdf' ? '📄' : file.suffix === '.md' ? '📝' : '📃'}
+                              </span>
+                            )}
                             <span className="truncate">{file.name}</span>
                             {s && s.score > 0 && (
                               <span className={`ml-2 text-[10px] font-bold px-1 py-0.5 rounded ${s.score >= 70 ? 'text-success bg-success/10' : s.score >= 40 ? 'text-warning bg-warning/10' : 'text-danger bg-danger/10'}`}>
@@ -749,13 +806,20 @@ export default function Materials() {
                             {m?.is_cover && (
                               <span className="text-[10px] text-warning bg-warning/5 px-1 py-0.5 rounded">封面</span>
                             )}
+                            {!isImage && (
+                              <span className="text-[10px] text-text-muted bg-bg-secondary px-1 py-0.5 rounded">{file.suffix.toUpperCase()}</span>
+                            )}
                           </td>
                           <td className="py-2 px-3 text-right text-text-muted tabular-nums whitespace-nowrap">
                             {m?.source_platform && <span className="text-xs text-text-muted mr-2">{m.source_platform}</span>}
                             {formatSize(file.size)}
                           </td>
                           <td className="py-2 px-3 text-right">
-                            <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
+                            {isImage ? (
+                              <button className="text-accent hover:underline text-xs" onClick={() => openLightboxFor(file.path)}>查看</button>
+                            ) : (
+                              <button className="text-accent hover:underline text-xs" onClick={() => setPreviewFile(file)}>预览</button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -819,6 +883,28 @@ export default function Materials() {
         onSaved={() => { setTagEditorTarget(null); loadScoresAndMeta(); }}
         addToast={addToast}
       />
+
+      {showUpload && (
+        <UploadModal
+          currentPath={currentPath}
+          onClose={() => setShowUpload(false)}
+          onUploadComplete={() => { setShowUpload(false); refreshCurrent(); materialsApi.tree().then(r => setFolderTree(r.tree)); }}
+        />
+      )}
+
+      {previewFile && isTextFile(previewFile.suffix) && (
+        <TextPreview
+          path={previewFile.path}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
+
+      {previewFile && isPdfFile(previewFile.suffix) && (
+        <PdfPreview
+          path={previewFile.path}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }

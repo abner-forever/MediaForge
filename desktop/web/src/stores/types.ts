@@ -1,4 +1,4 @@
-import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary, CheckinStatus, UserProfile } from '../types';
+import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary, CheckinStatus, UserProfile, DailyTask } from '../types';
 import type { PublishTaskState } from './queueSlice';
 
 /* ── Theme Presets ──────────────────────────── */
@@ -181,8 +181,10 @@ export interface AppState {
   // Credits
   creditsBalance: number;
   checkinStatus: CheckinStatus;
+  dailyTasks: DailyTask[];
   setCreditsBalance: (balance: number) => void;
   setCheckinStatus: (status: CheckinStatus) => void;
+  setDailyTasks: (tasks: DailyTask[]) => void;
 
   // User
   isAuthenticated: boolean;

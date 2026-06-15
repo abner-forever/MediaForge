@@ -8,6 +8,8 @@ export interface SettingsData {
   ai_api_key_set: boolean;
   ai_api_key_masked: string;
   ai_api_keys: Record<string, string>;
+  tavily_api_key_set: boolean;
+  tavily_api_key_masked: string;
   weibo_cookie_set: boolean;
   weibo_cookie: string;
   weibo_uid: string;
