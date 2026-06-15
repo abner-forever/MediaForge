@@ -105,7 +105,7 @@ def start_server(host: str = "127.0.0.1", port: int = 8765) -> None:
     try:
         import uvicorn
         from desktop.api import app
-        uvicorn.run(app, host=host, port=port, log_level="warning")
+        uvicorn.run(app, host=host, port=port, log_level="info")
     except Exception:
         import traceback
         crash_log = PROJECT_ROOT / "data" / "logs" / "crash.log"
@@ -244,6 +244,31 @@ def _start_app() -> None:
             with open(path, "wb") as f:
                 f.write(data)
             return True
+
+        def open_url(self, url: str) -> bool:
+            """在前端点击外部链接时，创建一个新的应用内窗口。
+
+            PyWebView 6.x 的 create_window 在非主线程 + guilib 已就绪时，
+            会立刻创建原生窗口，不阻塞调用方。
+            """
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(url)
+                title = f"浏览 - {parsed.netloc}"
+                w = webview.create_window(
+                    title, url=url,
+                    width=1024, height=768,
+                    resizable=True,
+                )
+                # 持有引用防止被 GC
+                if not hasattr(self, '_browser_windows'):
+                    self._browser_windows = []
+                self._browser_windows.append(w)
+                return True
+            except Exception as e:
+                import logging
+                logging.getLogger('JsApi').warning(f"打开新窗口失败: {e}")
+                return False
 
     js_api = JsApi()
 

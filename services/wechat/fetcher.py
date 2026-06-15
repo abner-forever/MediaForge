@@ -20,6 +20,7 @@ from services.wechat.helpers import (
     _extract_token_from_url,
     _human_sleep,
     _looks_logged_in,
+    inject_cookies_from_state,
 )
 
 logger = get_logger(__name__)
@@ -84,6 +85,8 @@ def fetch_published_articles(
                 return
             browser_pages = context.pages
             page = browser_pages[0] if browser_pages else context.new_page()
+            # 从 state.json 注入 Cookie（兼容 WebView2 新登录方案）
+            inject_cookies_from_state(context, state_path)
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             _emit("正在检查登录状态...")
 

@@ -204,10 +204,13 @@ export default function RichTextEditor({
     };
   }, [viewMode]);
 
-  // Rendered HTML for preview pane
+  // Rendered HTML for preview pane（所有链接在新窗口打开）
   const htmlPreview = (() => {
     try {
-      return marked.parse(plainText, { breaks: true, gfm: true }) as string;
+      let html = marked.parse(plainText, { breaks: true, gfm: true }) as string;
+      // 给所有 <a> 标签添加 target="_blank" 和 rel="noopener noreferrer"
+      html = html.replace(/<a\s+(?![\s\S]*?target=)/gi, '<a target="_blank" rel="noopener noreferrer" ');
+      return html;
     } catch {
       return '';
     }

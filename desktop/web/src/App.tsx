@@ -61,6 +61,37 @@ export default function App() {
     return () => { window.removeEventListener('auth:logout', handleLogout); };
   }, []);
 
+  // PyWebView 环境：拦截外部链接，通过 bridge 打开新应用窗口
+  useEffect(() => {
+    if (!window.pywebview?.api) return;
+
+    const handler = (e: MouseEvent) => {
+      const link = (e.target as Element).closest('a[href]');
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href) return;
+
+      // 跳过内部链接、锚点、javascript 协议
+      if (href.startsWith('/') || href.startsWith('#') || href.startsWith('javascript:')) return;
+
+      try {
+        const url = new URL(href, window.location.origin);
+        if (url.origin === window.location.origin) return;
+      } catch {
+        return;
+      }
+
+      e.preventDefault();
+      window.pywebview!.api.open_url(href).catch(() => {
+        // bridge 失败时兜底：用浏览器默认方式打开
+        window.open(href, '_blank');
+      });
+    };
+
+    document.addEventListener('click', handler, false);
+    return () => document.removeEventListener('click', handler, false);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

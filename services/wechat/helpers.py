@@ -1,5 +1,6 @@
-"""微信发布辅助函数：日志、登录、通用 UI 操作。"""
+"""微信发布辅助函数：日志、登录、Cookie 注入、通用 UI 操作。"""
 
+import json
 import re
 import time
 from pathlib import Path
@@ -9,6 +10,44 @@ from config import WECHAT_STATE_PATH
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _normalize_same_site(same_site: str) -> str:
+    """标准化 sameSite 值，Playwright 只认 Strict/Lax/None。
+
+    WebView2 CookieManager 可能返回 Unspecified/NoRestriction/none/lax/strict 等格式。
+    """
+    if not same_site or not isinstance(same_site, str):
+        return 'None'
+    s = same_site.strip().lower()
+    if s in ('strict', 'lax', 'none'):
+        return s.capitalize()
+    return 'None'
+
+
+def inject_cookies_from_state(context, state_path: Path | None) -> None:
+    """从 state.json 注入 Cookie 到 Playwright Context。
+
+    同时修复 WebView2 来源 Cookie 的 sameSite 格式（Playwright 只认 Strict/Lax/None）。
+    新方案：登录时通过 WebView2 CookieManager 将 Cookie 写入 state.json，
+    发布/同步/状态检查时从此注入，避免依赖 Chromium Profile 原生 Cookie 存储。
+    旧方案（Playwright 直接登录）的 state.json 格式也兼容。
+    """
+    if not state_path or not state_path.exists():
+        return
+    try:
+        data = json.loads(state_path.read_text("utf-8"))
+        cookies = data.get("cookies", [])
+        if not cookies:
+            return
+        # 标准化 sameSite（修复 WebView2 来源 Cookie 兼容性问题）
+        for c in cookies:
+            if 'sameSite' in c:
+                c['sameSite'] = _normalize_same_site(c.get('sameSite', ''))
+        context.add_cookies(cookies)
+        logger.debug("从 state.json 注入了 %d 条 Cookie", len(cookies))
+    except Exception as e:
+        logger.warning("注入 Cookie 失败: %s", e)
 
 
 def _emit(msg: str, on_log: Optional[Callable[[str], None]] = None) -> None:

@@ -19,6 +19,7 @@ from services.wechat.helpers import (
     _goto_new_article_direct,
     _human_sleep,
     _log_frames,
+    inject_cookies_from_state,
 )
 from services.wechat.editor import (
     _fill_title_robustly,
@@ -85,6 +86,8 @@ def publish_article(
             # 使用浏览器默认打开的页面，避免创建新页面导致出现空白窗口
             pages = context.pages
             page = pages[0] if pages else context.new_page()
+            # 从 state.json 注入 Cookie（兼容 WebView2 新登录方案）
+            inject_cookies_from_state(context, state_path_global)
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             _emit("正在登录微信公众号...", on_log)
             _ensure_login(page, state_path=state_path_global, on_scan_needed=on_scan_needed)

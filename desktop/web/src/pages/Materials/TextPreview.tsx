@@ -25,6 +25,13 @@ hljs.registerLanguage('bash', bash);
  * ───────────────────────────────────────────── */
 
 const renderer = new Renderer();
+
+// 所有链接在新窗口打开
+renderer.link = function ({ href, title, text }: { href: string; title?: string | null; text: string; tokens?: any[] }): string {
+  const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+};
+
 renderer.code = function ({ text, lang }: { text: string; lang?: string; escaped?: boolean }): string {
   const language = lang || '';
   let highlighted: string;

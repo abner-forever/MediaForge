@@ -5,6 +5,7 @@ declare const __BUILD_TIME__: string;
 
 interface PyWebViewApi {
   save_file(filename: string, content: string, mime_type?: string): Promise<boolean>;
+  open_url(url: string): Promise<boolean>;
 }
 
 interface Window {
