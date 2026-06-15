@@ -4,6 +4,7 @@ import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/vi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { marked } from 'marked';
+import { tiptapToPlain, plainToTiptap } from './utils';
 import './RichTextEditor.less';
 
 interface RichTextEditorProps {
@@ -14,57 +15,6 @@ interface RichTextEditorProps {
 }
 
 type ViewMode = 'edit' | 'preview' | 'split';
-
-// Tiptap JSON → plain text for API storage
-function tiptapToPlain(doc: object): string {
-  try {
-    const d = doc as {
-      type?: string;
-      content?: Array<{
-        type?: string;
-        text?: string;
-        content?: Array<{
-          type?: string;
-          text?: string;
-          marks?: Array<{ type?: string }>;
-        }>;
-      }>;
-    };
-    if (!d || d.type !== 'doc' || !Array.isArray(d.content)) return '';
-    return d.content
-      .map((node) => {
-        if (node.type === 'paragraph' || node.type === 'heading') {
-          return (node.content || []).map((c) => c.text || '').join('');
-        }
-        return '';
-      })
-      .join('\n');
-  } catch {
-    return '';
-  }
-}
-
-// plain text from API → Tiptap JSON doc
-function plainToTiptap(text: string): object {
-  if (!text) {
-    return { type: 'doc', content: [{ type: 'paragraph' }] };
-  }
-  const lines = text.split(/\n/);
-  if (lines.length === 1 && lines[0] === '') {
-    return { type: 'doc', content: [{ type: 'paragraph' }] };
-  }
-  return {
-    type: 'doc',
-    content: lines.map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : [],
-    })),
-  };
-}
-
-function textToTiptap(text: string): object {
-  return plainToTiptap(text);
-}
 
 export { tiptapToPlain, plainToTiptap };
 
@@ -180,7 +130,7 @@ export default function RichTextEditor({
       if (update.docChanged) {
         const text = update.state.doc.toString();
         setPlainText(text);
-        onChange(textToTiptap(text));
+        onChange(plainToTiptap(text));
       }
     });
 

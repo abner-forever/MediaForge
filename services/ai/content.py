@@ -22,6 +22,7 @@ from services.ai.prompts import (
     ARTICLE_TITLE_CANDIDATES_TEMPLATE,
     ARTICLE_TITLE_TEMPLATE,
     PROMPT_TEMPLATE,
+    QUEUE_CAPTION_POLISH_TEMPLATE,
     TRENDING_CELEBRITIES_TEMPLATE,
 )
 
@@ -84,6 +85,14 @@ def generate_content(text: str) -> Tuple[str, str]:
 
     logger.error("AI 接口失败，使用兜底文案: %s", last_err)
     return "今日美图分享", ""
+
+
+def polish_queue_caption(text: str) -> str:
+    """AI 润色发布队列图集文案，输出格式：明星名称 | 描述文案"""
+    if not text or not text.strip():
+        return ""
+    prompt = QUEUE_CAPTION_POLISH_TEMPLATE.format(text=text[:300])
+    return _call_ai(prompt, text[:30])
 
 
 def _build_chat_prompt(content: str, instruction: str, messages: list | None = None, *, title: str = "", tags: list | None = None, web_context: str = "", write_mode: bool = True) -> str:

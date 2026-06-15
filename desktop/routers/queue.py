@@ -25,7 +25,7 @@ from desktop.api_helpers import (
     friendly_error_message,
     raise_friendly,
 )
-from services.ai import generate_content, strip_emoji
+from services.ai import generate_content, polish_queue_caption, strip_emoji
 from services.extensions import select_cover
 
 router = APIRouter(tags=["queue"])
@@ -193,43 +193,46 @@ async def generate_queue_content(item_id: str):
     if not settings.ai_api_key:
         return {"success": False, "title": original_title, "desc": original_desc, "message": "暂未配置APIKey"}
 
-    context = original_title or original_desc
-    if celebrity and context.startswith(f"{celebrity} | "):
-        stripped = context[len(f"{celebrity} | "):]
-        if len(stripped.strip()) >= 4:
-            context = stripped
-        elif original_desc and len(original_desc.strip()) >= 4:
-            context = original_desc
-        else:
-            new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
-            app_state.update_queue_item_by_id(item_id, {"title": new_title})
-            app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
-            return {"success": True, "title": new_title, "desc": "", "message": ""}
+    # 优先使用 desc，其次用 title
+    input_text = (original_desc or original_title or "").strip()
 
-    if not context:
-        new_title = f"{celebrity} | 今日分享" if celebrity else "今日分享"
-        app_state.update_queue_item_by_id(item_id, {"title": new_title})
-        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认标题")
-        return {"success": True, "title": new_title, "desc": "", "message": ""}
+    # 如果已有内容，确保带上「明星 | 」格式
+    if input_text:
+        if celebrity and not input_text.startswith(f"{celebrity} | "):
+            input_text = f"{celebrity} | {input_text}"
+    else:
+        # 空内容，生成默认
+        new_desc = f"{celebrity} | 今日美图分享" if celebrity else "今日美图分享"
+        app_state.update_queue_item_by_id(item_id, {"title": new_desc[:20], "desc": new_desc})
+        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成默认文案")
+        return {"success": True, "title": new_desc[:20], "desc": new_desc, "message": ""}
 
-    ai_title, _ = generate_content(context)
-    ai_title = strip_emoji(ai_title)
+    # 调用 AI 润色图集文案
+    ai_result = polish_queue_caption(input_text)
+    ai_result = strip_emoji(ai_result).strip()
 
-    if ai_title and (len(ai_title.strip()) < 2 or (ai_title.strip().isdigit() and len(ai_title.strip()) < 4)):
-        ai_title = ""
-
-    if not ai_title or ai_title == "今日美图分享":
-        msg = "AI 润色失败，已使用原标题"
-        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题失败")
+    # 校验结果
+    if not ai_result or len(ai_result) < 4:
+        msg = "AI 润色失败，已保留原内容"
+        app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成文案失败")
         return {"success": False, "title": original_title, "desc": original_desc, "message": msg}
 
-    if celebrity and ai_title.startswith(celebrity):
-        ai_title = ai_title[len(celebrity):].lstrip(" |：,，")
+    # 确保输出格式符合要求
+    if celebrity and not ai_result.startswith(f"{celebrity} | "):
+        ai_result = f"{celebrity} | {ai_result}"
 
-    new_title = f"{celebrity} | {ai_title}" if celebrity else ai_title
-    app_state.update_queue_item_by_id(item_id, {"title": new_title})
-    app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成标题")
-    return {"success": True, "title": new_title, "desc": "", "message": ""}
+    # 限制长度，取前 200 字符
+    ai_desc = ai_result[:200]
+    # 从文案取前 20 字作为标题
+    if " | " in ai_desc:
+        name_part, desc_part = ai_desc.split(" | ", 1)
+        ai_title = f"{name_part} | {desc_part[:16]}" if len(desc_part) > 16 else ai_desc
+    else:
+        ai_title = ai_desc[:20]
+
+    app_state.update_queue_item_by_id(item_id, {"title": ai_title, "desc": ai_desc})
+    app_state.add_operation("AI 润色", f"为「{celebrity or '未知'}」生成文案")
+    return {"success": True, "title": ai_title, "desc": ai_desc, "message": ""}
 
 
 def _run_queue_publish_background(

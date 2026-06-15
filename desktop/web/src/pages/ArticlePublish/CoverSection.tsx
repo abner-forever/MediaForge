@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CoverImage } from '../../api/client';
 import Loading from '../../components/Loading';
 
@@ -20,6 +21,9 @@ export default function CoverSection({
   onCoverLoad?: () => void;
   onAddCover?: () => void;
 }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const blurring = coverLoading && !imgLoaded;
+
   return (
     <div style={{ marginBottom: 0 }}>
       {cover ? (
@@ -27,13 +31,19 @@ export default function CoverSection({
           <img
             key={cover}
             src={onCoverImageUrl(cover)}
-            style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', display: coverLoading ? 'none' : 'block' }}
+            style={{
+              width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, cursor: 'pointer',
+              transition: 'filter 0.7s ease-out, transform 0.7s ease-out, opacity 0.5s ease-out',
+              filter: blurring ? 'blur(16px)' : 'blur(0)',
+              transform: blurring ? 'scale(1.02)' : 'scale(1)',
+              opacity: blurring ? 0.5 : 1,
+            }}
             onClick={() => onOpenLightbox([onCoverImageUrl(cover)], 0)}
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; onCoverLoad?.(); }}
-            onLoad={() => onCoverLoad?.()}
+            onLoad={() => { setImgLoaded(true); onCoverLoad?.(); }}
           />
           {coverLoading && (
-            <div style={{ width: '100%', height: 120, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, pointerEvents: 'none' }}>
               <Loading size="sm" />
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>正在加载封面...</span>
             </div>

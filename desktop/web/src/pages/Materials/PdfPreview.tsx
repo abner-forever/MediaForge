@@ -1,12 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { fileUrl } from '../../utils/file';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Vite 构建时自动处理 worker URL
+// 类型导入（编译时擦除），运行时动态 import 避免 460 kB 阻塞页面加载
+import type * as pdfjsLib from 'pdfjs-dist';
+// Vite 构建时自动处理 worker URL（作为静态资源，体积不影响主线程）
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite ?url 导入
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export default function PdfPreview({
   path, onClose,
@@ -43,7 +42,7 @@ export default function PdfPreview({
   const downloadHref = fileUrl(path);
   const fileName = path.split('/').pop();
 
-  // ════════════════ 加载 PDF ════════════════
+  // ════════════════ 加载 PDF（延迟导入 pdfjs-dist） ════════════════
   useEffect(() => {
     let cancelled = false;
 
@@ -54,10 +53,16 @@ export default function PdfPreview({
         if (!res.ok) throw new Error('获取失败');
         const buf = await res.arrayBuffer();
 
-        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        // 动态导入 pdfjs-dist（460 kB chunk 按需加载）
+        const pdfjs = await import('pdfjs-dist');
+        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+          (pdfjs.GlobalWorkerOptions as any).workerSrc = workerUrl;
+        }
+
+        const pdf = await pdfjs.getDocument({ data: buf }).promise;
         if (cancelled) return;
 
-        pdfRef.current = pdf;
+        pdfRef.current = pdf as any;
         setPageCount(pdf.numPages);
         setCurrentPage(1);
         setLoading(false);

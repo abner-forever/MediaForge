@@ -10,6 +10,7 @@ from services.ai.content import (
     generate_content,
     optimize_layout,
     polish_article,
+    polish_queue_caption,
     recommend_celebrities,
 )
 
@@ -22,5 +23,6 @@ __all__ = [
     "generate_content",
     "optimize_layout",
     "polish_article",
+    "polish_queue_caption",
     "recommend_celebrities",
 ]

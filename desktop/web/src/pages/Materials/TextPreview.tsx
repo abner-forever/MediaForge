@@ -1,7 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fileUrl } from '../../utils/file';
 import { marked, Renderer } from 'marked';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import xml from 'highlight.js/lib/languages/xml';
+import css from 'highlight.js/lib/languages/css';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+import bash from 'highlight.js/lib/languages/bash';
+
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('markdown', markdown);
+hljs.registerLanguage('bash', bash);
 
 /* ─────────────────────────────────────────────
  * 配置 marked + highlight.js 自定义渲染器
@@ -54,117 +71,112 @@ function escapeHtml(s: string): string {
 
 const CODE_STYLES = `
 /* ═══════════════════════════════════════════════
- * CSS 变量：代码块 & hljs 颜色 (主题无关/Light 默认)
- * 参考配色：Light→Rosé Pine Dawn, Dark→Catppuccin Mocha
+ * CSS 变量：代码块 & hljs 颜色 — GitHub 主题风格
  * ═══════════════════════════════════════════════ */
 
 :root {
-  --cb-bg: #faf8f5;
-  --cb-hdr-bg: #f0eeeb;
-  --cb-border: #e2e0dd;
-  --cb-fg: #575279;
-  --cb-lang: #9893a5;
-  --cb-copy-fg: #9893a5;
-  --cb-copy-fg-hover: #575279;
-  --cb-copy-hover: rgba(0,0,0,0.04);
-  --cb-copy-active: rgba(0,0,0,0.08);
-  /* hljs tokens — light */
-  --hl-fg: #575279;
-  --hl-comment: #9893a5;
-  --hl-keyword: #907aa9;
-  --hl-string: #286983;
-  --hl-number: #d7827e;
-  --hl-title: #56949f;
-  --hl-builtin: #ea9d34;
-  --hl-attr: #56949f;
-  --hl-type: #ea9d34;
-  --hl-variable: #56949f;
-  --hl-meta: #9893a5;
-  --hl-deletion: #b4637a;
-  --hl-addition: #286983;
+  --cb-bg: #f6f8fa;
+  --cb-hdr-bg: #eff2f5;
+  --cb-border: #d0d7de;
+  --cb-fg: #1f2328;
+  --cb-lang: #656d76;
+  --cb-copy-fg: #656d76;
+  --cb-copy-fg-hover: #1f2328;
+  --cb-copy-hover: rgba(31,35,40,0.06);
+  --cb-copy-active: rgba(31,35,40,0.12);
+  /* hljs tokens — GitHub Light */
+  --hl-fg: #1f2328;
+  --hl-comment: #6e7781;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-title: #8250df;
+  --hl-builtin: #0550ae;
+  --hl-attr: #0a3069;
+  --hl-type: #0550ae;
+  --hl-variable: #953800;
+  --hl-meta: #6e7781;
+  --hl-deletion: #82071e;
+  --hl-addition: #116329;
 }
 
 [data-theme="dark"] {
-  --cb-bg: #1e1e2e;
-  --cb-hdr-bg: #181825;
-  --cb-border: #313244;
-  --cb-fg: #cdd6f4;
-  --cb-lang: #a6adc8;
-  --cb-copy-fg: #6c7086;
-  --cb-copy-fg-hover: #cdd6f4;
-  --cb-copy-hover: rgba(255,255,255,0.06);
-  --cb-copy-active: rgba(255,255,255,0.10);
-  --hl-fg: #cdd6f4;
-  --hl-comment: #6c7086;
-  --hl-keyword: #cba6f7;
-  --hl-string: #a6e3a1;
-  --hl-number: #fab387;
-  --hl-title: #89b4fa;
-  --hl-builtin: #f9e2af;
-  --hl-attr: #89dceb;
-  --hl-type: #f9e2af;
-  --hl-variable: #94e2d5;
-  --hl-meta: #585b70;
-  --hl-deletion: #f38ba8;
-  --hl-addition: #a6e3a1;
+  --cb-bg: #161b22;
+  --cb-hdr-bg: #0d1117;
+  --cb-border: #30363d;
+  --cb-fg: #e6edf3;
+  --cb-lang: #8b949e;
+  --cb-copy-fg: #8b949e;
+  --cb-copy-fg-hover: #e6edf3;
+  --cb-copy-hover: rgba(230,237,243,0.06);
+  --cb-copy-active: rgba(230,237,243,0.12);
+  --hl-fg: #e6edf3;
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-builtin: #79c0ff;
+  --hl-attr: #79c0ff;
+  --hl-type: #79c0ff;
+  --hl-variable: #ffa657;
+  --hl-meta: #8b949e;
+  --hl-deletion: #ffdcd7;
+  --hl-addition: #aff5b4;
 }
 
 [data-theme="auto"] { /* inherit :root (light) */ }
 @media (prefers-color-scheme: dark) {
   [data-theme="auto"] {
-    --cb-bg: #1e1e2e;
-    --cb-hdr-bg: #181825;
-    --cb-border: #313244;
-    --cb-fg: #cdd6f4;
-    --cb-lang: #a6adc8;
-    --cb-copy-fg: #6c7086;
-    --cb-copy-fg-hover: #cdd6f4;
-    --cb-copy-hover: rgba(255,255,255,0.06);
-    --cb-copy-active: rgba(255,255,255,0.10);
-    --hl-fg: #cdd6f4;
-    --hl-comment: #6c7086;
-    --hl-keyword: #cba6f7;
-    --hl-string: #a6e3a1;
-    --hl-number: #fab387;
-    --hl-title: #89b4fa;
-    --hl-builtin: #f9e2af;
-    --hl-attr: #89dceb;
-    --hl-type: #f9e2af;
-    --hl-variable: #94e2d5;
-    --hl-meta: #585b70;
-    --hl-deletion: #f38ba8;
-    --hl-addition: #a6e3a1;
+    --cb-bg: #161b22;
+    --cb-hdr-bg: #0d1117;
+    --cb-border: #30363d;
+    --cb-fg: #e6edf3;
+    --cb-lang: #8b949e;
+    --cb-copy-fg: #8b949e;
+    --cb-copy-fg-hover: #e6edf3;
+    --cb-copy-hover: rgba(230,237,243,0.06);
+    --cb-copy-active: rgba(230,237,243,0.12);
+    --hl-fg: #e6edf3;
+    --hl-comment: #8b949e;
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-number: #79c0ff;
+    --hl-title: #d2a8ff;
+    --hl-builtin: #79c0ff;
+    --hl-attr: #79c0ff;
+    --hl-type: #79c0ff;
+    --hl-variable: #ffa657;
+    --hl-meta: #8b949e;
+    --hl-deletion: #ffdcd7;
+    --hl-addition: #aff5b4;
   }
 }
 
 /* ═══════════════════════════════════════════════
- * 代码块 wrapper
+ * 代码块 wrapper — GitHub 风格
  * ═══════════════════════════════════════════════ */
 
 .cb-wrap {
   margin: 1.2em 0;
-  border-radius: 12px;
+  border-radius: 6px;
   overflow: hidden;
   border: 1px solid var(--cb-border);
   background: var(--cb-bg);
-  transition: box-shadow 0.2s;
 }
-.cb-wrap:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
 
 .cb-hdr {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 8px 16px;
   background: var(--cb-hdr-bg);
   border-bottom: 1px solid var(--cb-border);
   user-select: none;
 }
 .cb-lang {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--cb-lang);
 }
 
@@ -172,14 +184,15 @@ const CODE_STYLES = `
 .cb-copy {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: none;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--cb-border);
   border-radius: 6px;
-  background: transparent;
+  background: var(--cb-bg);
   color: var(--cb-copy-fg);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1;
   transition: background 0.15s, color 0.15s;
 }
 .cb-copy:hover { background: var(--cb-copy-hover); color: var(--cb-copy-fg-hover); }
@@ -195,11 +208,11 @@ const CODE_STYLES = `
 
 .cb-body {
   margin: 0 !important;
-  padding: 16px 18px !important;
+  padding: 8px 12px;
   overflow-x: auto;
   background: transparent !important;
   border: none !important;
-  line-height: 1.55 !important;
+  line-height: 1.6 !important;
   font-size: 13px !important;
 }
 .cb-body code {
@@ -207,7 +220,7 @@ const CODE_STYLES = `
   padding: 0 !important;
   font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', ui-monospace, 'Menlo', monospace !important;
   font-size: 13px !important;
-  line-height: 1.55 !important;
+  line-height: 1.6 !important;
   color: var(--cb-fg);
 }
 
@@ -243,117 +256,168 @@ const CODE_STYLES = `
 .hljs-link { text-decoration: underline; }
 
 /* ═══════════════════════════════════════════════
- * Markdown 内容排版
+ * Markdown 内容排版 — GitHub 风格
  * ═══════════════════════════════════════════════ */
 
-.md-content { color: var(--text); line-height: 1.75; font-size: 15px; }
-.md-content > *:first-child { margin-top: 0; }
-.md-content > *:last-child { margin-bottom: 0; }
-
-.md-content h1 {
-  font-size: 1.7em;
-  font-weight: 750;
-  margin: 1.2em 0 0.5em;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
+.md-content {
   color: var(--text);
-  padding-bottom: 0.2em;
-  border-bottom: 2px solid var(--border);
+  line-height: 1.6;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  padding: 0 6px;
+}
+.md-content > *:first-child { margin-top: 0 !important; }
+.md-content > *:last-child { margin-bottom: 0 !important; }
+
+.md-content h1, .md-content h2, .md-content h3, .md-content h4,
+.md-content h5, .md-content h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.md-content h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
 }
 .md-content h2 {
-  font-size: 1.35em;
-  font-weight: 700;
-  margin: 1.1em 0 0.45em;
-  line-height: 1.35;
-  letter-spacing: -0.015em;
-  color: var(--text);
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
 }
-.md-content h3 {
-  font-size: 1.1em;
-  font-weight: 650;
-  margin: 1em 0 0.4em;
-  line-height: 1.4;
-  color: var(--text);
+.md-content h3 { font-size: 1.25em; }
+.md-content h4 { font-size: 1em; }
+.md-content h5 { font-size: 0.875em; }
+.md-content h6 {
+  font-size: 0.85em;
+  color: var(--text-muted);
 }
-.md-content h4 { font-weight: 650; margin: 0.8em 0 0.3em; color: var(--text-secondary); }
-.md-content p { margin: 0 0 0.85em; }
+
+.md-content p { margin: 0 0 16px; }
 .md-content p:last-child { margin-bottom: 0; }
+
 .md-content a {
   color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
-  transition: color 0.15s;
+  text-decoration: none;
 }
-.md-content a:hover { color: var(--accent-hover); }
-.md-content strong { font-weight: 650; }
+.md-content a:hover { text-decoration: underline; }
+.md-content strong { font-weight: 600; }
 .md-content em { font-style: italic; }
 .md-content s { text-decoration: line-through; }
 
-.md-content ul, .md-content ol { margin: 0 0 0.85em; padding-left: 1.5em; }
-.md-content li { margin: 0.3em 0; }
-.md-content li > p { margin: 0; }
+.md-content ul, .md-content ol { margin: 0 0 16px; padding-left: 2em; }
+.md-content li { margin: 0; }
+.md-content li + li { margin-top: 0.25em; }
+.md-content li > p { margin-top: 16px; }
+.md-content ul ul, .md-content ol ul, .md-content ul ol, .md-content ol ol { margin: 0; }
 
 .md-content blockquote {
-  margin: 0.85em 0;
-  padding: 0.6em 1em 0.6em 1.2em;
-  border-left: 3px solid var(--accent);
-  background: var(--accent-softer);
-  border-radius: 0 8px 8px 0;
-  color: var(--text-secondary);
+  margin: 0 0 16px;
+  padding: 0 1em;
+  border-left: 0.25em solid #d0d7de;
+  color: #656d76;
+}
+[data-theme="dark"] .md-content blockquote {
+  border-left-color: #30363d;
+  color: #8b949e;
+}
+@media (prefers-color-scheme: light) {
+  [data-theme="auto"] .md-content blockquote { border-left-color: #d0d7de; color: #656d76; }
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .md-content blockquote {
+    border-left-color: #30363d;
+    color: #8b949e;
+  }
 }
 .md-content blockquote p:last-child { margin-bottom: 0; }
+.md-content blockquote > :first-child { margin-top: 0; }
+.md-content blockquote > :last-child { margin-bottom: 0; }
 
 .md-content hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--border), transparent);
-  margin: 1.5em 0;
+  height: 0.25em;
+  padding: 0;
+  margin: 24px 0;
+  background: #d0d7de;
+  border: 0;
+}
+[data-theme="dark"] .md-content hr { background: #30363d; }
+@media (prefers-color-scheme: light) {
+  [data-theme="auto"] .md-content hr { background: #d0d7de; }
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .md-content hr { background: #30363d; }
 }
 
 .md-content img {
   max-width: 100%;
   height: auto;
-  border-radius: 10px;
+  box-sizing: content-box;
+  border-radius: 6px;
   margin: 0.85em 0;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
 .md-content table {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   border-collapse: collapse;
   margin: 0.85em 0;
   font-size: 0.9em;
+  overflow: auto;
+  display: block;
 }
 .md-content th {
   background: var(--bg-secondary);
   font-weight: 600;
   text-align: left;
-  padding: 8px 12px;
+  padding: 6px 13px;
   border: 1px solid var(--border);
 }
 .md-content td {
-  padding: 8px 12px;
+  padding: 6px 13px;
   border: 1px solid var(--border);
 }
 .md-content tr:nth-child(even) { background: var(--bg-secondary); }
+.md-content tr { border-top: 1px solid var(--border); }
 
 .md-content code:not(.hljs) {
-  background: var(--bg-inset);
-  padding: 2px 7px;
-  border-radius: 5px;
-  font-size: 0.88em;
+  background: rgba(175,184,193,0.2);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  font-size: 0.85em;
   font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
   color: var(--text);
-  border: 1px solid var(--border-subtle);
+}
+[data-theme="dark"] .md-content code:not(.hljs) { background: rgba(110,118,129,0.4); }
+@media (prefers-color-scheme: light) {
+  [data-theme="auto"] .md-content code:not(.hljs) { background: rgba(175,184,193,0.2); }
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .md-content code:not(.hljs) { background: rgba(110,118,129,0.4); }
 }
 
 .md-content pre {
   margin: 0 !important;
   background: transparent !important;
   border: none !important;
-  padding: 0 !important;
 }
+
+.md-content .task-list-item {
+  list-style: none;
+}
+.md-content .task-list-item input[type="checkbox"] {
+  margin: 0 0.2em 0.25em -1.6em;
+  vertical-align: middle;
+}
+.md-content .contains-task-list { padding-left: 0; }
+.md-content .contains-task-list .contains-task-list { padding-left: 2em; }
+
+.md-content > :first-child { margin-top: 0; }
+.md-content > :last-child { margin-bottom: 0; }
 
 /* ═══ Plain text ═══ */
 .md-content .plain-text {
@@ -363,6 +427,16 @@ const CODE_STYLES = `
   font-size: 13px;
   line-height: 1.6;
   color: var(--text);
+}
+
+.plain-text { /* standalone plain-text pre (not inside .md-content) */
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  padding: 4px 0;
 }
 
 /* ═══════════════════════════════════════════════
@@ -545,7 +619,7 @@ export default function TextPreview({
           {/* ── 内容区 ── */}
           <div
             ref={contentRef}
-            className="flex-1 min-h-0 overflow-y-auto px-8 py-6 md-scroll"
+            className="flex-1 min-h-0 overflow-y-auto px-10 py-8 md-scroll"
           >
             {/* 加载中 */}
             {loading && (

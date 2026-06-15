@@ -46,6 +46,7 @@ export default function PublishConfirmModal({
 }: PublishConfirmModalProps) {
   const [ackHighRisk, setAckHighRisk] = useState(false);
   const [headless, setHeadless] = useState(false);
+  const [coverLoaded, setCoverLoaded] = useState(false);
   const [risks, setRisks] = useState<{ level: 'high' | 'medium' | 'low'; text: string }[]>([]);
   const [dupCheck, setDupCheck] = useState<DuplicateCheckResult | null>(null);
 
@@ -122,7 +123,15 @@ export default function PublishConfirmModal({
           </div>
           {cover ? (
             <button className="block w-full rounded-lg overflow-hidden border border-border bg-bg-secondary" onClick={(e) => e.preventDefault()}>
-              <img src={imgSrc(cover)} alt="" className="w-full aspect-[4/3] object-cover" />
+              <img src={imgSrc(cover)} alt=""
+                className="w-full aspect-[4/3] object-cover transition-all duration-700 ease-out"
+                style={{
+                  filter: coverLoaded ? 'blur(0)' : 'blur(16px)',
+                  transform: coverLoaded ? 'scale(1)' : 'scale(1.02)',
+                  opacity: coverLoaded ? 1 : 0.5,
+                }}
+                onLoad={() => setCoverLoaded(true)}
+              />
             </button>
           ) : (
             <div className="rounded-lg border border-dashed border-border p-6 text-sm text-text-muted text-center">未选择封面</div>

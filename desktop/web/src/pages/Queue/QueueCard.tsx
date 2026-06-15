@@ -193,8 +193,8 @@ const QueueCard = React.memo(function QueueCard({ item, seq, accounts }: { item:
       addToast('AI 正在润色...', 'info');
       try {
         const r = await queueApi.generate(itemId);
-        setTitle(r.title);
-        if (r.success) setDesc('');
+        if (r.desc) setDesc(r.desc);
+        if (r.title) setTitle(r.title);
         setQueue((await queueApi.get()).queue);
         if (r.message) {
           addToast(r.message, 'error');

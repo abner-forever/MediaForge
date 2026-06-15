@@ -18,18 +18,11 @@ interface LazyImageProps {
   onError?: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   placeholder?: React.ReactNode;
   rootMargin?: string;
+  /** 模糊过渡时长（ms），默认 700 */
+  blurDuration?: number;
 }
 
-const shimmerStyle = {
-  background: 'var(--bg-secondary)',
-};
-
-const shimmerSlideStyle = {
-  background: 'linear-gradient(90deg, transparent 0%, var(--bg-elevated) 50%, transparent 100%)',
-  animation: 'lazy-shimmer-slide 1.5s linear infinite',
-};
-
-export default function LazyImage({ src, alt = '', className, imgClassName, onClick, onError, placeholder, rootMargin = '200px' }: LazyImageProps) {
+export default function LazyImage({ src, alt = '', className, imgClassName, onClick, onError, placeholder, rootMargin = '200px', blurDuration = 700 }: LazyImageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -52,21 +45,18 @@ export default function LazyImage({ src, alt = '', className, imgClassName, onCl
   }, [rootMargin]);
 
   return (
-    <div ref={ref} className={`relative overflow-hidden ${className || ''}`} onClick={onClick}>
-      {/* shimmer 骨架屏 */}
-      {!inView || !loaded ? (
-        <div className="absolute inset-0 overflow-hidden" style={shimmerStyle}>
-          <div className="absolute inset-y-0 left-0 right-0" style={shimmerSlideStyle} />
-        </div>
-      ) : null}
-      {/* 纯 CSS shimmer keyframes */}
-      <style>{`@keyframes lazy-shimmer-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
+    <div ref={ref} className={`relative overflow-hidden bg-bg-secondary ${className || ''}`} onClick={onClick}>
       {inView && (
         <img
           src={src}
           alt={alt}
           draggable={false}
-          className={`w-full h-full ${imgClassName || 'object-cover'} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+          className={`w-full h-full ${imgClassName || 'object-cover'} transition-all duration-700 ease-out ${
+            loaded
+              ? 'opacity-100 scale-100 blur-none'
+              : 'opacity-50 scale-[1.02] blur-lg'
+          }`}
+          style={{ transitionDuration: loaded ? `${Math.min(blurDuration, 800)}ms` : '0ms' }}
           onLoad={() => setLoaded(true)}
           onError={(e) => {
             setError(true);

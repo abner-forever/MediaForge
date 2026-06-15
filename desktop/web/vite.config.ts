@@ -22,7 +22,7 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: true,
     minify: 'esbuild',
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         entryFileNames: 'js/[name]-[hash].js',
         chunkFileNames(chunkInfo) {
@@ -41,6 +41,8 @@ export default defineConfig({
             if (id.includes('/node_modules/react-router')) return 'vendor-router';
             if (id.includes('/node_modules/zustand/')) return 'vendor-state';
             if (id.includes('/node_modules/marked/')) return 'vendor-marked';
+            if (id.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf';
+            if (id.includes('/node_modules/highlight.js/')) return 'vendor-highlight';
             const cmMatch = id.match(/\/node_modules\/@codemirror\/([^/]+)/);
             if (cmMatch) return `cm-${cmMatch[1]}`;
             if (id.includes('/node_modules/@tiptap/') || id.includes('/node_modules/prosemirror-')) return 'vendor-editor';

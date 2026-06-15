@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../stores';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,7 +8,8 @@ import Loading from '../../components/Loading';
 import Dialog from '../../components/Dialog';
 import PublishConfirmModal from '../../components/PublishConfirmModal';
 import EffectEntry from '../../components/EffectEntry';
-import RichTextEditor, { tiptapToPlain, plainToTiptap } from '../../components/feature/RichTextEditor';
+import { tiptapToPlain, plainToTiptap } from '../../components/feature/RichTextEditor/utils';
+const RichTextEditor = lazy(() => import('../../components/feature/RichTextEditor'));
 import Select from '../../components/Select';
 import Drawer from '../../components/ui/Drawer';
 import AIToolbar from './AIToolbar';
@@ -882,6 +883,11 @@ export default function ArticlePublish() {
 
           {/* Editor */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Suspense fallback={
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+              </div>
+            }>
             <RichTextEditor
               value={contentDoc}
               onChange={(doc) => {
@@ -891,6 +897,7 @@ export default function ArticlePublish() {
               placeholder="开始写作..."
               minHeight={400}
             />
+            </Suspense>
           </div>
         </div>
 

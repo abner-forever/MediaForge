@@ -13,6 +13,7 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
   const addToast = useStore(s => s.addToast);
   const setQueue = useStore(s => s.setQueue);
   const [selectedAccountId, setSelectedAccountId] = useState(item.account_id || '');
+  const [coverLoaded, setCoverLoaded] = useState(false);
   const tags = item.tags || [];
 
   async function deleteItem(deleteLocal: boolean) {
@@ -85,7 +86,14 @@ const ArticleCard = React.memo(function ArticleCard({ item, seq, accounts }: { i
             </div>
           )}
           {item.cover ? (
-            <img src={imgSrc(item.cover)} alt="" className="w-full h-full absolute inset-0 object-cover" />
+            <img src={imgSrc(item.cover)} alt="" className="w-full h-full absolute inset-0 object-cover transition-all duration-700 ease-out"
+              style={{
+                filter: coverLoaded ? 'blur(0)' : 'blur(16px)',
+                transform: coverLoaded ? 'scale(1)' : 'scale(1.02)',
+                opacity: coverLoaded ? 1 : 0.5,
+              }}
+              onLoad={() => setCoverLoaded(true)}
+            />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <svg className="w-12 h-12 text-[var(--accent)]/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
