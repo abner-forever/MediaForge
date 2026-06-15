@@ -44,6 +44,7 @@ export interface SettingsData {
   materials_path: string;
   download_dir: string;
   wechat_accounts: WeChatAccount[];
+  ai_recommended_celebs?: string;
   sidebar_open: string;
   sidebar_width: string;
 }

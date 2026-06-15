@@ -92,6 +92,7 @@ export default function Discovery() {
         if (s.weibo_super_topics) setSuperTopics(s.weibo_super_topics);
         if (s.toutiao_search_tags) setToutiaoKeywords(s.toutiao_search_tags);
       }
+      if (s.ai_recommended_celebs) setRecommendedCelebs(s.ai_recommended_celebs.split(','));
       if (s.post_limit) setLimit(s.post_limit);
     }).catch(() => {});
   }, []);
@@ -281,7 +282,9 @@ export default function Discovery() {
     try {
       const res = await discoveryApi.trendingCelebrities();
       setRecommendedCelebs(res.celebrities);
-      addToast(recommendedCelebs.length ? '已刷新今日推荐' : '已推荐当前发文流量最大的明星，点击即可搜索', 'success');
+      // 持久化到 settings，刷新页面不丢失
+      settingsApi.save({ AI_RECOMMENDED_CELEBS: res.celebrities.join(',') }).catch(() => {});
+      addToast(res.celebrities.length ? '已刷新今日推荐' : '已推荐当前发文流量最大的明星，点击即可搜索', 'success');
     } catch (err: any) {
       addToast(err.message || '推荐失败', 'error');
     }

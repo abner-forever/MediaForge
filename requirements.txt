@@ -5,6 +5,7 @@ pillow
 opencv-python-headless
 tenacity>=8.2.0
 fastapi
+python-multipart
 uvicorn
 pywebview
 PyJWT

@@ -266,6 +266,10 @@ async def get_trending_celebrities():
         from services.ai import recommend_celebrities
         loop = asyncio.get_event_loop()
         celebs = await loop.run_in_executor(None, recommend_celebrities)
+        # 持久化推荐结果到 settings.json，刷新页面后不丢失
+        if celebs:
+            from utils.settings_store import write_settings
+            write_settings({"AI_RECOMMENDED_CELEBS": ",".join(celebs)})
         return {"celebrities": celebs}
     except Exception as e:
         _req_logger.warning("AI 推荐热门明星失败，使用兜底列表: %s", e)

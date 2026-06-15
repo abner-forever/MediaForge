@@ -105,6 +105,7 @@ async def get_settings():
         "download_dir": str(DOWNLOAD_DIR),
         "theme": store.get("APP_THEME", ""),
         "accent": store.get("APP_ACCENT", ""),
+        "ai_recommended_celebs": cfg.get("AI_RECOMMENDED_CELEBS", ""),
         "sidebar_open": store.get("SIDEBAR_OPEN", "true"),
         "sidebar_width": store.get("SIDEBAR_WIDTH", "240"),
         "wechat_accounts": get_wechat_accounts_list(),
