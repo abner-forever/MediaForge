@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.2 (2026-06-15)
+
+### Bug Fixes
+
+- 持久化 AI 推荐明星到设置，刷新页面后不丢失
+  ([`8aae814`](https://github.com/abner-forever/MediaForge/commit/8aae81477196529b9e14388496663b130e437435))
+
+
 ## v1.22.1 (2026-06-15)
 
 ### Bug Fixes
