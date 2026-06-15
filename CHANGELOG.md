@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.3 (2026-06-15)
+
+### Bug Fixes
+
+- 支持通过 PyWebView 打开外部链接，增强微信公众号登录和 Cookie 注入功能
+  ([`2fca251`](https://github.com/abner-forever/MediaForge/commit/2fca25112d2317640edac4b1aa29b08f6ee57464))
+
+
 ## v1.22.2 (2026-06-15)
 
 ### Bug Fixes
