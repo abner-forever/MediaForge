@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.7 (2026-06-16)
+
+### Bug Fixes
+
+- 优化构建流程，支持从 CI 传入 APP_VERSION，并更新 Sentry 配置以包含版本信息
+  ([`be823f8`](https://github.com/abner-forever/MediaForge/commit/be823f8d0d58e684e49bf7f33c0b13371869dcce))
+
+
 ## v1.22.6 (2026-06-16)
 
 ### Bug Fixes
