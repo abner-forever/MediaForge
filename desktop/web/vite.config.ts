@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
@@ -8,9 +9,25 @@ const pyproject = readFileSync(resolve(__dirname, '../../pyproject.toml'), 'utf-
 const version = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1] || '0.0.0';
 const buildTime = new Date().toISOString();
 
+// 仅当 SENTRY_AUTH_TOKEN 存在时启用 Sentry source map 上传
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version), __BUILD_TIME__: JSON.stringify(buildTime) },
-  plugins: [react()],
+  plugins: [
+    react(),
+    sentryAuthToken
+      ? sentryVitePlugin({
+          org: 'abnerming',
+          project: 'mediaforge',
+          authToken: sentryAuthToken,
+          telemetry: false,
+          sourcemaps: {
+            assets: 'static/**',
+          },
+        })
+      : undefined,
+  ].filter(Boolean) as any,
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

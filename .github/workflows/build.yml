@@ -101,6 +101,8 @@ jobs:
           cache-dependency-path: desktop/web/pnpm-lock.yaml
 
       - name: 构建前端
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
           cd desktop/web
           pnpm install --frozen-lockfile
@@ -194,6 +196,8 @@ jobs:
 
       - name: 构建前端
         shell: bash
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
           cd desktop/web
           pnpm install --frozen-lockfile

@@ -6,6 +6,7 @@ import type { StateCreator } from 'zustand';
 import type { AppState } from './types';
 import type { UserProfile } from '../types';
 import { userApi } from '../api/client';
+import { setSentryUser } from '../sentry';
 
 export interface UserSlice {
   // 状态
@@ -57,6 +58,8 @@ export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, 
       token,
     });
     localStorage.setItem('auth_token', token);
+    // 同步用户上下文到 Sentry
+    setSentryUser(user);
   },
 
   // 登出
@@ -69,13 +72,18 @@ export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, 
     localStorage.removeItem('auth_token');
     // 清除后端持久化的 token（PyWebView 重启恢复用）
     userApi.logout().catch(() => {});
+    // 清除 Sentry 用户上下文
+    setSentryUser(null);
   },
 
   // 更新用户信息
   updateUserInfo: (updates) => {
     const { user } = get();
     if (user) {
-      set({ user: { ...user, ...updates } });
+      const updated = { ...user, ...updates };
+      set({ user: updated });
+      // 同步更新 Sentry 上下文
+      setSentryUser(updated);
     }
   },
 });

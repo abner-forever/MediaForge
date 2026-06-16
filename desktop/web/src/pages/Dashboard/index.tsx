@@ -38,6 +38,14 @@ export default function Dashboard() {
   const { loading: loadingDashboard, withLoading: withLoad } = useLoading();
   const { loading: deleting, withLoading: withDelete } = useLoading();
 
+  function triggerSentryError() {
+    // 制造一个真实的运行时错误
+    const obj: Record<string, unknown> = {};
+    // @ts-expect-error — 故意访问深层未定义属性触发异常
+    const x = obj.user.profile.name;
+    console.log(x);
+  }
+
   async function load() {
     await withLoad(async () => {
       try {
@@ -182,6 +190,20 @@ export default function Dashboard() {
   return (
     <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <HeroSection health={health} />
+
+      {/* Sentry 手动测试按钮 — 仅开发环境可见 */}
+      {import.meta.env.VITE_SENTRY_DEBUG && (
+        <div className="flex justify-end">
+          <button
+            className="btn btn-ghost btn-xs text-text-muted/40 hover:text-danger/60 transition-colors"
+            onClick={triggerSentryError}
+            title="点击触发一个错误，验证 Sentry 上报"
+          >
+            🧪 Sentry
+          </button>
+        </div>
+      )}
+
       <StatCards stats={stats} navigate={navigate} />
       <StudioActions navigate={navigate} />
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
