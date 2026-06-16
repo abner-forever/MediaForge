@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.22.4 (2026-06-16)
+
+### Bug Fixes
+
+- Integrate Sentry for error monitoring and reporting
+  ([`d392f96`](https://github.com/abner-forever/MediaForge/commit/d392f96dbfa1450d767fb1c11ce981938bbbb440))
+
+### Refactoring
+
+- Improve code formatting and readability across multiple files
+  ([`e56e473`](https://github.com/abner-forever/MediaForge/commit/e56e473ec822e9d18d57ab9596813347caa379ca))
+
+
 ## v1.22.3 (2026-06-15)
 
 ### Bug Fixes
