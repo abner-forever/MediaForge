@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.6 (2026-06-16)
+
+### Bug Fixes
+
+- 更新构建流程以支持前端产物上传和下载，优化 Sentry 配置
+  ([`1108f22`](https://github.com/abner-forever/MediaForge/commit/1108f22377b0800b8c509bc2427d4965fcc36444))
+
+
 ## v1.22.5 (2026-06-16)
 
 ### Bug Fixes
