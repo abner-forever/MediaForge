@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.22.5 (2026-06-16)
+
+### Bug Fixes
+
+- 添加 SENTRY_AUTH_TOKEN 环境变量以支持 Sentry source map 上传
+  ([`619a7c9`](https://github.com/abner-forever/MediaForge/commit/619a7c95307ae17726ba87a09468af38f50182b8))
+
+
 ## v1.22.4 (2026-06-16)
 
 ### Bug Fixes
