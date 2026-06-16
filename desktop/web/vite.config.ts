@@ -12,14 +12,18 @@ const buildTime = new Date().toISOString();
 // 仅当 SENTRY_AUTH_TOKEN 存在时启用 Sentry source map 上传
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
+// 组织 slug 和项目名 — 在 Sentry Settings → General Settings 顶部查看
+const SENTRY_ORG = 'abner';
+const SENTRY_PROJECT = 'mediaforge';
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version), __BUILD_TIME__: JSON.stringify(buildTime) },
   plugins: [
     react(),
     sentryAuthToken
       ? sentryVitePlugin({
-          org: 'abnerming',
-          project: 'mediaforge',
+          org: SENTRY_ORG,
+          project: SENTRY_PROJECT,
           authToken: sentryAuthToken,
           telemetry: false,
           sourcemaps: {

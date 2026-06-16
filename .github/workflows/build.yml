@@ -103,6 +103,7 @@ jobs:
       - name: 构建前端
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           cd desktop/web
           pnpm install --frozen-lockfile
@@ -198,6 +199,7 @@ jobs:
         shell: bash
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
           cd desktop/web
           pnpm install --frozen-lockfile
