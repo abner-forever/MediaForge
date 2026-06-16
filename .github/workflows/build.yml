@@ -76,12 +76,9 @@ jobs:
             echo "无新版本，当前版本: ${NEXT_VERSION}"
           fi
 
-  build-macos:
+  build-frontend:
     needs: [calculate-version]
-    runs-on: macos-latest
-    env:
-      PYTHON_VERSION: '3.11.9'
-      APP_VERSION: ${{ needs.calculate-version.outputs.version }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
@@ -104,10 +101,36 @@ jobs:
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG || 'abner-94' }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || 'mediaforge' }}
         run: |
           cd desktop/web
           pnpm install --frozen-lockfile
           pnpm run build
+
+      - name: 上传前端产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: desktop/static/
+          retention-days: 1
+
+  build-macos:
+    needs: [calculate-version, build-frontend]
+    runs-on: macos-latest
+    env:
+      PYTHON_VERSION: '3.11.9'
+      APP_VERSION: ${{ needs.calculate-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: 下载前端产物
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: desktop/static/
 
       - name: 安装 Python
         run: |
@@ -173,7 +196,7 @@ jobs:
           path: MediaForge-macOS-*.dmg
 
   build-windows:
-    needs: [calculate-version]
+    needs: [calculate-version, build-frontend]
     runs-on: windows-latest
     env:
       APP_VERSION: ${{ needs.calculate-version.outputs.version }}
@@ -182,28 +205,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 设置 pnpm
-        uses: pnpm/action-setup@v4
+      - name: 下载前端产物
+        uses: actions/download-artifact@v8
         with:
-          version: 9
-          run_install: false
-
-      - name: 设置 Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
-          cache: 'pnpm'
-          cache-dependency-path: desktop/web/pnpm-lock.yaml
-
-      - name: 构建前端
-        shell: bash
-        env:
-          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: |
-          cd desktop/web
-          pnpm install --frozen-lockfile
-          pnpm run build
+          name: frontend-dist
+          path: desktop/static/
 
       - name: 设置 Python
         uses: actions/setup-python@v6
