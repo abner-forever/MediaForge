@@ -99,6 +99,7 @@ jobs:
 
       - name: 构建前端
         env:
+          APP_VERSION: ${{ needs.calculate-version.outputs.version }}-build-${{ github.run_id }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG || 'abner-94' }}

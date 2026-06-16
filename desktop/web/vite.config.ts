@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
 const pyproject = readFileSync(resolve(__dirname, '../../pyproject.toml'), 'utf-8');
-const version = pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1] || '0.0.0';
+// 优先使用 CI 传入的 APP_VERSION（如 1.22.6-build-12345678），否则从 pyproject.toml 读取
+const version = process.env.APP_VERSION || pyproject.match(/^version\s*=\s*"([^"]+)"/m)?.[1] || '0.0.0';
 const buildTime = new Date().toISOString();
 
 // 仅当 SENTRY_AUTH_TOKEN 存在时启用 Sentry source map 上传
@@ -26,13 +27,15 @@ export default defineConfig({
           org: SENTRY_ORG,
           project: SENTRY_PROJECT,
           authToken: sentryAuthToken,
+          release: { name: version },
           telemetry: false,
           sourcemaps: {
-            assets: 'static/**',
+            assets: ['../static/js/**', '../static/vendor/**'],
+            filesToDeleteAfterUpload: ['../static/js/**/*.js.map', '../static/vendor/**/*.js.map'],
           },
         })
       : undefined,
-  ].filter(Boolean) as any,
+  ].filter(Boolean),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -44,6 +47,7 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: true,
     minify: 'esbuild',
+    sourcemap: sentryAuthToken ? 'hidden' : false,
     rolldownOptions: {
       output: {
         entryFileNames: 'js/[name]-[hash].js',
