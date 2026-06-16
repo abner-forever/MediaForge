@@ -56,14 +56,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setProgress: (p) => set({ progress: p }),
 
   activeTasks: new Set(),
-  registerTask: (name) => set((s) => {
-    const next = new Set(s.activeTasks);
-    next.add(name);
-    return { activeTasks: next };
-  }),
-  unregisterTask: (name) => set((s) => {
-    const next = new Set(s.activeTasks);
-    next.delete(name);
-    return { activeTasks: next };
-  }),
+  registerTask: (name) =>
+    set((s) => {
+      const next = new Set(s.activeTasks);
+      next.add(name);
+      return { activeTasks: next };
+    }),
+  unregisterTask: (name) =>
+    set((s) => {
+      const next = new Set(s.activeTasks);
+      next.delete(name);
+      return { activeTasks: next };
+    }),
 });

@@ -8,17 +8,28 @@ type Status = 'idle' | 'streaming' | 'done' | 'error';
 
 /** 简单 Markdown 渲染：粗体、标题、列表 */
 function renderMarkdown(text: string): string {
-  return text
-    // 标题 ## / ###
-    .replace(/^### (.+)$/gm, '<h4 style="font-size:14px;font-weight:700;color:var(--text);margin:16px 0 8px">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;color:var(--text);margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">$1</h3>')
-    // 粗体
-    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text)">$1</strong>')
-    // 列表项
-    .replace(/^- (.+)$/gm, '<div style="display:flex;gap:8px;margin:4px 0"><span style="color:var(--accent);flex-shrink:0">-</span><span>$1</span></div>')
-    // 换行
-    .replace(/\n\n/g, '<div style="height:8px"></div>')
-    .replace(/\n/g, '');
+  return (
+    text
+      // 标题 ## / ###
+      .replace(
+        /^### (.+)$/gm,
+        '<h4 style="font-size:14px;font-weight:700;color:var(--text);margin:16px 0 8px">$1</h4>',
+      )
+      .replace(
+        /^## (.+)$/gm,
+        '<h3 style="font-size:15px;font-weight:700;color:var(--text);margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)">$1</h3>',
+      )
+      // 粗体
+      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text)">$1</strong>')
+      // 列表项
+      .replace(
+        /^- (.+)$/gm,
+        '<div style="display:flex;gap:8px;margin:4px 0"><span style="color:var(--accent);flex-shrink:0">-</span><span>$1</span></div>',
+      )
+      // 换行
+      .replace(/\n\n/g, '<div style="height:8px"></div>')
+      .replace(/\n/g, '')
+  );
 }
 
 export default function AiAnalysis({ days }: { days: number }) {
@@ -27,8 +38,8 @@ export default function AiAnalysis({ days }: { days: number }) {
   const [error, setError] = usePersistedState(`ai-analysis-error-${days}`, '');
   const [expanded, setExpanded] = usePersistedState(`ai-analysis-expanded-${days}`, true);
   const abortRef = useRef<AbortController | null>(null);
-  const registerTask = useStore(s => s.registerTask);
-  const unregisterTask = useStore(s => s.unregisterTask);
+  const registerTask = useStore((s) => s.registerTask);
+  const unregisterTask = useStore((s) => s.unregisterTask);
 
   // 注册/注销进行中的任务
   useEffect(() => {
@@ -61,18 +72,22 @@ export default function AiAnalysis({ days }: { days: number }) {
     abortRef.current = controller;
 
     try {
-      await effectsApi.aiAnalysis(days, (evt: AiAnalysisEvent) => {
-        if (evt.type === 'token' && evt.content) {
-          setContent(prev => prev + evt.content);
-        } else if (evt.type === 'done') {
-          setStatus('done');
-        } else if (evt.type === 'error') {
-          setStatus('error');
-          setError(evt.message || '分析失败');
-        }
-      }, controller.signal);
+      await effectsApi.aiAnalysis(
+        days,
+        (evt: AiAnalysisEvent) => {
+          if (evt.type === 'token' && evt.content) {
+            setContent((prev) => prev + evt.content);
+          } else if (evt.type === 'done') {
+            setStatus('done');
+          } else if (evt.type === 'error') {
+            setStatus('error');
+            setError(evt.message || '分析失败');
+          }
+        },
+        controller.signal,
+      );
       // 流正常结束但没有 done 事件时也标记完成
-      setStatus(prev => prev === 'streaming' ? 'done' : prev);
+      setStatus((prev) => (prev === 'streaming' ? 'done' : prev));
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setStatus('error');
@@ -87,18 +102,36 @@ export default function AiAnalysis({ days }: { days: number }) {
       {/* 头部 */}
       <div
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 20px', borderBottom: expanded ? '1px solid var(--border)' : 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 20px',
+          borderBottom: expanded ? '1px solid var(--border)' : 'none',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* AI 图标 */}
-          <div style={{
-            width: 28, height: 28, borderRadius: 8,
-            background: 'linear-gradient(135deg, #7868d0, #3b82f6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #7868d0, #3b82f6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93" />
               <path d="M8 6a4 4 0 0 1 8 0" />
               <path d="M6 12a6 6 0 0 0 12 0" />
@@ -115,15 +148,29 @@ export default function AiAnalysis({ days }: { days: number }) {
             onClick={handleAnalyze}
             className="btn btn-sm"
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, height: 30,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              height: 30,
               background: status === 'streaming' ? 'var(--danger)' : undefined,
               color: status === 'streaming' ? '#fff' : undefined,
             }}
           >
             {status === 'streaming' ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             )}
@@ -131,12 +178,27 @@ export default function AiAnalysis({ days }: { days: number }) {
           </button>
           {content && (
             <button
-              onClick={() => setExpanded(v => !v)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-muted)' }}
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 4,
+                color: 'var(--text-muted)',
+              }}
             >
               <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                style={{
+                  transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
               >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -147,7 +209,12 @@ export default function AiAnalysis({ days }: { days: number }) {
 
       {/* 内容区 */}
       {expanded && (content || status === 'streaming' || error) && (
-        <div style={{ padding: '16px 20px', minHeight: status === 'streaming' && !content ? 60 : undefined }}>
+        <div
+          style={{
+            padding: '16px 20px',
+            minHeight: status === 'streaming' && !content ? 60 : undefined,
+          }}
+        >
           {error ? (
             <div style={{ fontSize: 13, color: 'var(--danger)', padding: '8px 0' }}>{error}</div>
           ) : content ? (
@@ -156,17 +223,41 @@ export default function AiAnalysis({ days }: { days: number }) {
               dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
             />
           ) : status === 'streaming' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
-              <div style={{
-                width: 16, height: 16, border: '2px solid var(--border)', borderTopColor: 'var(--accent)',
-                borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-              }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: 'var(--text-muted)',
+                fontSize: 13,
+              }}
+            >
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  border: '2px solid var(--border)',
+                  borderTopColor: 'var(--accent)',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
               正在分析数据，请稍候...
             </div>
           ) : null}
           {/* 流式输出光标 */}
           {status === 'streaming' && content && (
-            <span style={{ display: 'inline-block', width: 2, height: 14, background: 'var(--accent)', marginLeft: 2, animation: 'blink 1s infinite', verticalAlign: 'text-bottom' }} />
+            <span
+              style={{
+                display: 'inline-block',
+                width: 2,
+                height: 14,
+                background: 'var(--accent)',
+                marginLeft: 2,
+                animation: 'blink 1s infinite',
+                verticalAlign: 'text-bottom',
+              }}
+            />
           )}
         </div>
       )}

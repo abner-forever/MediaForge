@@ -49,7 +49,9 @@ function wrapSelection(view: EditorView, before: string, after: string) {
   const { from, to } = view.state.selection.main;
   const selected = view.state.sliceDoc(from, to);
   if (selected.startsWith(before) && selected.endsWith(after)) {
-    view.dispatch({ changes: { from, to, insert: selected.slice(before.length, selected.length - after.length) } });
+    view.dispatch({
+      changes: { from, to, insert: selected.slice(before.length, selected.length - after.length) },
+    });
   } else {
     view.dispatch({ changes: { from, to, insert: `${before}${selected}${after}` } });
   }
@@ -79,6 +81,33 @@ function insertLines(view: EditorView, before: string, after: string) {
   view.dispatch({
     changes: { from: line.from, to: line.to, insert: `${before}${lineText}${after}` },
   });
+}
+
+// ── ToolbarButton sub-component ──────────────────────────────────────────────────
+
+function ToolbarButton({
+  onClick,
+  active,
+  title,
+  className,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`rte-toolbar-btn${active ? ' active' : ''}${className ? ` ${className}` : ''}`}
+    >
+      {children}
+    </button>
+  );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -112,13 +141,16 @@ export default function RichTextEditor({
         });
         // 打字机型内容更新时自动滚动到底部
         requestAnimationFrame(() => {
-          const scroller = editorContainerRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
+          const scroller = editorContainerRef.current?.querySelector(
+            '.cm-scroller',
+          ) as HTMLElement | null;
           if (scroller) {
             scroller.scrollTop = scroller.scrollHeight;
           }
         });
       }
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   }, [value]);
 
   // Mount CodeMirror once
@@ -139,10 +171,7 @@ export default function RichTextEditor({
       extensions: [
         history(),
         markdown({ base: markdownLanguage }),
-        keymap.of([
-          ...defaultKeymap,
-          ...historyKeymap,
-        ]),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
         editorTheme,
         cmPlaceholder(placeholder),
         updateListener,
@@ -155,7 +184,7 @@ export default function RichTextEditor({
     });
 
     const view = new EditorView({ state, parent: editorContainerRef.current! });
-    (window as any).__cm = view;
+    (window as unknown as Record<string, unknown>).__cm = view;
     editorViewRef.current = view;
 
     return () => {
@@ -170,28 +199,35 @@ export default function RichTextEditor({
   useEffect(() => {
     if (viewMode !== 'split') return;
 
-    const editorScroller = editorContainerRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
+    const editorScroller = editorContainerRef.current?.querySelector(
+      '.cm-scroller',
+    ) as HTMLElement | null;
     const previewPane = previewPaneRef.current;
     if (!editorScroller || !previewPane) return;
 
     const acquireLock = (who: 'editor' | 'preview') => {
       clearTimeout(scrollSyncTimer.current);
       scrollSyncLock.current = who;
-      scrollSyncTimer.current = setTimeout(() => { scrollSyncLock.current = null; }, 80);
+      scrollSyncTimer.current = setTimeout(() => {
+        scrollSyncLock.current = null;
+      }, 80);
     };
 
     const onEditorScroll = () => {
       if (scrollSyncLock.current === 'preview') return;
       acquireLock('editor');
-      const ratio = editorScroller.scrollTop / (editorScroller.scrollHeight - editorScroller.clientHeight || 1);
+      const ratio =
+        editorScroller.scrollTop / (editorScroller.scrollHeight - editorScroller.clientHeight || 1);
       previewPane.scrollTop = ratio * (previewPane.scrollHeight - previewPane.clientHeight);
     };
 
     const onPreviewScroll = () => {
       if (scrollSyncLock.current === 'editor') return;
       acquireLock('preview');
-      const ratio = previewPane.scrollTop / (previewPane.scrollHeight - previewPane.clientHeight || 1);
-      editorScroller.scrollTop = ratio * (editorScroller.scrollHeight - editorScroller.clientHeight);
+      const ratio =
+        previewPane.scrollTop / (previewPane.scrollHeight - previewPane.clientHeight || 1);
+      editorScroller.scrollTop =
+        ratio * (editorScroller.scrollHeight - editorScroller.clientHeight);
     };
 
     editorScroller.addEventListener('scroll', onEditorScroll, { passive: true });
@@ -251,67 +287,129 @@ export default function RichTextEditor({
     if (view) fn(view);
   }, []);
 
-  const ToolbarButton = ({
-    onClick,
-    active,
-    title,
-    className,
-    children,
-  }: {
-    onClick: () => void;
-    active?: boolean;
-    title: string;
-    className?: string;
-    children: React.ReactNode;
-  }) => (
-    <button type="button" onClick={onClick} title={title} className={`rte-toolbar-btn${active ? ' active' : ''}${className ? ` ${className}` : ''}`}>
-      {children}
-    </button>
-  );
-
   return (
-    <div className={`rte-wrapper${isFullscreen ? ' fullscreen' : ''}`} style={isFullscreen ? undefined : { minHeight }}>
+    <div
+      className={`rte-wrapper${isFullscreen ? ' fullscreen' : ''}`}
+      style={isFullscreen ? undefined : { minHeight }}
+    >
       {/* Toolbar */}
       <div className="rte-toolbar">
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 4, alignSelf: 'center', flexShrink: 0 }}>Markdown</span>
+        <span
+          style={{
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            marginRight: 4,
+            alignSelf: 'center',
+            flexShrink: 0,
+          }}
+        >
+          Markdown
+        </span>
         <div className="rte-divider" />
 
         {/* Heading */}
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '# '))} active={false} title="标题 1">H1</ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '## '))} active={false} title="标题 2">H2</ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '### '))} active={false} title="标题 3">H3</ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => prependLine(v, '# '))}
+          active={false}
+          title="标题 1"
+        >
+          H1
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => prependLine(v, '## '))}
+          active={false}
+          title="标题 2"
+        >
+          H2
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => prependLine(v, '### '))}
+          active={false}
+          title="标题 3"
+        >
+          H3
+        </ToolbarButton>
 
         <div className="rte-divider" />
 
         {/* Inline formatting */}
-        <ToolbarButton onClick={() => run((v) => wrapSelection(v, '**', '**'))} active={false} title="粗体"><strong>B</strong></ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => wrapSelection(v, '*', '*'))} active={false} title="斜体"><em>I</em></ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => wrapSelection(v, '~~', '~~'))} active={false} title="删除线"><s>S</s></ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => wrapSelection(v, '**', '**'))}
+          active={false}
+          title="粗体"
+        >
+          <strong>B</strong>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => wrapSelection(v, '*', '*'))}
+          active={false}
+          title="斜体"
+        >
+          <em>I</em>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => wrapSelection(v, '~~', '~~'))}
+          active={false}
+          title="删除线"
+        >
+          <s>S</s>
+        </ToolbarButton>
 
         <div className="rte-divider" />
 
         {/* Lists & quote */}
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '- '))} active={false} title="无序列表">•</ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '1. '))} active={false} title="有序列表">1.</ToolbarButton>
-        <ToolbarButton onClick={() => run((v) => prependLine(v, '> '))} active={false} title="引用">❝</ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => prependLine(v, '- '))}
+          active={false}
+          title="无序列表"
+        >
+          •
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => run((v) => prependLine(v, '1. '))}
+          active={false}
+          title="有序列表"
+        >
+          1.
+        </ToolbarButton>
+        <ToolbarButton onClick={() => run((v) => prependLine(v, '> '))} active={false} title="引用">
+          ❝
+        </ToolbarButton>
 
         <div className="rte-divider" />
 
         {/* Link */}
-        <ToolbarButton
-          onClick={() => setLinkInput({ url: '' })}
-          active={false}
-          title="链接"
-        >
+        <ToolbarButton onClick={() => setLinkInput({ url: '' })} active={false} title="链接">
           🔗
         </ToolbarButton>
 
         <div className="rte-divider" style={{ marginLeft: 'auto' }} />
 
         {/* View modes */}
-        <ToolbarButton onClick={() => setViewMode('edit')} active={viewMode === 'edit'} title="纯编辑" className="rte-toolbar-icon">✏</ToolbarButton>
-        <ToolbarButton onClick={() => setViewMode('preview')} active={viewMode === 'preview'} title="纯预览" className="rte-toolbar-icon">👁</ToolbarButton>
-        <ToolbarButton onClick={() => setViewMode('split')} active={viewMode === 'split'} title="分屏" className="rte-toolbar-icon">⫿</ToolbarButton>
+        <ToolbarButton
+          onClick={() => setViewMode('edit')}
+          active={viewMode === 'edit'}
+          title="纯编辑"
+          className="rte-toolbar-icon"
+        >
+          ✏
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => setViewMode('preview')}
+          active={viewMode === 'preview'}
+          title="纯预览"
+          className="rte-toolbar-icon"
+        >
+          👁
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => setViewMode('split')}
+          active={viewMode === 'split'}
+          title="分屏"
+          className="rte-toolbar-icon"
+        >
+          ⫿
+        </ToolbarButton>
 
         <div className="rte-divider" />
 
@@ -334,10 +432,10 @@ export default function RichTextEditor({
             type="text"
             autoFocus
             value={linkInput.url}
-            onChange={e => setLinkInput({ url: e.target.value })}
+            onChange={(e) => setLinkInput({ url: e.target.value })}
             placeholder="https://..."
             className="flex-1 text-sm"
-            onKeyDown={e => {
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && linkInput.url) {
                 run((v) => wrapSelection(v, '[', `](${linkInput.url})`));
                 setLinkInput(null);
@@ -345,13 +443,21 @@ export default function RichTextEditor({
               if (e.key === 'Escape') setLinkInput(null);
             }}
           />
-          <button className="btn btn-sm btn-primary" disabled={!linkInput.url} onClick={() => {
-            if (linkInput.url) {
-              run((v) => wrapSelection(v, '[', `](${linkInput.url})`));
-              setLinkInput(null);
-            }
-          }}>确认</button>
-          <button className="btn btn-sm btn-ghost" onClick={() => setLinkInput(null)}>取消</button>
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={!linkInput.url}
+            onClick={() => {
+              if (linkInput.url) {
+                run((v) => wrapSelection(v, '[', `](${linkInput.url})`));
+                setLinkInput(null);
+              }
+            }}
+          >
+            确认
+          </button>
+          <button className="btn btn-sm btn-ghost" onClick={() => setLinkInput(null)}>
+            取消
+          </button>
         </div>
       )}
 
@@ -373,16 +479,20 @@ export default function RichTextEditor({
         {/* Preview pane */}
         {viewMode !== 'edit' && (
           <div className="rte-preview-pane" ref={previewPaneRef}>
-            <div className="rte-preview-content" dangerouslySetInnerHTML={{ __html: htmlPreview }} />
+            <div
+              className="rte-preview-content"
+              dangerouslySetInnerHTML={{ __html: htmlPreview }}
+            />
           </div>
         )}
       </div>
 
       {/* Status bar */}
       <div className="rte-status-bar">
-        <span>{wordCount} 字 / {charCount} 字符</span>
+        <span>
+          {wordCount} 字 / {charCount} 字符
+        </span>
       </div>
-
     </div>
   );
 }

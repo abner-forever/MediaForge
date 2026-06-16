@@ -38,7 +38,9 @@ describe('useApi', () => {
 
   it('execute 期间 loading 为 true', async () => {
     let resolve: (v: string) => void;
-    const promise = new Promise<string>((r) => { resolve = r; });
+    const promise = new Promise<string>((r) => {
+      resolve = r;
+    });
     const fn = () => promise;
     const { result } = renderHook(() => useApi(fn));
 

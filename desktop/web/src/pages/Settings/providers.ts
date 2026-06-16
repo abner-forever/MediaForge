@@ -11,12 +11,22 @@ export interface ProviderInfo {
 export const PROVIDERS: Record<string, ProviderInfo> = {
   mimo: {
     name: '小米 MiMo',
-    models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2.5-tts-voiceclone', 'mimo-v2.5-tts-voicedesign', 'mimo-v2.5-tts', 'mimo-v2-tts'],
+    models: [
+      'mimo-v2.5-pro',
+      'mimo-v2.5',
+      'mimo-v2-pro',
+      'mimo-v2-omni',
+      'mimo-v2.5-tts-voiceclone',
+      'mimo-v2.5-tts-voicedesign',
+      'mimo-v2.5-tts',
+      'mimo-v2-tts',
+    ],
     baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
     keyName: 'MIMO_API_KEY',
     urlHint: '小米 Mimo OpenAI 兼容地址，Token Plan：https://token-plan-cn.xiaomimimo.com/v1',
     guideUrl: 'https://platform.xiaomimimo.com/console/plan-manage',
-    guide: '登录小米 MiMo 官网 → 控制台 → API 密钥 → 创建 API Key（Token Plan 需使用 tp- 前缀的密钥）',
+    guide:
+      '登录小米 MiMo 官网 → 控制台 → API 密钥 → 创建 API Key（Token Plan 需使用 tp- 前缀的密钥）',
   },
   deepseek: {
     name: 'DeepSeek',
@@ -38,7 +48,16 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   },
   glm: {
     name: '智谱 GLM',
-    models: ['GLM-5.1', 'GLM-5', 'GLM-5-Turbo', 'GLM-4.7', 'GLM-4.7-Flash', 'GLM-4.6', 'GLM-4.5-Air', 'GLM-4-Long'],
+    models: [
+      'GLM-5.1',
+      'GLM-5',
+      'GLM-5-Turbo',
+      'GLM-4.7',
+      'GLM-4.7-Flash',
+      'GLM-4.6',
+      'GLM-4.5-Air',
+      'GLM-4-Long',
+    ],
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     keyName: 'GLM_API_KEY',
     urlHint: '智谱 API 地址，格式：https://open.bigmodel.cn/api/paas/v4',
@@ -47,7 +66,16 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
   },
   qwen: {
     name: '千问 Qwen',
-    models: ['qwen3.6-max-preview', 'qwen3.5-max', 'qwen3.5-plus', 'qwen3.5-flash', 'qwen3-max-thinking', 'qwen3-max', 'qwen3-plus', 'qwen3-flash'],
+    models: [
+      'qwen3.6-max-preview',
+      'qwen3.5-max',
+      'qwen3.5-plus',
+      'qwen3.5-flash',
+      'qwen3-max-thinking',
+      'qwen3-max',
+      'qwen3-plus',
+      'qwen3-flash',
+    ],
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     keyName: 'QWEN_API_KEY',
     urlHint: '阿里云 DashScope 兼容地址，格式：https://dashscope.aliyuncs.com/compatible-mode/v1',

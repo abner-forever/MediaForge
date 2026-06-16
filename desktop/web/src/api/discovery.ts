@@ -1,6 +1,12 @@
 import { get, post, del } from './base';
 import { sseGet } from './sse';
-import type { Post, ScoreInfo, DiscoveryResult, DownloadStreamEvent, SearchStreamEvent } from '../types';
+import type {
+  Post,
+  ScoreInfo,
+  DiscoveryResult,
+  DownloadStreamEvent,
+  SearchStreamEvent,
+} from '../types';
 
 export const discoveryApi = {
   get: () => get<{ posts: Post[] }>('/api/discovery'),
@@ -14,12 +20,17 @@ export const discoveryApi = {
     post_limit: number;
   }) => post<DiscoveryResult>('/api/discovery/search', params),
   download: (post_indices?: number[]) =>
-    post<{ success: boolean; posts: Post[]; total_downloaded: number }>('/api/discovery/download', { post_indices }),
+    post<{ success: boolean; posts: Post[]; total_downloaded: number }>('/api/discovery/download', {
+      post_indices,
+    }),
   removePost: (index: number) => del<{ success: boolean }>(`/api/discovery/post/${index}`),
   score: (use_vision = true) =>
-    post<{ success: boolean; scores: Record<string, ScoreInfo>; vision_count: number; heuristic_count: number }>(
-      '/api/discovery/score', { use_vision }
-    ),
+    post<{
+      success: boolean;
+      scores: Record<string, ScoreInfo>;
+      vision_count: number;
+      heuristic_count: number;
+    }>('/api/discovery/score', { use_vision }),
   checkWatermark: (paths: string[]) =>
     post<{ watermarked: string[] }>('/api/discovery/check-watermark', paths),
   trendingCelebrities: () => get<{ celebrities: string[] }>('/api/discovery/trending-celebrities'),
@@ -59,5 +70,8 @@ export async function searchStream(
     post_limit: String(params.post_limit),
   });
   if (params.page) q.set('page', String(params.page));
-  await sseGet<SearchStreamEvent>(`/api/discovery/search-stream?${q}`, onEvent, { signal, flushBuffer: false });
+  await sseGet<SearchStreamEvent>(`/api/discovery/search-stream?${q}`, onEvent, {
+    signal,
+    flushBuffer: false,
+  });
 }

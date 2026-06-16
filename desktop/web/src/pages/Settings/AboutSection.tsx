@@ -23,14 +23,19 @@ function formatSize(bytes: number): string {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   } catch {
     return iso;
   }
 }
 
 export default function AboutSection() {
-  const addToast = useStore(s => s.addToast);
+  const addToast = useStore((s) => s.addToast);
   const [clickCount, setClickCount] = useState(0);
   const [devMode, setDevMode] = useState(false);
 
@@ -48,12 +53,16 @@ export default function AboutSection() {
   const [clearingAll, setClearingAll] = useState(false);
 
   useEffect(() => {
-    logsApi.list().then(res => {
-      setLogFiles(res.files);
-      setLogError('');
-    }).catch(err => {
-      setLogError(err.message || '加载日志列表失败');
-    }).finally(() => setLoading(false));
+    logsApi
+      .list()
+      .then((res) => {
+        setLogFiles(res.files);
+        setLogError('');
+      })
+      .catch((err) => {
+        setLogError(err.message || '加载日志列表失败');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleCopyAll = useCallback(async () => {
@@ -85,7 +94,9 @@ export default function AboutSection() {
         try {
           await logsApi.saveToDownloads(f.name);
           saved++;
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
       addToast(`${saved} 个日志文件已保存到下载目录`, 'success');
     } catch (err: any) {
@@ -95,53 +106,66 @@ export default function AboutSection() {
     }
   }, [logFiles, addToast]);
 
-  const toggleFile = useCallback(async (name: string) => {
-    if (openedFile === name) {
-      setOpenedFile(null);
-      return;
-    }
-    setOpenedFile(name);
-    if (!fileContents[name]) {
-      setLoadingContent(name);
-      try {
-        const res = await logsApi.content(name, 100);
-        setFileContents(prev => ({ ...prev, [name]: res.lines }));
-      } catch {
-        setFileContents(prev => ({ ...prev, [name]: ['（读取失败）'] }));
-      } finally {
-        setLoadingContent(null);
+  const toggleFile = useCallback(
+    async (name: string) => {
+      if (openedFile === name) {
+        setOpenedFile(null);
+        return;
       }
-    }
-  }, [openedFile, fileContents]);
+      setOpenedFile(name);
+      if (!fileContents[name]) {
+        setLoadingContent(name);
+        try {
+          const res = await logsApi.content(name, 100);
+          setFileContents((prev) => ({ ...prev, [name]: res.lines }));
+        } catch {
+          setFileContents((prev) => ({ ...prev, [name]: ['（读取失败）'] }));
+        } finally {
+          setLoadingContent(null);
+        }
+      }
+    },
+    [openedFile, fileContents],
+  );
 
-  const handleCopyFile = useCallback(async (file: LogFileInfo) => {
-    setCopying(true);
-    try {
-      const res = await logsApi.content(file.name, 2000);
-      const header = `── ${file.name} (${formatSize(file.size)}, ${res.total} 行) ──\n`;
-      await logsApi.copyToClipboard(header + res.lines.join('\n'));
-      addToast(`「${file.name}」日志已复制到剪贴板`, 'success');
-    } catch (err: any) {
-      addToast(err.message || '复制失败', 'error');
-    } finally {
-      setCopying(false);
-    }
-  }, [addToast]);
+  const handleCopyFile = useCallback(
+    async (file: LogFileInfo) => {
+      setCopying(true);
+      try {
+        const res = await logsApi.content(file.name, 2000);
+        const header = `── ${file.name} (${formatSize(file.size)}, ${res.total} 行) ──\n`;
+        await logsApi.copyToClipboard(header + res.lines.join('\n'));
+        addToast(`「${file.name}」日志已复制到剪贴板`, 'success');
+      } catch (err: any) {
+        addToast(err.message || '复制失败', 'error');
+      } finally {
+        setCopying(false);
+      }
+    },
+    [addToast],
+  );
 
-  const handleDeleteFile = useCallback(async (file: LogFileInfo) => {
-    setDeleting(file.name);
-    try {
-      await logsApi.delete(file.name);
-      setLogFiles(prev => prev.filter(f => f.name !== file.name));
-      if (openedFile === file.name) setOpenedFile(null);
-      setFileContents(prev => { const next = { ...prev }; delete next[file.name]; return next; });
-      addToast(`已删除「${file.name}」`, 'success');
-    } catch (err: any) {
-      addToast(err.message || '删除失败', 'error');
-    } finally {
-      setDeleting(null);
-    }
-  }, [openedFile, addToast]);
+  const handleDeleteFile = useCallback(
+    async (file: LogFileInfo) => {
+      setDeleting(file.name);
+      try {
+        await logsApi.delete(file.name);
+        setLogFiles((prev) => prev.filter((f) => f.name !== file.name));
+        if (openedFile === file.name) setOpenedFile(null);
+        setFileContents((prev) => {
+          const next = { ...prev };
+          delete next[file.name];
+          return next;
+        });
+        addToast(`已删除「${file.name}」`, 'success');
+      } catch (err: any) {
+        addToast(err.message || '删除失败', 'error');
+      } finally {
+        setDeleting(null);
+      }
+    },
+    [openedFile, addToast],
+  );
 
   const handleClearAll = useCallback(async () => {
     setClearingAll(true);
@@ -177,7 +201,7 @@ export default function AboutSection() {
       return;
     }
 
-    setTimeout(() => setClickCount(c => Math.max(0, c - 1)), 2000);
+    setTimeout(() => setClickCount((c) => Math.max(0, c - 1)), 2000);
   }, [clickCount]);
 
   const handleExitDevMode = () => {
@@ -196,7 +220,11 @@ export default function AboutSection() {
       <div className="card space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-accent-soft shrink-0">
-            <img src="/static/logo.png" alt="图文工坊" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
+            <img
+              src="/static/logo.png"
+              alt="图文工坊"
+              style={{ width: '90%', height: '90%', objectFit: 'contain' }}
+            />
           </div>
           <div>
             <h2 className="text-lg font-bold text-text tracking-tight">MediaForge</h2>
@@ -205,7 +233,8 @@ export default function AboutSection() {
         </div>
 
         <p className="text-sm text-text-secondary leading-relaxed">
-          MediaForge 是专为微信公众号运营者设计的内容生产效率工具。自动完成热点发现、素材采集、AI 写作、排版优化和定时发布的完整工作流，让运营团队从繁琐的重复劳动中解放出来，专注于内容创意本身。
+          MediaForge 是专为微信公众号运营者设计的内容生产效率工具。自动完成热点发现、素材采集、AI
+          写作、排版优化和定时发布的完整工作流，让运营团队从繁琐的重复劳动中解放出来，专注于内容创意本身。
         </p>
       </div>
 
@@ -214,11 +243,23 @@ export default function AboutSection() {
         <div className="section-header">新手快速入门</div>
         <ol className="space-y-2.5 text-sm text-text-secondary">
           {[
-            ['配置 AI 服务', '前往「系统设置 → 大模型配置」填写 API Key 和 Base URL，这是 AI 写作和智能评分的动力来源。'],
-            ['登录内容平台', '在「系统设置 → 媒体来源」中登录微博、今日头条等平台，开启图文发现能力。'],
+            [
+              '配置 AI 服务',
+              '前往「系统设置 → 大模型配置」填写 API Key 和 Base URL，这是 AI 写作和智能评分的动力来源。',
+            ],
+            [
+              '登录内容平台',
+              '在「系统设置 → 媒体来源」中登录微博、今日头条等平台，开启图文发现能力。',
+            ],
             ['发现与采集', '在「图片发现」页设置艺人关键词或话题标签，一键搜索并下载图片素材。'],
-            ['AI 创作内容', '选中素材加入发布队列，使用 AI 润色生成标题；或在「文章发布」中让 AI 根据话题自动创作全文。'],
-            ['发布到公众号', '在「系统设置 → 微信配置」中添加并登录公众号账号，回到队列一键保存草稿或直接发布。'],
+            [
+              'AI 创作内容',
+              '选中素材加入发布队列，使用 AI 润色生成标题；或在「文章发布」中让 AI 根据话题自动创作全文。',
+            ],
+            [
+              '发布到公众号',
+              '在「系统设置 → 微信配置」中添加并登录公众号账号，回到队列一键保存草稿或直接发布。',
+            ],
           ].map(([step, desc], i) => (
             <li key={i} className="flex gap-3">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-accent-soft text-accent text-xs font-bold shrink-0 mt-0.5">
@@ -259,8 +300,11 @@ export default function AboutSection() {
           <span className="text-sm text-text-secondary">更新时间</span>
           <span className="text-sm text-text-muted">
             {new Date(__BUILD_TIME__).toLocaleString('zh-CN', {
-              year: 'numeric', month: '2-digit', day: '2-digit',
-              hour: '2-digit', minute: '2-digit'
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
             })}
           </span>
         </div>
@@ -273,13 +317,23 @@ export default function AboutSection() {
           className="w-full flex items-center justify-between cursor-pointer"
         >
           <div className="flex items-center gap-2">
-            <svg className={`w-4 h-4 text-text-muted transition-transform ${expanded ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className={`w-4 h-4 text-text-muted transition-transform ${expanded ? 'rotate-90' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="9 18 15 12 9 6" />
             </svg>
             <span className="section-header">日志与反馈</span>
           </div>
           {!loading && !logError && (
-            <span className="text-xs text-text-muted">{logFiles.length} 个文件 · {formatSize(totalSize)}</span>
+            <span className="text-xs text-text-muted">
+              {logFiles.length} 个文件 · {formatSize(totalSize)}
+            </span>
           )}
         </button>
 
@@ -292,7 +346,11 @@ export default function AboutSection() {
             <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
               {savingAll ? '保存中...' : '保存到下载目录'}
             </button>
-            <button onClick={handleClearAll} disabled={clearingAll} className="btn btn-sm btn-danger">
+            <button
+              onClick={handleClearAll}
+              disabled={clearingAll}
+              className="btn btn-sm btn-danger"
+            >
               {clearingAll ? '清空中...' : '清空全部'}
             </button>
           </div>
@@ -314,9 +372,23 @@ export default function AboutSection() {
             {logError && (
               <div className="empty-state py-4">
                 <p className="text-sm text-danger">{logError}</p>
-                <button className="btn btn-xs mt-2" onClick={() => { setLoading(true); setLogError('');
-                  logsApi.list().then(res => { setLogFiles(res.files); setLogError(''); }).catch(err => setLogError(err.message || '加载失败')).finally(() => setLoading(false));
-                }}>重试</button>
+                <button
+                  className="btn btn-xs mt-2"
+                  onClick={() => {
+                    setLoading(true);
+                    setLogError('');
+                    logsApi
+                      .list()
+                      .then((res) => {
+                        setLogFiles(res.files);
+                        setLogError('');
+                      })
+                      .catch((err) => setLogError(err.message || '加载失败'))
+                      .finally(() => setLoading(false));
+                  }}
+                >
+                  重试
+                </button>
               </div>
             )}
 
@@ -328,17 +400,33 @@ export default function AboutSection() {
 
             {!loading && !logError && logFiles.length > 0 && (
               <div className="space-y-1">
-                {logFiles.map(file => (
+                {logFiles.map((file) => (
                   <div key={file.name} className="rounded-xl overflow-hidden">
                     <button
                       onClick={() => toggleFile(file.name)}
                       className="w-full flex items-center justify-between px-4 py-2.5 bg-bg-secondary hover:bg-accent-softer transition-colors text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <svg className={`w-3.5 h-3.5 text-text-muted shrink-0 transition-transform ${openedFile === file.name ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          className={`w-3.5 h-3.5 text-text-muted shrink-0 transition-transform ${openedFile === file.name ? 'rotate-90' : ''}`}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           <polyline points="9 18 15 12 9 6" />
                         </svg>
-                        <svg className="w-4 h-4 text-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          className="w-4 h-4 text-text-muted shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
@@ -350,7 +438,10 @@ export default function AboutSection() {
                         <span className="text-xs text-text-muted">{formatSize(file.size)}</span>
                         <span className="text-xs text-text-muted">{formatTime(file.mtime)}</span>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteFile(file); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFile(file);
+                          }}
                           disabled={deleting === file.name}
                           className="w-6 h-6 flex items-center justify-center rounded hover:bg-danger/10 text-text-muted hover:text-danger transition-colors cursor-pointer"
                           title="删除此日志"
@@ -358,7 +449,15 @@ export default function AboutSection() {
                           {deleting === file.name ? (
                             <div className="w-3 h-3 border border-danger border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg
+                              className="w-3.5 h-3.5"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
                               <polyline points="3 6 5 6 21 6" />
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                             </svg>
@@ -402,7 +501,11 @@ export default function AboutSection() {
                 <button onClick={handleSaveAll} disabled={savingAll} className="btn btn-sm">
                   {savingAll ? '保存中...' : '保存到下载目录'}
                 </button>
-                <button onClick={handleClearAll} disabled={clearingAll} className="btn btn-sm btn-danger">
+                <button
+                  onClick={handleClearAll}
+                  disabled={clearingAll}
+                  className="btn btn-sm btn-danger"
+                >
                   {clearingAll ? '清空中...' : '清空全部'}
                 </button>
               </div>
@@ -420,13 +523,20 @@ export default function AboutSection() {
         <div className="card border-accent/30 bg-accent-softer">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="w-4 h-4 text-accent"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
               </svg>
               <span className="text-sm font-medium text-accent">开发者模式已开启</span>
             </div>
-            <button onClick={handleExitDevMode}
-              className="btn btn-xs btn-danger">
+            <button onClick={handleExitDevMode} className="btn btn-xs btn-danger">
               退出开发者模式
             </button>
           </div>

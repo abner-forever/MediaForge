@@ -1,201 +1,211 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { creditsApi } from '@/api/client'
-import { useStore } from '@/stores'
-import type { VideoTask } from '@/types'
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { creditsApi } from '@/api/client';
+import { useStore } from '@/stores';
+import type { VideoTask } from '@/types';
 
 interface VideoPlayerModalProps {
-  video: VideoTask
-  onClose: () => void
-  onRewardClaimed: () => void
+  video: VideoTask;
+  onClose: () => void;
+  onRewardClaimed: () => void;
 }
 
-export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: VideoPlayerModalProps) {
-  const { addToast, setCreditsBalance } = useStore()
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>()
-  const [watchedSeconds, setWatchedSeconds] = useState(0)
-  const [claiming, setClaiming] = useState(false)
-  const [claimed, setClaimed] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [showControls, setShowControls] = useState(true)
-  const [progress, setProgress] = useState(0)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [entered, setEntered] = useState(false)
-  const [showHint, setShowHint] = useState(false)
+export default function VideoPlayerModal({
+  video,
+  onClose,
+  onRewardClaimed,
+}: VideoPlayerModalProps) {
+  const { addToast, setCreditsBalance } = useStore();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [watchedSeconds, setWatchedSeconds] = useState(0);
+  const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
-  const minWatchSeconds = Math.min(30, video.duration_seconds)
-  const canClaim = watchedSeconds >= minWatchSeconds && !claimed
-  const remainingSeconds = Math.max(0, minWatchSeconds - watchedSeconds)
+  const minWatchSeconds = Math.min(30, video.duration_seconds);
+  const canClaim = watchedSeconds >= minWatchSeconds && !claimed;
+  const remainingSeconds = Math.max(0, minWatchSeconds - watchedSeconds);
 
   useEffect(() => {
-    requestAnimationFrame(() => setEntered(true))
-  }, [])
+    requestAnimationFrame(() => setEntered(true));
+  }, []);
 
   // ── 全屏变化监听 ──
   useEffect(() => {
-    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
-    const onFsError = () => setIsFullscreen(false)
-    document.addEventListener('fullscreenchange', onFsChange)
-    document.addEventListener('fullscreenerror', onFsError)
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const onFsError = () => setIsFullscreen(false);
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('fullscreenerror', onFsError);
     return () => {
-      document.removeEventListener('fullscreenchange', onFsChange)
-      document.removeEventListener('fullscreenerror', onFsError)
-    }
-  }, [])
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('fullscreenerror', onFsError);
+    };
+  }, []);
 
   const handleTimeUpdate = useCallback(() => {
-    const v = videoRef.current
-    if (!v || v.seeking || isDragging) return
-    const t = Math.floor(v.currentTime)
-    setWatchedSeconds(t)
-    setProgress(v.duration ? v.currentTime / v.duration : 0)
-  }, [isDragging])
+    const v = videoRef.current;
+    if (!v || v.seeking || isDragging) return;
+    const t = Math.floor(v.currentTime);
+    setWatchedSeconds(t);
+    setProgress(v.duration ? v.currentTime / v.duration : 0);
+  }, [isDragging]);
 
   const handleSeeked = useCallback(() => {
     if (videoRef.current && videoRef.current.currentTime > watchedSeconds + 2) {
-      videoRef.current.currentTime = watchedSeconds
+      videoRef.current.currentTime = watchedSeconds;
     }
-  }, [watchedSeconds])
+  }, [watchedSeconds]);
 
   const startHideTimer = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     if (isPlaying) {
-      hideTimerRef.current = setTimeout(() => setShowControls(false), 2500)
+      hideTimerRef.current = setTimeout(() => setShowControls(false), 2500);
     }
-  }, [isPlaying])
+  }, [isPlaying]);
 
   const showControlsTemporarily = useCallback(() => {
-    setShowControls(true)
-    startHideTimer()
-  }, [startHideTimer])
+    setShowControls(true);
+    startHideTimer();
+  }, [startHideTimer]);
 
   const handleMouseMove = useCallback(() => {
-    showControlsTemporarily()
-  }, [showControlsTemporarily])
+    showControlsTemporarily();
+  }, [showControlsTemporarily]);
 
   const togglePlay = useCallback(() => {
-    const v = videoRef.current
-    if (!v) return
+    const v = videoRef.current;
+    if (!v) return;
     if (v.paused) {
-      v.play().catch(() => {})
+      v.play().catch(() => {});
       if (watchedSeconds === 0) {
-        setShowHint(true)
-        setTimeout(() => setShowHint(false), 3000)
+        setShowHint(true);
+        setTimeout(() => setShowHint(false), 3000);
       }
     } else {
-      v.pause()
+      v.pause();
     }
-  }, [watchedSeconds])
+  }, [watchedSeconds]);
 
   const toggleMute = useCallback(() => {
-    const v = videoRef.current
-    if (!v) return
-    v.muted = !v.muted
-    setIsMuted(v.muted)
-  }, [])
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+  }, []);
 
   // ── 全屏切换 ──
   const toggleFullscreen = useCallback(async () => {
     try {
       if (document.fullscreenElement) {
-        await document.exitFullscreen()
+        await document.exitFullscreen();
       } else if (containerRef.current) {
-        await containerRef.current.requestFullscreen()
+        await containerRef.current.requestFullscreen();
       }
     } catch (err) {
-      console.error('全屏切换失败:', err)
+      console.error('全屏切换失败:', err);
     }
-  }, [])
+  }, []);
 
   // ── 双击视频切换全屏 ──
   const handleVideoDblClick = useCallback(() => {
-    toggleFullscreen()
-  }, [toggleFullscreen])
+    toggleFullscreen();
+  }, [toggleFullscreen]);
 
   // ── 进度条拖拽 ──
-  const handleProgressPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    setIsDragging(true)
-    const rect = e.currentTarget.getBoundingClientRect()
-    const updateFromPointer = (pe: PointerEvent) => {
-      const v = videoRef.current
-      if (!v) return
-      const x = Math.max(0, Math.min(pe.clientX - rect.left, rect.width))
-      const ratio = x / rect.width
-      const targetTime = ratio * v.duration
+  const handleProgressPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      setIsDragging(true);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const updateFromPointer = (pe: PointerEvent) => {
+        const v = videoRef.current;
+        if (!v) return;
+        const x = Math.max(0, Math.min(pe.clientX - rect.left, rect.width));
+        const ratio = x / rect.width;
+        const targetTime = ratio * v.duration;
+        if (targetTime <= watchedSeconds + 1) {
+          v.currentTime = targetTime;
+          setProgress(ratio);
+        }
+      };
+      const cleanup = () => {
+        setIsDragging(false);
+        window.removeEventListener('pointermove', updateFromPointer);
+        window.removeEventListener('pointerup', cleanup);
+      };
+      window.addEventListener('pointermove', updateFromPointer);
+      window.addEventListener('pointerup', cleanup);
+      const v = videoRef.current;
+      if (!v) return;
+      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const ratio = x / rect.width;
+      const targetTime = ratio * v.duration;
       if (targetTime <= watchedSeconds + 1) {
-        v.currentTime = targetTime
-        setProgress(ratio)
+        v.currentTime = targetTime;
+        setProgress(ratio);
       }
-    }
-    const cleanup = () => {
-      setIsDragging(false)
-      window.removeEventListener('pointermove', updateFromPointer)
-      window.removeEventListener('pointerup', cleanup)
-    }
-    window.addEventListener('pointermove', updateFromPointer)
-    window.addEventListener('pointerup', cleanup)
-    const v = videoRef.current
-    if (!v) return
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
-    const ratio = x / rect.width
-    const targetTime = ratio * v.duration
-    if (targetTime <= watchedSeconds + 1) {
-      v.currentTime = targetTime
-      setProgress(ratio)
-    }
-  }, [watchedSeconds])
+    },
+    [watchedSeconds],
+  );
 
   const handleClaim = async () => {
-    if (claiming || claimed) return
-    setClaiming(true)
+    if (claiming || claimed) return;
+    setClaiming(true);
     try {
-      const result = await creditsApi.watchVideo(video.id, watchedSeconds)
+      const result = await creditsApi.watchVideo(video.id, watchedSeconds);
       if (result.success) {
-        setClaimed(true)
-        setCreditsBalance(result.balance)
-        addToast(`+${result.earned} 积分（今日第${result.daily_count}次）`, 'success')
-        onRewardClaimed()
+        setClaimed(true);
+        setCreditsBalance(result.balance);
+        addToast(`+${result.earned} 积分（今日第${result.daily_count}次）`, 'success');
+        onRewardClaimed();
       }
     } catch (err: any) {
-      addToast(err.message || '领取失败，请重试', 'error')
+      addToast(err.message || '领取失败，请重试', 'error');
     } finally {
-      setClaiming(false)
+      setClaiming(false);
     }
-  }
+  };
 
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !document.fullscreenElement) onClose()
-  }, [onClose])
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget && !document.fullscreenElement) onClose();
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.fullscreenElement) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+      if (e.key === 'Escape' && !document.fullscreenElement) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   useEffect(() => {
     return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
       if (videoRef.current) {
-        videoRef.current.pause()
-        videoRef.current.removeAttribute('src')
-        videoRef.current.load()
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
       }
-    }
-  }, [])
+    };
+  }, []);
 
   const formatTime = (s: number) => {
-    const m = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${m}:${sec.toString().padStart(2, '0')}`
-  }
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
 
-  const controlsVisible = showControls || !isPlaying || isDragging
+  const controlsVisible = showControls || !isPlaying || isDragging;
 
   return (
     <div
@@ -254,7 +264,10 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
               onContextMenu={(e) => e.preventDefault()}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              onEnded={() => { setIsPlaying(false); setShowControls(true) }}
+              onEnded={() => {
+                setIsPlaying(false);
+                setShowControls(true);
+              }}
               onClick={togglePlay}
               onDoubleClick={handleVideoDblClick}
               preload="auto"
@@ -301,7 +314,13 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 backdrop-blur transition-all duration-200 active:scale-90 hover:bg-white/20"
                   style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
                 >
-                  <svg className="h-[16px] w-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg
+                    className="h-[16px] w-[16px]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -316,7 +335,8 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                   : 'opacity-0 translate-y-3 pointer-events-none'
               }`}
               style={{
-                background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)',
+                background:
+                  'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 60%, transparent 100%)',
                 zIndex: 10,
               }}
             >
@@ -370,7 +390,11 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                         <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                       </svg>
                     ) : (
-                      <svg className="ml-0.5 h-[15px] w-[15px]" fill="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className="ml-0.5 h-[15px] w-[15px]"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     )}
@@ -383,13 +407,37 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                     style={{ color: isMuted ? '#f3727f' : 'rgba(255,255,255,0.6)' }}
                   >
                     {isMuted ? (
-                      <svg className="h-[15px] w-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                      <svg
+                        className="h-[15px] w-[15px]"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                        />
                       </svg>
                     ) : (
-                      <svg className="h-[15px] w-[15px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      <svg
+                        className="h-[15px] w-[15px]"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        />
                       </svg>
                     )}
                   </button>
@@ -409,20 +457,58 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                     className="flex h-8 w-8 items-center justify-center rounded-full text-white/60 active:scale-90 transition-all duration-150 hover:text-white/90"
                     title={isFullscreen ? '退出全屏' : '全屏'}
                   >
-                    <svg className="h-[17px] w-[17px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg
+                      className="h-[17px] w-[17px]"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                    >
                       {isFullscreen ? (
                         <>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v3a2 2 0 01-2 2H3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8h-3a2 2 0 01-2-2V3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16h3a2 2 0 012 2v3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-3a2 2 0 012-2h3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8 3v3a2 2 0 01-2 2H3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M21 8h-3a2 2 0 01-2-2V3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M3 16h3a2 2 0 012 2v3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16 21v-3a2 2 0 012-2h3"
+                          />
                         </>
                       ) : (
                         <>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 3H5a2 2 0 00-2 2v3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8V5a2 2 0 00-2-2h-3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 21h3a2 2 0 002-2v-3" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16v3a2 2 0 002 2h3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M8 3H5a2 2 0 00-2 2v3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M21 8V5a2 2 0 00-2-2h-3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16 21h3a2 2 0 002-2v-3"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M3 16v3a2 2 0 002 2h3"
+                          />
                         </>
                       )}
                     </svg>
@@ -439,7 +525,13 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
 
                   {claimed ? (
                     <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400 backdrop-blur">
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                       已领取
@@ -450,8 +542,12 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
                       disabled={claiming}
                       className="rounded-full px-4 py-1.5 text-xs font-semibold text-white transition-all duration-200 active:scale-90 disabled:opacity-50 sm:px-5 sm:text-sm"
                       style={{ backgroundColor: 'var(--accent)' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-hover)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent)' }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--accent-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--accent)';
+                      }}
                     >
                       {claiming ? '领取中...' : `+${video.reward} 领取`}
                     </button>
@@ -463,5 +559,5 @@ export default function VideoPlayerModal({ video, onClose, onRewardClaimed }: Vi
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -21,12 +21,17 @@ const STEPS = [
 
 export default function FunnelChart({ days }: { days: number }) {
   const [articleId, setArticleId] = useState('');
-  const [articles, setArticles] = useState<Array<{ item_id: string; title: string; publish_time: string }>>([]);
+  const [articles, setArticles] = useState<
+    Array<{ item_id: string; title: string; publish_time: string }>
+  >([]);
   const [data, setData] = useState<FunnelData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    effectsApi.articleOptions().then(res => setArticles(res.articles)).catch(() => {});
+    effectsApi
+      .articleOptions()
+      .then((res) => setArticles(res.articles))
+      .catch(() => {});
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -41,16 +46,20 @@ export default function FunnelChart({ days }: { days: number }) {
     }
   }, [days, articleId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   if (!loading && !data) return null;
 
-  const values = STEPS.map(s => data?.[s.key] ?? 0);
+  const values = STEPS.map((s) => data?.[s.key] ?? 0);
   const maxVal = Math.max(...values, 1);
 
   return (
     <div className="card p-4">
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>互动漏斗</h3>
+      <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 16px' }}>
+        互动漏斗
+      </h3>
 
       {articles.length > 0 && (
         <div style={{ marginBottom: 16, maxWidth: 280 }}>
@@ -61,8 +70,10 @@ export default function FunnelChart({ days }: { days: number }) {
             size="sm"
             options={[
               { label: '全部文章', value: '' },
-              ...articles.map(a => ({
-                label: (a.title || '(无标题)').slice(0, 40) + (a.title && a.title.length > 40 ? '...' : ''),
+              ...articles.map((a) => ({
+                label:
+                  (a.title || '(无标题)').slice(0, 40) +
+                  (a.title && a.title.length > 40 ? '...' : ''),
                 value: a.item_id,
               })),
             ]}
@@ -71,37 +82,81 @@ export default function FunnelChart({ days }: { days: number }) {
       )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', fontSize: 12, color: 'var(--text-muted)' }}>加载中...</div>
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '20px 0',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+          }}
+        >
+          加载中...
+        </div>
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {STEPS.map((step, i) => {
               const val = values[i];
               const pct = maxVal > 0 ? val / maxVal : 0;
-              const rate = i > 0 && values[i - 1] > 0 ? ((val / values[i - 1]) * 100).toFixed(1) : null;
+              const rate =
+                i > 0 && values[i - 1] > 0 ? ((val / values[i - 1]) * 100).toFixed(1) : null;
               return (
                 <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ width: 32, fontSize: 12, color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
+                  <span
+                    style={{
+                      width: 32,
+                      fontSize: 12,
+                      color: 'var(--text-muted)',
+                      textAlign: 'right',
+                      flexShrink: 0,
+                    }}
+                  >
                     {step.label}
                   </span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ height: 24, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', borderRadius: 4,
-                        width: `${pct * 100}%`,
-                        background: step.color, opacity: 0.8,
-                        transition: 'width 0.6s ease-out',
-                      }} />
+                    <div
+                      style={{
+                        height: 24,
+                        borderRadius: 4,
+                        background: 'var(--border)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          borderRadius: 4,
+                          width: `${pct * 100}%`,
+                          background: step.color,
+                          opacity: 0.8,
+                          transition: 'width 0.6s ease-out',
+                        }}
+                      />
                     </div>
                   </div>
                   <span
                     title={val.toLocaleString()}
-                    style={{ width: 64, fontSize: 12, fontWeight: 600, color: 'var(--text)', textAlign: 'right', flexShrink: 0 }}
+                    style={{
+                      width: 64,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--text)',
+                      textAlign: 'right',
+                      flexShrink: 0,
+                    }}
                   >
                     {formatCount(val)}
                   </span>
                   {rate && (
-                    <span style={{ width: 48, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
+                    <span
+                      style={{
+                        width: 48,
+                        fontSize: 11,
+                        color: 'var(--text-muted)',
+                        textAlign: 'right',
+                        flexShrink: 0,
+                      }}
+                    >
                       {rate}%
                     </span>
                   )}
@@ -110,7 +165,14 @@ export default function FunnelChart({ days }: { days: number }) {
               );
             })}
           </div>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '12px 0 0', textAlign: 'center' }}>
+          <p
+            style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              margin: '12px 0 0',
+              textAlign: 'center',
+            }}
+          >
             百分比为相邻步骤的转化率
           </p>
         </>

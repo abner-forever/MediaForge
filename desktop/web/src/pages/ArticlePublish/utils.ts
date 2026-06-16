@@ -1,5 +1,10 @@
 export type TabKey = 'all' | 'draft' | 'queued' | 'published';
-export const TAB_LABELS: Record<TabKey, string> = { all: '全部', draft: '草稿', queued: '已排队', published: '已发布' };
+export const TAB_LABELS: Record<TabKey, string> = {
+  all: '全部',
+  draft: '草稿',
+  queued: '已排队',
+  published: '已发布',
+};
 export const STATUS_LABELS: Record<string, { text: string }> = {
   draft: { text: '草稿' },
   reviewing: { text: '待检查' },

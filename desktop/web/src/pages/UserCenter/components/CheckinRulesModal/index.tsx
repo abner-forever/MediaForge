@@ -3,20 +3,25 @@
  * 显示签到规则和里程碑奖励
  */
 
-import Modal from '@/components/ui/Modal'
-import type { CheckinHistory } from '@/types'
-import { STREAK_MILESTONES } from '../CheckinCalendar'
+import Modal from '@/components/ui/Modal';
+import type { CheckinHistory } from '@/types';
+import { STREAK_MILESTONES } from '../CheckinCalendar';
 
 interface CheckinRulesModalProps {
-  open: boolean
-  onClose: () => void
-  checkinHistory: CheckinHistory | null
-  currentStreak: number
+  open: boolean;
+  onClose: () => void;
+  checkinHistory: CheckinHistory | null;
+  currentStreak: number;
 }
 
-export default function CheckinRulesModal({ open, onClose, checkinHistory, currentStreak }: CheckinRulesModalProps) {
+export default function CheckinRulesModal({
+  open,
+  onClose,
+  checkinHistory,
+  currentStreak,
+}: CheckinRulesModalProps) {
   // 计算下一个里程碑
-  const nextMilestone = STREAK_MILESTONES.find(m => m.days > currentStreak)
+  const nextMilestone = STREAK_MILESTONES.find((m) => m.days > currentStreak);
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -32,9 +37,11 @@ export default function CheckinRulesModal({ open, onClose, checkinHistory, curre
 
         <h4 className="text-sm font-semibold text-text mb-3">连续签到里程碑</h4>
         <div className="flex flex-col gap-2">
-          {STREAK_MILESTONES.map(milestone => {
-            const achieved = checkinHistory ? checkinHistory.current_streak >= milestone.days : false
-            const isNext = nextMilestone?.days === milestone.days
+          {STREAK_MILESTONES.map((milestone) => {
+            const achieved = checkinHistory
+              ? checkinHistory.current_streak >= milestone.days
+              : false;
+            const isNext = nextMilestone?.days === milestone.days;
             return (
               <div
                 key={milestone.days}
@@ -48,31 +55,37 @@ export default function CheckinRulesModal({ open, onClose, checkinHistory, curre
                 style={{ border: isNext ? undefined : '1px solid transparent' }}
               >
                 <div>
-                  <span className={`text-[13px] font-medium ${achieved ? 'text-success' : 'text-text'}`}>
+                  <span
+                    className={`text-[13px] font-medium ${achieved ? 'text-success' : 'text-text'}`}
+                  >
                     {milestone.label}
                   </span>
-                  <span className="text-xs text-text-muted ml-2">
-                    连续{milestone.days}天
-                  </span>
+                  <span className="text-xs text-text-muted ml-2">连续{milestone.days}天</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-[13px] font-semibold ${achieved ? 'text-success' : 'text-accent'}`}>
+                  <span
+                    className={`text-[13px] font-semibold ${achieved ? 'text-success' : 'text-accent'}`}
+                  >
                     +{milestone.bonus}
                   </span>
                   {achieved && <span className="text-[11px] text-success">✓ 已达成</span>}
                   {isNext && checkinHistory && (
-                    <span className="text-[11px] text-accent">还差{milestone.days - checkinHistory.current_streak}天</span>
+                    <span className="text-[11px] text-accent">
+                      还差{milestone.days - checkinHistory.current_streak}天
+                    </span>
                   )}
                 </div>
               </div>
-            )
+            );
           })}
         </div>
 
         <div className="flex justify-end mt-5">
-          <button className="btn btn-sm" onClick={onClose}>知道了</button>
+          <button className="btn btn-sm" onClick={onClose}>
+            知道了
+          </button>
         </div>
       </div>
     </Modal>
-  )
+  );
 }

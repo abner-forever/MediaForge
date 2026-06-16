@@ -63,7 +63,9 @@ export const createDiscoverySlice: StateCreator<AppState, [], [], DiscoverySlice
   clearSelectedImages: () => set({ selectedImages: [] }),
   selectAllImages: (paths: string[]) =>
     set((s) => {
-      const isAll = s.selectedImages.length === paths.length && paths.every((p) => s.selectedImages.includes(p));
+      const isAll =
+        s.selectedImages.length === paths.length &&
+        paths.every((p) => s.selectedImages.includes(p));
       return { selectedImages: isAll ? [] : [...paths] };
     }),
   setDiscoveryCelebs: (v) => set({ discoveryCelebs: v }),

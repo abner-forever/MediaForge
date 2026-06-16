@@ -4,7 +4,7 @@
  */
 
 interface SecuritySectionProps {
-  onChangePassword: () => void
+  onChangePassword: () => void;
 }
 
 export default function SecuritySection({ onChangePassword }: SecuritySectionProps) {
@@ -14,14 +14,11 @@ export default function SecuritySection({ onChangePassword }: SecuritySectionPro
       <div className="flex flex-col gap-4">
         <p className="text-sm text-text-secondary">定期修改密码可以保护您的账户安全</p>
         <div className="flex gap-3">
-          <button
-            onClick={onChangePassword}
-            className="btn btn-sm"
-          >
+          <button onClick={onChangePassword} className="btn btn-sm">
             修改密码
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

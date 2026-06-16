@@ -88,15 +88,30 @@ ModalApi.alert = function alert(options: AlertOptions): Promise<void> {
         <ModalComponent open onClose={done} className="min-w-[280px] max-w-[360px]">
           <div className="flex flex-col items-center py-1">
             <div className="w-11 h-11 rounded-full bg-accent-softer flex items-center justify-center mb-3">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #10b981)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6 9 17l-5-5"/>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--accent, #10b981)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
               </svg>
             </div>
-            <h3 className="text-[15px] font-semibold text-text mb-1.5">{options.title || '提示'}</h3>
-            <p className="text-[13px] text-text-secondary text-center leading-relaxed">{options.message}</p>
-            <button className="btn btn-primary mt-5 min-w-[100px]" onClick={done}>知道了</button>
+            <h3 className="text-[15px] font-semibold text-text mb-1.5">
+              {options.title || '提示'}
+            </h3>
+            <p className="text-[13px] text-text-secondary text-center leading-relaxed">
+              {options.message}
+            </p>
+            <button className="btn btn-primary mt-5 min-w-[100px]" onClick={done}>
+              知道了
+            </button>
           </div>
-        </ModalComponent>
+        </ModalComponent>,
       );
     });
   });
@@ -127,7 +142,7 @@ ModalApi.confirm = function confirm(options: ConfirmOptions): Promise<ConfirmRet
           noLoading
           onConfirm={(checked) => cleanup(true, checked)}
           onCancel={() => cleanup(false, false)}
-        />
+        />,
       );
     });
   });
@@ -142,20 +157,33 @@ ModalApi.info = function info(options: InfoOptions): void {
       <ModalComponent open onClose={close} className="min-w-[280px] max-w-[360px]">
         <div className="flex flex-col items-center py-1">
           <div className="w-11 h-11 rounded-full bg-accent-softer flex items-center justify-center mb-3">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #10b981)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6 9 17l-5-5"/>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--accent, #10b981)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
           <h3 className="text-[15px] font-semibold text-text mb-1.5">{options.title || '提示'}</h3>
-          <p className="text-[13px] text-text-secondary text-center leading-relaxed">{options.message}</p>
+          <p className="text-[13px] text-text-secondary text-center leading-relaxed">
+            {options.message}
+          </p>
         </div>
-      </ModalComponent>
+      </ModalComponent>,
     );
   });
 };
 
 /** 发布前确认弹窗 */
-ModalApi.publishConfirm = function publishConfirm(options: PublishConfirmOptions): Promise<PublishConfirmReturn> {
+ModalApi.publishConfirm = function publishConfirm(
+  options: PublishConfirmOptions,
+): Promise<PublishConfirmReturn> {
   return new Promise((resolve) => {
     mount((root, el, close) => {
       let done = false;
@@ -178,7 +206,7 @@ ModalApi.publishConfirm = function publishConfirm(options: PublishConfirmOptions
           loading={false}
           onConfirm={(headless) => cleanup(true, headless)}
           onCancel={() => cleanup(false, false)}
-        />
+        />,
       );
     });
   });
@@ -212,7 +240,7 @@ ModalApi.open = function open(options: OpenOptions): OpenRef {
             {currentOptions.footer}
           </div>
         )}
-      </ModalComponent>
+      </ModalComponent>,
     );
   }
 

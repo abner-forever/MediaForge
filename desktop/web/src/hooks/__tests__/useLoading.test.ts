@@ -11,7 +11,9 @@ describe('useLoading', () => {
   it('withLoading 执行时设置 loading 为 true，完成后恢复', async () => {
     const { result } = renderHook(() => useLoading());
     let resolve: (v: string) => void;
-    const promise = new Promise<string>((r) => { resolve = r; });
+    const promise = new Promise<string>((r) => {
+      resolve = r;
+    });
 
     act(() => {
       result.current.withLoading(() => promise);

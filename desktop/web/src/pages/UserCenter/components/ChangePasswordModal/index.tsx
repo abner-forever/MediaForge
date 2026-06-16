@@ -2,41 +2,41 @@
  * 修改密码弹窗
  */
 
-import { useState } from 'react'
-import Button from '@/components/ui/Button'
-import Modal from '@/components/ui/Modal'
-import EyeIcon from '@/components/ui/EyeIcon'
+import { useState } from 'react';
+import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import EyeIcon from '@/components/ui/EyeIcon';
 
 interface ChangePasswordModalProps {
-  open: boolean
-  onClose: () => void
-  onSave: (oldPassword: string, newPassword: string) => Promise<void>
+  open: boolean;
+  onClose: () => void;
+  onSave: (oldPassword: string, newPassword: string) => Promise<void>;
 }
 
 export default function ChangePasswordModal({ open, onClose, onSave }: ChangePasswordModalProps) {
-  const [oldPassword, setOldPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmNewPwd, setConfirmNewPwd] = useState('')
-  const [changing, setChanging] = useState(false)
-  const [showOldPwd, setShowOldPwd] = useState(false)
-  const [showNewPwd, setShowNewPwd] = useState(false)
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPwd, setConfirmNewPwd] = useState('');
+  const [changing, setChanging] = useState(false);
+  const [showOldPwd, setShowOldPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
 
   const handleClose = () => {
-    onClose()
-    setOldPassword('')
-    setNewPassword('')
-    setConfirmNewPwd('')
-  }
+    onClose();
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmNewPwd('');
+  };
 
   const handleSave = async () => {
-    setChanging(true)
+    setChanging(true);
     try {
-      await onSave(oldPassword, newPassword)
-      handleClose()
+      await onSave(oldPassword, newPassword);
+      handleClose();
     } finally {
-      setChanging(false)
+      setChanging(false);
     }
-  }
+  };
 
   return (
     <Modal open={open} onClose={handleClose}>
@@ -59,7 +59,9 @@ export default function ChangePasswordModal({ open, onClose, onSave }: ChangePas
                 type="button"
                 onClick={() => setShowOldPwd(!showOldPwd)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted flex items-center cursor-pointer bg-transparent border-none"
-              ><EyeIcon visible={showOldPwd} /></button>
+              >
+                <EyeIcon visible={showOldPwd} />
+              </button>
             </div>
           </div>
           {/* 新密码 */}
@@ -78,7 +80,9 @@ export default function ChangePasswordModal({ open, onClose, onSave }: ChangePas
                 type="button"
                 onClick={() => setShowNewPwd(!showNewPwd)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-text-muted flex items-center cursor-pointer bg-transparent border-none"
-              ><EyeIcon visible={showNewPwd} /></button>
+              >
+                <EyeIcon visible={showNewPwd} />
+              </button>
             </div>
           </div>
           {/* 确认新密码 */}
@@ -94,13 +98,14 @@ export default function ChangePasswordModal({ open, onClose, onSave }: ChangePas
           </div>
         </div>
         <div className="flex gap-2 justify-end mt-6">
-          <button
-            className="btn btn-sm"
-            onClick={handleClose}
-          >取消</button>
-          <Button type="primary" size="sm" loading={changing} onClick={handleSave}>确认修改</Button>
+          <button className="btn btn-sm" onClick={handleClose}>
+            取消
+          </button>
+          <Button type="primary" size="sm" loading={changing} onClick={handleSave}>
+            确认修改
+          </Button>
         </div>
       </div>
     </Modal>
-  )
+  );
 }

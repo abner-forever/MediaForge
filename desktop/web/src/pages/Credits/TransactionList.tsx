@@ -26,7 +26,7 @@ export default function TransactionList() {
       if (p === 1) {
         setItems(result.transactions);
       } else {
-        setItems(prev => [...prev, ...result.transactions]);
+        setItems((prev) => [...prev, ...result.transactions]);
       }
       setTotal(result.total);
       setPage(p);
@@ -35,16 +35,27 @@ export default function TransactionList() {
     }
   }, []);
 
-  useEffect(() => { load(1); }, [load]);
+  useEffect(() => {
+    load(1);
+  }, [load]);
 
   const hasMore = items.length < total;
 
   return (
     <div className="card" style={{ padding: '24px 28px' }}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>积分明细</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 16 }}>
+        积分明细
+      </div>
 
       {items.length === 0 && !loading && (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '32px 0',
+            color: 'var(--text-muted)',
+            fontSize: 13,
+          }}
+        >
           暂无积分记录
         </div>
       )}
@@ -78,7 +89,8 @@ export default function TransactionList() {
                 marginLeft: 16,
               }}
             >
-              {tx.amount > 0 ? '+' : ''}{tx.amount}
+              {tx.amount > 0 ? '+' : ''}
+              {tx.amount}
             </div>
           </div>
         ))}

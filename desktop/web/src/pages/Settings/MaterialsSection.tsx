@@ -3,9 +3,15 @@ import { settingsApi, type SettingsData } from '../../api/client';
 import { useLoading } from '../../hooks/useLoading';
 import { useStore } from '../../stores';
 
-export default function MaterialsSection({ data, save }: { data: SettingsData; save: (u: Record<string, string>) => void }) {
+export default function MaterialsSection({
+  data,
+  save,
+}: {
+  data: SettingsData;
+  save: (u: Record<string, string>) => void;
+}) {
   const { loading: saving, withLoading: withSave } = useLoading();
-  const addToast = useStore(s => s.addToast);
+  const addToast = useStore((s) => s.addToast);
   const [materialsPath, setMaterialsPath] = useState(data.download_dir);
   const [browsing, setBrowsing] = useState(false);
 
@@ -31,14 +37,31 @@ export default function MaterialsSection({ data, save }: { data: SettingsData; s
       <div className="space-y-2">
         <p className="text-xs text-text-muted">图片下载后的本地保存目录，置空恢复默认路径</p>
         <div className="flex gap-2">
-          <input type="text" value={materialsPath} onChange={e => setMaterialsPath(e.target.value)} placeholder="默认路径" className="flex-1" />
+          <input
+            type="text"
+            value={materialsPath}
+            onChange={(e) => setMaterialsPath(e.target.value)}
+            placeholder="默认路径"
+            className="flex-1"
+          />
           <button type="button" className="btn btn-sm" onClick={handleBrowse} disabled={browsing}>
             {browsing ? '选择中...' : '选择文件夹'}
           </button>
         </div>
       </div>
-      <button className="btn btn-primary" onClick={() => withSave(async () => save({ MATERIALS_PATH: materialsPath }))} disabled={saving}>
-        {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存'}
+      <button
+        className="btn btn-primary"
+        onClick={() => withSave(async () => save({ MATERIALS_PATH: materialsPath }))}
+        disabled={saving}
+      >
+        {saving ? (
+          <>
+            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />{' '}
+            保存中
+          </>
+        ) : (
+          '保存'
+        )}
       </button>
     </div>
   );

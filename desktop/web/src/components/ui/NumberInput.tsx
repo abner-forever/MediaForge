@@ -10,12 +10,29 @@ interface NumberInputProps {
 }
 
 const sizeConfig = {
-  sm: { wrapper: 'form-number-input-sm', btn: 'form-number-btn form-number-btn-sm', icon: 'w-2.5 h-2.5', text: 'form-number-value form-number-value-sm' },
+  sm: {
+    wrapper: 'form-number-input-sm',
+    btn: 'form-number-btn form-number-btn-sm',
+    icon: 'w-2.5 h-2.5',
+    text: 'form-number-value form-number-value-sm',
+  },
   md: { wrapper: '', btn: 'form-number-btn', icon: 'w-3 h-3', text: 'form-number-value' },
-  lg: { wrapper: 'form-number-input-lg', btn: 'form-number-btn form-number-btn-lg', icon: 'w-3.5 h-3.5', text: 'form-number-value form-number-value-lg' },
+  lg: {
+    wrapper: 'form-number-input-lg',
+    btn: 'form-number-btn form-number-btn-lg',
+    icon: 'w-3.5 h-3.5',
+    text: 'form-number-value form-number-value-lg',
+  },
 };
 
-export default function NumberInput({ value, onChange, min, max, step = 1, size = 'md' }: NumberInputProps) {
+export default function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  size = 'md',
+}: NumberInputProps) {
   const s = sizeConfig[size];
 
   function clamp(v: number) {
@@ -25,17 +42,23 @@ export default function NumberInput({ value, onChange, min, max, step = 1, size 
   }
 
   return (
-    <div
-      className={`form-number-input ${s.wrapper}`}
-      style={{ borderRadius: 'var(--radius-sm)' }}
-    >
+    <div className={`form-number-input ${s.wrapper}`} style={{ borderRadius: 'var(--radius-sm)' }}>
       <button
         type="button"
         onClick={() => onChange(clamp(value - step))}
         disabled={min !== undefined && value <= min}
         className={`${s.btn}`}
       >
-        <svg className={s.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14" /></svg>
+        <svg
+          className={s.icon}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        >
+          <path d="M5 12h14" />
+        </svg>
       </button>
       <input
         type="number"
@@ -53,7 +76,16 @@ export default function NumberInput({ value, onChange, min, max, step = 1, size 
         disabled={max !== undefined && value >= max}
         className={`${s.btn}`}
       >
-        <svg className={s.icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        <svg
+          className={s.icon}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
       </button>
     </div>
   );

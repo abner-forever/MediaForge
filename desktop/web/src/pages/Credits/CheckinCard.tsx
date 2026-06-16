@@ -29,10 +29,18 @@ export default function CheckinCard({ status, onCheckin }: Props) {
 
   return (
     <div className="card" style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 20,
+        }}
+      >
         <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>每日签到</div>
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          连续签到 <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{status.streak}</span> 天
+          连续签到 <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{status.streak}</span>{' '}
+          天
         </div>
       </div>
 
@@ -70,9 +78,7 @@ export default function CheckinCard({ status, onCheckin }: Props) {
               >
                 +{reward}
               </div>
-              {done && (
-                <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>✓</div>
-              )}
+              {done && <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>✓</div>}
             </div>
           );
         })}
@@ -90,9 +96,10 @@ export default function CheckinCard({ status, onCheckin }: Props) {
           fontSize: 14,
           fontWeight: 600,
           cursor: status.can_checkin && !justChecked ? 'pointer' : 'not-allowed',
-          background: status.can_checkin && !justChecked
-            ? 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))'
-            : 'var(--bg-card-hover)',
+          background:
+            status.can_checkin && !justChecked
+              ? 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))'
+              : 'var(--bg-card-hover)',
           color: status.can_checkin && !justChecked ? '#fff' : 'var(--text-muted)',
           transition: 'all 0.2s',
         }}

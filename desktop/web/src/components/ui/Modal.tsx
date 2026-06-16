@@ -14,7 +14,9 @@ export default function Modal({ open, onClose, children, className = '' }: Modal
   const [exiting, setExiting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -64,11 +66,11 @@ export default function Modal({ open, onClose, children, className = '' }: Modal
     >
       <div
         className={`bg-bg-card border border-border rounded-2xl p-6 shadow-xl ${exiting ? 'animate-scale-out' : 'animate-scale'} ${className}`}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {children}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

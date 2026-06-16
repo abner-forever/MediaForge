@@ -3,7 +3,9 @@ import WeiboSection from './WeiboSection';
 import ToutiaoSection from './ToutiaoSection';
 
 export default function MediaSourceSection({
-  data, save, onReload,
+  data,
+  save,
+  onReload,
 }: {
   data: SettingsData;
   save: (u: Record<string, string>) => void;

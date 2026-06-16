@@ -51,13 +51,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       .join(' ');
 
     return (
-      <button
-        ref={ref}
-        type={htmlType}
-        className={cls}
-        disabled={disabled || loading}
-        {...rest}
-      >
+      <button ref={ref} type={htmlType} className={cls} disabled={disabled || loading} {...rest}>
         {loading ? <Loading size="xs" /> : icon}
         {children && <span>{children}</span>}
       </button>

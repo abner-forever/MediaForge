@@ -56,9 +56,13 @@ export default function App() {
     checkAuth();
 
     // 监听 auth:logout 事件
-    const handleLogout = () => { logout(); };
+    const handleLogout = () => {
+      logout();
+    };
     window.addEventListener('auth:logout', handleLogout);
-    return () => { window.removeEventListener('auth:logout', handleLogout); };
+    return () => {
+      window.removeEventListener('auth:logout', handleLogout);
+    };
   }, []);
 
   // PyWebView 环境：拦截外部链接，通过 bridge 打开新应用窗口
@@ -103,7 +107,9 @@ export default function App() {
               element={
                 <Suspense fallback={<PageLoading />}>
                   {errorBoundary ? (
-                    <ErrorBoundary><Page /></ErrorBoundary>
+                    <ErrorBoundary>
+                      <Page />
+                    </ErrorBoundary>
                   ) : (
                     <Page />
                   )}
@@ -120,7 +126,9 @@ export default function App() {
 
 function PageLoading() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+    <div
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}
+    >
       <Loading />
     </div>
   );

@@ -1,4 +1,19 @@
-import type { Post, ScoreInfo, QueueItem, ArticleItem, ChatMessage, InspirationTopic, TreeNode, BrowseFolder, BrowseFile, PipelineEvent, PipelineSummary, CheckinStatus, UserProfile, DailyTask } from '../types';
+import type {
+  Post,
+  ScoreInfo,
+  QueueItem,
+  ArticleItem,
+  ChatMessage,
+  InspirationTopic,
+  TreeNode,
+  BrowseFolder,
+  BrowseFile,
+  PipelineEvent,
+  PipelineSummary,
+  CheckinStatus,
+  UserProfile,
+  DailyTask,
+} from '../types';
 import type { PublishTaskState } from './queueSlice';
 
 /* ── Theme Presets ──────────────────────────── */
@@ -148,7 +163,15 @@ export interface AppState {
   pipelineCheckpoint: {
     message: string;
     runId: string;
-    items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }>;
+    items?: Array<{
+      title: string;
+      desc?: string;
+      celebrity?: string;
+      images: number;
+      score?: number;
+      cover?: string;
+      image_list?: string[];
+    }>;
   } | null;
   pipelineDecisionReq: {
     message: string;
@@ -165,8 +188,29 @@ export interface AppState {
   setPipelineStepProgress: (progress: { current: number; total: number } | null) => void;
   setPipelineSummary: (summary: PipelineSummary | null) => void;
   setPipelineError: (error: string | null) => void;
-  setPipelineCheckpoint: (checkpoint: { message: string; runId: string; items?: Array<{ title: string; desc?: string; celebrity?: string; images: number; score?: number; cover?: string; image_list?: string[] }> } | null) => void;
-  setPipelineDecisionReq: (req: { message: string; runId: string; options: Array<{ id: string; label: string }>; context?: Record<string, unknown> } | null) => void;
+  setPipelineCheckpoint: (
+    checkpoint: {
+      message: string;
+      runId: string;
+      items?: Array<{
+        title: string;
+        desc?: string;
+        celebrity?: string;
+        images: number;
+        score?: number;
+        cover?: string;
+        image_list?: string[];
+      }>;
+    } | null,
+  ) => void;
+  setPipelineDecisionReq: (
+    req: {
+      message: string;
+      runId: string;
+      options: Array<{ id: string; label: string }>;
+      context?: Record<string, unknown>;
+    } | null,
+  ) => void;
   resetPipelineState: () => void;
 
   // Article sidebar state (persisted)

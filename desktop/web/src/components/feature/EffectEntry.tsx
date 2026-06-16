@@ -29,13 +29,26 @@ export function showEffectEntry(itemId: string, title?: string): Promise<boolean
     }
 
     root.render(
-      <EffectEntryModal itemId={itemId} title={title} onClose={() => cleanup(false)} onSaved={() => cleanup(true)} />
+      <EffectEntryModal
+        itemId={itemId}
+        title={title}
+        onClose={() => cleanup(false)}
+        onSaved={() => cleanup(true)}
+      />,
     );
   });
 }
 
-function EffectEntryModal({ itemId, title, onClose, onSaved }: {
-  itemId: string; title?: string; onClose: () => void; onSaved: () => void;
+function EffectEntryModal({
+  itemId,
+  title,
+  onClose,
+  onSaved,
+}: {
+  itemId: string;
+  title?: string;
+  onClose: () => void;
+  onSaved: () => void;
 }) {
   const [effect, setEffect] = useState<PublishEffect | null>(null);
   const [reads, setReads] = useState('');
@@ -50,19 +63,22 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
   const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
-    effectsApi.get(itemId).then(({ effect: e }) => {
-      if (e) {
-        setEffect(e);
-        setReads(String(e.reads || ''));
-        setLikes(String(e.likes || ''));
-        setShares(String(e.shares || ''));
-        setFavorites(String(e.favorites || ''));
-        setComments(String(e.comments || ''));
-        setContentType(e.content_type || '');
-        setSourcePlatform(e.source_platform || '');
-        setCelebrity(e.celebrity || '');
-      }
-    }).catch(() => {});
+    effectsApi
+      .get(itemId)
+      .then(({ effect: e }) => {
+        if (e) {
+          setEffect(e);
+          setReads(String(e.reads || ''));
+          setLikes(String(e.likes || ''));
+          setShares(String(e.shares || ''));
+          setFavorites(String(e.favorites || ''));
+          setComments(String(e.comments || ''));
+          setContentType(e.content_type || '');
+          setSourcePlatform(e.source_platform || '');
+          setCelebrity(e.celebrity || '');
+        }
+      })
+      .catch(() => {});
   }, [itemId]);
 
   function handleClose() {
@@ -86,7 +102,9 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
       });
       setExiting(true);
       setTimeout(() => onSaved(), 200);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setSaving(false);
   }
 
@@ -99,7 +117,7 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
     >
       <div
         className={`bg-bg-card border border-border rounded-2xl p-6 shadow-xl min-w-[420px] max-w-[520px] ${exiting ? 'animate-scale-out' : 'animate-scale'}`}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-base font-bold text-text mb-4">发布效果录入</h3>
 
@@ -107,35 +125,88 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelStyle}>阅读量</label>
-            <input type="number" min="0" className="w-full text-sm" value={reads} onChange={e => setReads(e.target.value)} placeholder="0" />
+            <input
+              type="number"
+              min="0"
+              className="w-full text-sm"
+              value={reads}
+              onChange={(e) => setReads(e.target.value)}
+              placeholder="0"
+            />
           </div>
           <div>
             <label className={labelStyle}>点赞</label>
-            <input type="number" min="0" className="w-full text-sm" value={likes} onChange={e => setLikes(e.target.value)} placeholder="0" />
+            <input
+              type="number"
+              min="0"
+              className="w-full text-sm"
+              value={likes}
+              onChange={(e) => setLikes(e.target.value)}
+              placeholder="0"
+            />
           </div>
           <div>
             <label className={labelStyle}>分享</label>
-            <input type="number" min="0" className="w-full text-sm" value={shares} onChange={e => setShares(e.target.value)} placeholder="0" />
+            <input
+              type="number"
+              min="0"
+              className="w-full text-sm"
+              value={shares}
+              onChange={(e) => setShares(e.target.value)}
+              placeholder="0"
+            />
           </div>
           <div>
             <label className={labelStyle}>收藏</label>
-            <input type="number" min="0" className="w-full text-sm" value={favorites} onChange={e => setFavorites(e.target.value)} placeholder="0" />
+            <input
+              type="number"
+              min="0"
+              className="w-full text-sm"
+              value={favorites}
+              onChange={(e) => setFavorites(e.target.value)}
+              placeholder="0"
+            />
           </div>
           <div>
             <label className={labelStyle}>评论数</label>
-            <input type="number" min="0" className="w-full text-sm" value={comments} onChange={e => setComments(e.target.value)} placeholder="0" />
+            <input
+              type="number"
+              min="0"
+              className="w-full text-sm"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="0"
+            />
           </div>
           <div>
             <label className={labelStyle}>内容类型</label>
-            <Select value={contentType} onChange={v => setContentType(v as typeof contentType)} options={[{ value: '', label: '请选择' }, { value: 'image', label: '图文' }, { value: 'article', label: '文章' }]} />
+            <Select
+              value={contentType}
+              onChange={(v) => setContentType(v as typeof contentType)}
+              options={[
+                { value: '', label: '请选择' },
+                { value: 'image', label: '图文' },
+                { value: 'article', label: '文章' },
+              ]}
+            />
           </div>
           <div>
             <label className={labelStyle}>素材来源</label>
-            <Select value={sourcePlatform} onChange={setSourcePlatform} options={SOURCE_PLATFORMS} />
+            <Select
+              value={sourcePlatform}
+              onChange={setSourcePlatform}
+              options={SOURCE_PLATFORMS}
+            />
           </div>
           <div className="col-span-2">
             <label className={labelStyle}>关联艺人</label>
-            <input type="text" className="w-full text-sm" value={celebrity} onChange={e => setCelebrity(e.target.value)} placeholder="艺人名称" />
+            <input
+              type="text"
+              className="w-full text-sm"
+              value={celebrity}
+              onChange={(e) => setCelebrity(e.target.value)}
+              placeholder="艺人名称"
+            />
           </div>
         </div>
 
@@ -153,7 +224,9 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
 
         {/* 操作按钮 */}
         <div className="flex justify-end gap-2.5 mt-5 pt-4 border-t border-border">
-          <button className="btn" onClick={handleClose}>取消</button>
+          <button className="btn" onClick={handleClose}>
+            取消
+          </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存'}
           </button>
@@ -167,7 +240,17 @@ function EffectEntryModal({ itemId, title, onClose, onSaved }: {
 export default function EffectEntry({ itemId, title }: { itemId: string; title?: string }) {
   return (
     <button className="btn btn-sm btn-ghost text-xs" onClick={() => showEffectEntry(itemId, title)}>
-      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M7 21V10a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v11m0 0h8V6a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v14m6-8h.01"/><path d="M4 21h16"/></svg>
+      <svg
+        className="w-3.5 h-3.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      >
+        <path d="M7 21V10a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v11m0 0h8V6a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v14m6-8h.01" />
+        <path d="M4 21h16" />
+      </svg>
       效果录入
     </button>
   );

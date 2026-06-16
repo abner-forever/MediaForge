@@ -5,9 +5,15 @@ import { useStore } from '../index';
 const storage: Record<string, string> = {};
 vi.stubGlobal('localStorage', {
   getItem: (k: string) => storage[k] ?? null,
-  setItem: (k: string, v: string) => { storage[k] = v; },
-  removeItem: (k: string) => { delete storage[k]; },
-  clear: () => { Object.keys(storage).forEach(k => delete storage[k]); },
+  setItem: (k: string, v: string) => {
+    storage[k] = v;
+  },
+  removeItem: (k: string) => {
+    delete storage[k];
+  },
+  clear: () => {
+    Object.keys(storage).forEach((k) => delete storage[k]);
+  },
 });
 
 // Mock fetch for theme sync

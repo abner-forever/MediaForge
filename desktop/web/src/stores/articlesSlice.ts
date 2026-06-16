@@ -40,8 +40,8 @@ export const createArticlesSlice: StateCreator<AppState, [], [], ArticlesSlice> 
     set((state) => ({
       chatMessages: {
         ...state.chatMessages,
-        [articleId]: (state.chatMessages[articleId] || []).map(msg =>
-          msg.id === messageId ? { ...msg, content } : msg
+        [articleId]: (state.chatMessages[articleId] || []).map((msg) =>
+          msg.id === messageId ? { ...msg, content } : msg,
         ),
       },
     })),
@@ -49,7 +49,7 @@ export const createArticlesSlice: StateCreator<AppState, [], [], ArticlesSlice> 
     set((state) => ({
       chatMessages: {
         ...state.chatMessages,
-        [articleId]: (state.chatMessages[articleId] || []).filter(msg => msg.id !== messageId),
+        [articleId]: (state.chatMessages[articleId] || []).filter((msg) => msg.id !== messageId),
       },
     })),
   clearChatMessages: (articleId) =>

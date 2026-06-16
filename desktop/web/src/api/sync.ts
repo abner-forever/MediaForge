@@ -2,8 +2,8 @@
  * 云同步 API
  */
 
-import { get, post } from './base'
-import type { SyncStatus, SyncConfigRequest, SyncResult, DeviceInfo } from '../types'
+import { get, post } from './base';
+import type { SyncStatus, SyncConfigRequest, SyncResult, DeviceInfo } from '../types';
 
 export const syncApi = {
   /** 获取同步状态 */
@@ -26,4 +26,4 @@ export const syncApi = {
 
   /** 获取设备信息 */
   getDeviceInfo: () => get<DeviceInfo>('/api/sync/device-info'),
-}
+};

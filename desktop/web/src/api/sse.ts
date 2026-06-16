@@ -24,7 +24,9 @@ export async function readSSEStream<T = unknown>(
           if (!line.startsWith('data: ')) continue;
           try {
             onEvent(JSON.parse(line.slice(6)));
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
       break;
@@ -36,7 +38,9 @@ export async function readSSEStream<T = unknown>(
       if (!line.startsWith('data: ')) continue;
       try {
         onEvent(JSON.parse(line.slice(6)));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

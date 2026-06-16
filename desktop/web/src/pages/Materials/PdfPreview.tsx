@@ -7,12 +7,7 @@ import type * as pdfjsLib from 'pdfjs-dist';
 // @ts-ignore — Vite ?url 导入
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-export default function PdfPreview({
-  path, onClose,
-}: {
-  path: string;
-  onClose: () => void;
-}) {
+export default function PdfPreview({ path, onClose }: { path: string; onClose: () => void }) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,7 +69,9 @@ export default function PdfPreview({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [path]);
 
   // ════════════════ 渲染当前页 ════════════════
@@ -86,7 +83,11 @@ export default function PdfPreview({
 
     // 取消前一次渲染
     if (renderTaskRef.current) {
-      try { renderTaskRef.current.cancel(); } catch { /* */ }
+      try {
+        renderTaskRef.current.cancel();
+      } catch {
+        /* */
+      }
       renderTaskRef.current = null;
     }
 
@@ -136,7 +137,11 @@ export default function PdfPreview({
   useEffect(() => {
     return () => {
       if (renderTaskRef.current) {
-        try { renderTaskRef.current.cancel(); } catch { /* */ }
+        try {
+          renderTaskRef.current.cancel();
+        } catch {
+          /* */
+        }
       }
       pdfRef.current?.cleanup();
     };
@@ -152,9 +157,7 @@ export default function PdfPreview({
       <div className="relative w-[90vw] max-w-5xl h-[90vh] bg-bg-card rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-          <h3 className="text-sm font-semibold text-text truncate">
-            {fileName}
-          </h3>
+          <h3 className="text-sm font-semibold text-text truncate">{fileName}</h3>
           <div className="flex items-center gap-2">
             <a
               href={downloadHref}
@@ -162,16 +165,32 @@ export default function PdfPreview({
               className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text transition-colors"
               title="下载"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </a>
             <button
               className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text transition-colors"
               onClick={onClose}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M18 6L6 18M6 6l12 12"/>
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
@@ -186,8 +205,20 @@ export default function PdfPreview({
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className="flex items-center gap-3 text-text-muted">
                 <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-20"/>
-                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    className="opacity-20"
+                  />
+                  <path
+                    d="M12 2a10 10 0 0 1 10 10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <span className="text-sm">加载 PDF 中...</span>
               </div>
@@ -207,10 +238,7 @@ export default function PdfPreview({
           )}
           {!loading && !error && (
             <>
-              <canvas
-                ref={canvasRef}
-                className="shadow-xl rounded-sm bg-white"
-              />
+              <canvas ref={canvasRef} className="shadow-xl rounded-sm bg-white" />
 
               {/* 页码导航 */}
               {pageCount > 1 && (
@@ -218,22 +246,42 @@ export default function PdfPreview({
                   <button
                     className="p-1 rounded hover:bg-bg-hover disabled:opacity-30 transition-colors"
                     disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    <svg
+                      className="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
                   </button>
                   <span className="text-xs text-text tabular-nums whitespace-nowrap">
                     {currentPage} / {pageCount}
                     {actualScale !== 1 && (
-                      <span className="ml-1.5 text-text-muted">({Math.round(actualScale * 100)}%)</span>
+                      <span className="ml-1.5 text-text-muted">
+                        ({Math.round(actualScale * 100)}%)
+                      </span>
                     )}
                   </span>
                   <button
                     className="p-1 rounded hover:bg-bg-hover disabled:opacity-30 transition-colors"
                     disabled={currentPage >= pageCount}
-                    onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                    onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg
+                      className="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
                   </button>
                 </div>
               )}

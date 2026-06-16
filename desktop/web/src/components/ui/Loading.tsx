@@ -31,13 +31,17 @@ export default function Loading({ text, size = 'md', className = '', inline }: L
       >
         <svg className="w-full h-full" viewBox="0 0 42 42">
           <circle
-            cx="21" cy="21" r="18"
+            cx="21"
+            cy="21"
+            r="18"
             fill="none"
             stroke="rgba(59, 130, 246, 0.2)"
             strokeWidth="2.5"
           />
           <circle
-            cx="21" cy="21" r="18"
+            cx="21"
+            cy="21"
+            r="18"
             fill="none"
             stroke="url(#loadOuter)"
             strokeWidth="2.5"
@@ -64,13 +68,17 @@ export default function Loading({ text, size = 'md', className = '', inline }: L
       >
         <svg className="w-full h-full" viewBox="0 0 36 36">
           <circle
-            cx="18" cy="18" r="15"
+            cx="18"
+            cy="18"
+            r="15"
             fill="none"
             stroke="rgba(139, 92, 246, 0.15)"
             strokeWidth="3"
           />
           <circle
-            cx="18" cy="18" r="15"
+            cx="18"
+            cy="18"
+            r="15"
             fill="none"
             stroke="url(#loadInner)"
             strokeWidth="3"

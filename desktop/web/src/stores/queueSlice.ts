@@ -41,63 +41,68 @@ export const createQueueSlice: StateCreator<AppState, [], [], QueueSlice> = (set
   // 发布任务状态
   publishingTasks: {},
 
-  startPublishTask: (id, action, title) => set(state => ({
-    publishingTasks: {
-      ...state.publishingTasks,
-      [id]: {
-        action,
-        status: 'publishing',
-        logs: [],
-        title,
-        startTime: Date.now(),
-      },
-    },
-  })),
-
-  updatePublishTask: (id, updates) => set(state => {
-    const existing = state.publishingTasks[id];
-    if (!existing) return state;
-    return {
-      publishingTasks: {
-        ...state.publishingTasks,
-        [id]: { ...existing, ...updates },
-      },
-    };
-  }),
-
-  addPublishLog: (id, log) => set(state => {
-    const existing = state.publishingTasks[id];
-    if (!existing) return state;
-    return {
-      publishingTasks: {
-        ...state.publishingTasks,
-        [id]: { ...existing, logs: [...existing.logs, log] },
-      },
-    };
-  }),
-
-  finishPublishTask: (id, success, error) => set(state => {
-    const existing = state.publishingTasks[id];
-    if (!existing) return state;
-    return {
+  startPublishTask: (id, action, title) =>
+    set((state) => ({
       publishingTasks: {
         ...state.publishingTasks,
         [id]: {
-          ...existing,
-          status: success ? 'done' : 'error',
-          error,
+          action,
+          status: 'publishing',
+          logs: [],
+          title,
+          startTime: Date.now(),
         },
       },
-    };
-  }),
+    })),
 
-  removePublishTask: (id) => set(state => {
-    const { [id]: _, ...rest } = state.publishingTasks;
-    return { publishingTasks: rest };
-  }),
+  updatePublishTask: (id, updates) =>
+    set((state) => {
+      const existing = state.publishingTasks[id];
+      if (!existing) return state;
+      return {
+        publishingTasks: {
+          ...state.publishingTasks,
+          [id]: { ...existing, ...updates },
+        },
+      };
+    }),
+
+  addPublishLog: (id, log) =>
+    set((state) => {
+      const existing = state.publishingTasks[id];
+      if (!existing) return state;
+      return {
+        publishingTasks: {
+          ...state.publishingTasks,
+          [id]: { ...existing, logs: [...existing.logs, log] },
+        },
+      };
+    }),
+
+  finishPublishTask: (id, success, error) =>
+    set((state) => {
+      const existing = state.publishingTasks[id];
+      if (!existing) return state;
+      return {
+        publishingTasks: {
+          ...state.publishingTasks,
+          [id]: {
+            ...existing,
+            status: success ? 'done' : 'error',
+            error,
+          },
+        },
+      };
+    }),
+
+  removePublishTask: (id) =>
+    set((state) => {
+      const { [id]: _, ...rest } = state.publishingTasks;
+      return { publishingTasks: rest };
+    }),
 
   getActiveTaskCount: () => {
     const tasks = get().publishingTasks;
-    return Object.values(tasks).filter(t => t.status === 'publishing').length;
+    return Object.values(tasks).filter((t) => t.status === 'publishing').length;
   },
 });

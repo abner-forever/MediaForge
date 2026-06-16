@@ -25,20 +25,21 @@ hljs.registerLanguage('bash', bash);
  * ───────────────────────────────────────────── */
 
 const renderer = new Renderer();
-
-// 所有链接在新窗口打开
-renderer.link = function ({ href, title, text }: { href: string; title?: string | null; text: string; tokens?: any[] }): string {
-  const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
-};
-
-renderer.code = function ({ text, lang }: { text: string; lang?: string; escaped?: boolean }): string {
+renderer.code = function ({
+  text,
+  lang,
+}: {
+  text: string;
+  lang?: string;
+  escaped?: boolean;
+}): string {
   const language = lang || '';
   let highlighted: string;
   try {
-    highlighted = language && hljs.getLanguage(language)
-      ? hljs.highlight(text, { language }).value
-      : hljs.highlightAuto(text).value;
+    highlighted =
+      language && hljs.getLanguage(language)
+        ? hljs.highlight(text, { language }).value
+        : hljs.highlightAuto(text).value;
   } catch {
     highlighted = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -69,7 +70,11 @@ marked.setOptions({
 
 /** 简单 HTML 转义 */
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /* ─────────────────────────────────────────────
@@ -469,12 +474,7 @@ const CODE_STYLES = `
  * 组件
  * ───────────────────────────────────────────── */
 
-export default function TextPreview({
-  path, onClose,
-}: {
-  path: string;
-  onClose: () => void;
-}) {
+export default function TextPreview({ path, onClose }: { path: string; onClose: () => void }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -519,7 +519,9 @@ export default function TextPreview({
 
   useEffect(() => {
     fetchContent();
-    return () => { abortRef.current?.abort(); };
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [fetchContent]);
 
   // ── 统计 ──
@@ -550,17 +552,20 @@ export default function TextPreview({
       const pre = btn.closest('.cb-wrap')?.querySelector('pre');
       if (!pre) return;
       const code = pre.textContent || '';
-      navigator.clipboard.writeText(code).then(() => {
-        btn.classList.add('copied');
-        setTimeout(() => btn.classList.remove('copied'), 2000);
-      }).catch(() => {
-        // clipboard 失败时降级选中
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(pre);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      });
+      navigator.clipboard
+        .writeText(code)
+        .then(() => {
+          btn.classList.add('copied');
+          setTimeout(() => btn.classList.remove('copied'), 2000);
+        })
+        .catch(() => {
+          // clipboard 失败时降级选中
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(pre);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        });
     };
     el.addEventListener('click', handleClick);
     return () => el.removeEventListener('click', handleClick);
@@ -592,20 +597,21 @@ export default function TextPreview({
               <span className="shrink-0 w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-sm">
                 {isMarkdown ? (
                   <svg className="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 14h-2v-4l-2 3-2-3v4H9V7h2l2 3 2-3h2v9z"/>
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 14h-2v-4l-2 3-2-3v4H9V7h2l2 3 2-3h2v9z" />
                   </svg>
                 ) : (
                   <svg className="w-4 h-4 text-text-muted" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
                   </svg>
                 )}
               </span>
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-text truncate leading-tight">{fileName}</h3>
+                <h3 className="text-sm font-semibold text-text truncate leading-tight">
+                  {fileName}
+                </h3>
                 {!loading && content && (
                   <p className="text-[11px] text-text-muted mt-0.5 tabular-nums">
-                    {wordCount} 词 · {charCount} 字
-                    {isMarkdown && ' · Markdown'}
+                    {wordCount} 词 · {charCount} 字{isMarkdown && ' · Markdown'}
                   </p>
                 )}
               </div>
@@ -616,18 +622,22 @@ export default function TextPreview({
                 onClick={onClose}
                 title="关闭 (Esc)"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M18 6L6 18M6 6l12 12"/>
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
           </div>
 
           {/* ── 内容区 ── */}
-          <div
-            ref={contentRef}
-            className="flex-1 min-h-0 overflow-y-auto px-10 py-8 md-scroll"
-          >
+          <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto px-10 py-8 md-scroll">
             {/* 加载中 */}
             {loading && (
               <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -644,8 +654,17 @@ export default function TextPreview({
             {error && (
               <div className="flex flex-col items-center justify-center h-full gap-5">
                 <div className="w-14 h-14 rounded-full bg-danger/10 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  <svg
+                    className="w-6 h-6 text-danger"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
                 <div className="text-center">
@@ -665,8 +684,16 @@ export default function TextPreview({
             {!loading && !error && !content && (
               <div className="flex flex-col items-center justify-center h-full gap-3">
                 <div className="w-14 h-14 rounded-full bg-bg-secondary flex items-center justify-center">
-                  <svg className="w-6 h-6 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>
+                  <svg
+                    className="w-6 h-6 text-text-muted"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  >
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <polyline points="13 2 13 9 20 9" />
                   </svg>
                 </div>
                 <p className="text-sm text-text-muted">文件内容为空</p>

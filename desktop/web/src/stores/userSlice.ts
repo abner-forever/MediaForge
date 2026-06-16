@@ -2,24 +2,24 @@
  * 用户状态 Slice
  */
 
-import type { StateCreator } from 'zustand'
-import type { AppState } from './types'
-import type { UserProfile } from '../types'
-import { userApi } from '../api/client'
+import type { StateCreator } from 'zustand';
+import type { AppState } from './types';
+import type { UserProfile } from '../types';
+import { userApi } from '../api/client';
 
 export interface UserSlice {
   // 状态
-  isAuthenticated: boolean
-  user: UserProfile | null
-  token: string | null
+  isAuthenticated: boolean;
+  user: UserProfile | null;
+  token: string | null;
 
   // 操作
-  setUser: (user: UserProfile | null) => void
-  setToken: (token: string | null) => void
-  setAuthenticated: (isAuthenticated: boolean) => void
-  login: (user: UserProfile, token: string) => void
-  logout: () => void
-  updateUserInfo: (updates: Partial<UserProfile>) => void
+  setUser: (user: UserProfile | null) => void;
+  setToken: (token: string | null) => void;
+  setAuthenticated: (isAuthenticated: boolean) => void;
+  login: (user: UserProfile, token: string) => void;
+  logout: () => void;
+  updateUserInfo: (updates: Partial<UserProfile>) => void;
 }
 
 export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, get) => ({
@@ -30,23 +30,23 @@ export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, 
 
   // 设置用户
   setUser: (user) => {
-    set({ user })
+    set({ user });
   },
 
   // 设置Token
   setToken: (token) => {
-    set({ token })
+    set({ token });
     // 持久化到 localStorage
     if (token) {
-      localStorage.setItem('auth_token', token)
+      localStorage.setItem('auth_token', token);
     } else {
-      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_token');
     }
   },
 
   // 设置认证状态
   setAuthenticated: (isAuthenticated) => {
-    set({ isAuthenticated })
+    set({ isAuthenticated });
   },
 
   // 登录
@@ -54,9 +54,9 @@ export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, 
     set({
       isAuthenticated: true,
       user,
-      token
-    })
-    localStorage.setItem('auth_token', token)
+      token,
+    });
+    localStorage.setItem('auth_token', token);
   },
 
   // 登出
@@ -64,18 +64,18 @@ export const createUserSlice: StateCreator<AppState, [], [], UserSlice> = (set, 
     set({
       isAuthenticated: false,
       user: null,
-      token: null
-    })
-    localStorage.removeItem('auth_token')
+      token: null,
+    });
+    localStorage.removeItem('auth_token');
     // 清除后端持久化的 token（PyWebView 重启恢复用）
-    userApi.logout().catch(() => {})
+    userApi.logout().catch(() => {});
   },
 
   // 更新用户信息
   updateUserInfo: (updates) => {
-    const { user } = get()
+    const { user } = get();
     if (user) {
-      set({ user: { ...user, ...updates } })
+      set({ user: { ...user, ...updates } });
     }
   },
-})
+});

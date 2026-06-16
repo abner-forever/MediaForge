@@ -3,18 +3,19 @@
  * 显示当前积分、今日获得、连续签到天数
  */
 
-import type { CheckinStatus } from '@/types'
+import type { CheckinStatus } from '@/types';
 
 interface CreditsBalanceCardProps {
-  balance: number
-  checkinStatus: CheckinStatus
+  balance: number;
+  checkinStatus: CheckinStatus;
 }
 
 export default function CreditsBalanceCard({ balance, checkinStatus }: CreditsBalanceCardProps) {
   return (
     <div
       style={{
-        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))',
+        background:
+          'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))',
         borderRadius: 16,
         padding: '28px 32px',
         color: '#fff',
@@ -35,7 +36,11 @@ export default function CreditsBalanceCard({ balance, checkinStatus }: CreditsBa
           {balance.toLocaleString()}
         </div>
         <div className="text-[13px] opacity-75 mt-3">
-          今日已获得 <span className="font-semibold">{checkinStatus.can_checkin ? 0 : checkinStatus.today_earned}</span> 积分
+          今日已获得{' '}
+          <span className="font-semibold">
+            {checkinStatus.can_checkin ? 0 : checkinStatus.today_earned}
+          </span>{' '}
+          积分
         </div>
       </div>
       <div className="relative mt-4">
@@ -44,5 +49,5 @@ export default function CreditsBalanceCard({ balance, checkinStatus }: CreditsBa
         </div>
       </div>
     </div>
-  )
+  );
 }

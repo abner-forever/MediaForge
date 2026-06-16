@@ -9,6 +9,11 @@ type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
+function SortIcon({ k, sortKey, sortDir }: { k: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (sortKey !== k) return <span className="text-text-muted/40 ml-0.5">↕</span>;
+  return <span className="text-accent ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
 export default function MpArticlesTable({ onCleared }: { onCleared?: () => void }) {
   const [data, setData] = useState<MpArticlesResponse | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -51,10 +56,14 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
     }
   }, [page, pageSize, debouncedSearch, celebFilter, sortKey, sortDir]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // 筛选变化时重置到第 1 页
-  useEffect(() => { setPage(1); }, [debouncedSearch, celebFilter, pageSize]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, celebFilter, pageSize]);
 
   const articles = data?.articles ?? [];
   const total = data?.total ?? 0;
@@ -63,7 +72,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
       setSortDir('desc');
@@ -87,18 +96,11 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
 
   if (!initialLoading && total === 0 && !debouncedSearch && !celebFilter) return null;
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-text-muted/40 ml-0.5">↕</span>;
-    return <span className="text-accent ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <p className="text-xs text-text-muted">
-            已发布文章数据{total > 0 && `，共 ${total} 篇`}
-          </p>
+          <p className="text-xs text-text-muted">已发布文章数据{total > 0 && `，共 ${total} 篇`}</p>
         </div>
         {total > 0 && (
           <button
@@ -118,7 +120,7 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
           className="input-sm w-52"
           placeholder="搜索标题..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
         />
         {celebrities.length > 0 && (
           <div className="w-32">
@@ -128,89 +130,154 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
               onChange={setCelebFilter}
               options={[
                 { label: '全部艺人', value: '' },
-                ...celebrities.map(c => ({ label: c, value: c })),
+                ...celebrities.map((c) => ({ label: c, value: c })),
               ]}
             />
           </div>
         )}
         <span className="text-xs text-text-muted ml-auto">
-          {debouncedSearch || celebFilter ? `筛选结果 ${total} 篇` : total > 0 ? `共 ${total} 篇` : ''}
+          {debouncedSearch || celebFilter
+            ? `筛选结果 ${total} 篇`
+            : total > 0
+              ? `共 ${total} 篇`
+              : ''}
         </span>
       </div>
 
       {/* 表格 */}
       <div className="overflow-x-auto relative">
         {fetching && (
-          <div className="absolute inset-0 bg-bg/40 z-10 flex items-center justify-center"
-            style={{ backdropFilter: 'blur(1px)' }}>
+          <div
+            className="absolute inset-0 bg-bg/40 z-10 flex items-center justify-center"
+            style={{ backdropFilter: 'blur(1px)' }}
+          >
             <span className="text-xs text-text-muted">加载中...</span>
           </div>
         )}
         {initialLoading ? (
           <div className="py-8 text-center text-text-muted text-sm">加载中...</div>
         ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-text-muted text-xs">
-              <th className="text-left py-2 pr-2 font-medium w-12">封面</th>
-              <th className="text-left py-2 pr-3 font-medium">标题</th>
-              <th className="text-left py-2 pr-3 font-medium">艺人</th>
-              <th className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('reads')}>
-                阅读<SortIcon k="reads" />
-              </th>
-              <th className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('likes')}>
-                点赞<SortIcon k="likes" />
-              </th>
-              <th className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('shares')}>
-                分享<SortIcon k="shares" />
-              </th>
-              <th className="text-right py-2 pr-3 font-medium">推荐</th>
-              <th className="text-right py-2 pr-3 font-medium">留言</th>
-              <th className="text-left py-2 font-medium cursor-pointer select-none hover:text-text" onClick={() => toggleSort('publish_time')}>
-                发布时间<SortIcon k="publish_time" />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {articles.length === 0 ? (
-              <tr><td colSpan={9} className="py-8 text-center text-text-muted">无匹配数据</td></tr>
-            ) : articles.map((art, i) => (
-              <tr key={art.item_id} className={`border-b border-border-subtle ${i % 2 === 0 ? '' : 'bg-bg/50'}`}>
-                <td className="py-2 pr-2">
-                  {art.cover ? (
-                    <img
-                      src={`/proxy?url=${encodeURIComponent(art.cover)}&platform=wechat&thumbnail=1`}
-                      alt=""
-                      className="w-10 h-10 rounded object-cover bg-border"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded bg-border flex items-center justify-center text-text-muted text-xs">-</div>
-                  )}
-                </td>
-                <td className="py-2 pr-3 max-w-[280px]">
-                  {art.content_url ? (
-                    <a href={art.content_url} target="_blank" rel="noopener noreferrer"
-                      className="text-text hover:text-accent truncate block" title={art.title}>
-                      {art.title || '-'}
-                    </a>
-                  ) : (
-                    <span className="text-text truncate block" title={art.title}>{art.title || '-'}</span>
-                  )}
-                </td>
-                <td className="py-2 pr-3 text-text-secondary">{art.celebrity || '-'}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text" title={String(art.reads || 0)}>{formatCount(art.reads || 0)}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.likes || 0)}>{formatCount(art.likes || 0)}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.shares || 0)}>{formatCount(art.shares || 0)}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={String(art.recommendations || 0)}>{formatCount(art.recommendations || 0)}</td>
-                <td className="py-2 pr-3 text-right font-mono text-text-secondary" title={art.comment_num != null ? String(art.comment_num) : undefined}>{art.comment_num != null ? formatCount(art.comment_num) : '-'}</td>
-                <td className="py-2 text-text-muted text-xs whitespace-nowrap">
-                  {art.publish_time ? formatTime(art.publish_time) : '-'}
-                </td>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-text-muted text-xs">
+                <th className="text-left py-2 pr-2 font-medium w-12">封面</th>
+                <th className="text-left py-2 pr-3 font-medium">标题</th>
+                <th className="text-left py-2 pr-3 font-medium">艺人</th>
+                <th
+                  className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text"
+                  onClick={() => toggleSort('reads')}
+                >
+                  阅读
+                  <SortIcon k="reads" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th
+                  className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text"
+                  onClick={() => toggleSort('likes')}
+                >
+                  点赞
+                  <SortIcon k="likes" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th
+                  className="text-right py-2 pr-3 font-medium cursor-pointer select-none hover:text-text"
+                  onClick={() => toggleSort('shares')}
+                >
+                  分享
+                  <SortIcon k="shares" sortKey={sortKey} sortDir={sortDir} />
+                </th>
+                <th className="text-right py-2 pr-3 font-medium">推荐</th>
+                <th className="text-right py-2 pr-3 font-medium">留言</th>
+                <th
+                  className="text-left py-2 font-medium cursor-pointer select-none hover:text-text"
+                  onClick={() => toggleSort('publish_time')}
+                >
+                  发布时间
+                  <SortIcon k="publish_time" sortKey={sortKey} sortDir={sortDir} />
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {articles.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-text-muted">
+                    无匹配数据
+                  </td>
+                </tr>
+              ) : (
+                articles.map((art, i) => (
+                  <tr
+                    key={art.item_id}
+                    className={`border-b border-border-subtle ${i % 2 === 0 ? '' : 'bg-bg/50'}`}
+                  >
+                    <td className="py-2 pr-2">
+                      {art.cover ? (
+                        <img
+                          src={`/proxy?url=${encodeURIComponent(art.cover)}&platform=wechat&thumbnail=1`}
+                          alt=""
+                          className="w-10 h-10 rounded object-cover bg-border"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-border flex items-center justify-center text-text-muted text-xs">
+                          -
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 max-w-[280px]">
+                      {art.content_url ? (
+                        <a
+                          href={art.content_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-text hover:text-accent truncate block"
+                          title={art.title}
+                        >
+                          {art.title || '-'}
+                        </a>
+                      ) : (
+                        <span className="text-text truncate block" title={art.title}>
+                          {art.title || '-'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-text-secondary">{art.celebrity || '-'}</td>
+                    <td
+                      className="py-2 pr-3 text-right font-mono text-text"
+                      title={String(art.reads || 0)}
+                    >
+                      {formatCount(art.reads || 0)}
+                    </td>
+                    <td
+                      className="py-2 pr-3 text-right font-mono text-text-secondary"
+                      title={String(art.likes || 0)}
+                    >
+                      {formatCount(art.likes || 0)}
+                    </td>
+                    <td
+                      className="py-2 pr-3 text-right font-mono text-text-secondary"
+                      title={String(art.shares || 0)}
+                    >
+                      {formatCount(art.shares || 0)}
+                    </td>
+                    <td
+                      className="py-2 pr-3 text-right font-mono text-text-secondary"
+                      title={String(art.recommendations || 0)}
+                    >
+                      {formatCount(art.recommendations || 0)}
+                    </td>
+                    <td
+                      className="py-2 pr-3 text-right font-mono text-text-secondary"
+                      title={art.comment_num != null ? String(art.comment_num) : undefined}
+                    >
+                      {art.comment_num != null ? formatCount(art.comment_num) : '-'}
+                    </td>
+                    <td className="py-2 text-text-muted text-xs whitespace-nowrap">
+                      {art.publish_time ? formatTime(art.publish_time) : '-'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -223,30 +290,39 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
               <Select
                 size="sm"
                 value={String(pageSize)}
-                onChange={v => setPageSize(Number(v))}
-                options={PAGE_SIZES.map(s => ({ label: String(s), value: String(s) }))}
+                onChange={(v) => setPageSize(Number(v))}
+                options={PAGE_SIZES.map((s) => ({ label: String(s), value: String(s) }))}
               />
             </div>
             <span className="text-xs text-text-muted">条</span>
           </div>
           {totalPages > 1 && (
             <>
-              <span className="text-sm text-text-muted">第 {page}/{totalPages} 页</span>
+              <span className="text-sm text-text-muted">
+                第 {page}/{totalPages} 页
+              </span>
               <div className="flex items-center gap-1">
                 <input
                   type="text"
                   className="text-xs text-center"
                   placeholder="跳转"
                   value={jumpInput}
-                  onChange={e => setJumpInput(e.target.value.replace(/\D/g, ''))}
-                  onKeyDown={e => {
+                  onChange={(e) => setJumpInput(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => {
                     if (e.key === 'Enter' && jumpInput) {
                       const p = Math.max(1, Math.min(totalPages, Number(jumpInput)));
                       setPage(p);
                       setJumpInput('');
                     }
                   }}
-                  style={{ width: 48, height: 28, borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)' }}
+                  style={{
+                    width: 48,
+                    height: 28,
+                    borderRadius: 4,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-card)',
+                    color: 'var(--text)',
+                  }}
                 />
                 <span className="text-xs text-text-muted">页</span>
               </div>
@@ -255,8 +331,12 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
-            <PageBtn disabled={page <= 1} onClick={() => setPage(1)}>«</PageBtn>
-            <PageBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</PageBtn>
+            <PageBtn disabled={page <= 1} onClick={() => setPage(1)}>
+              «
+            </PageBtn>
+            <PageBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              ‹
+            </PageBtn>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               let p: number;
               if (totalPages <= 5) {
@@ -274,8 +354,12 @@ export default function MpArticlesTable({ onCleared }: { onCleared?: () => void 
                 </PageBtn>
               );
             })}
-            <PageBtn disabled={page >= totalPages} onClick={() => setPage(page + 1)}>›</PageBtn>
-            <PageBtn disabled={page >= totalPages} onClick={() => setPage(totalPages)}>»</PageBtn>
+            <PageBtn disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+              ›
+            </PageBtn>
+            <PageBtn disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
+              »
+            </PageBtn>
           </div>
         )}
       </div>
@@ -292,8 +376,16 @@ function formatTime(iso: string): string {
   }
 }
 
-function PageBtn({ children, active, disabled, onClick }: {
-  children: React.ReactNode; active?: boolean; disabled?: boolean; onClick: () => void;
+function PageBtn({
+  children,
+  active,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -301,9 +393,14 @@ function PageBtn({ children, active, disabled, onClick }: {
       onClick={onClick}
       className="text-sm"
       style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: 32, height: 32, padding: '0 8px',
-        borderRadius: 6, border: '1px solid var(--border)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 32,
+        height: 32,
+        padding: '0 8px',
+        borderRadius: 6,
+        border: '1px solid var(--border)',
         background: active ? 'var(--accent)' : 'var(--bg-card)',
         color: active ? '#fff' : disabled ? 'var(--text-muted)' : 'var(--text)',
         opacity: disabled ? 0.4 : 1,

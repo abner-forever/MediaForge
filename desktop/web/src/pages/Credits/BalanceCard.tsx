@@ -7,7 +7,8 @@ export default function BalanceCard({ balance, todayEarned }: Props) {
   return (
     <div
       style={{
-        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))',
+        background:
+          'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #a855f7))',
         borderRadius: 16,
         padding: '28px 32px',
         color: '#fff',

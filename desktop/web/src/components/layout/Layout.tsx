@@ -10,14 +10,16 @@ import { put } from '../../api/base';
 const isWin = typeof navigator !== 'undefined' && navigator.platform?.includes('Win');
 
 export default function Layout() {
-  const syncTheme = useStore(s => s.syncTheme);
-  const pipelineRunning = useStore(s => s.pipelineRunning);
-  const activeTasks = useStore(s => s.activeTasks);
-  const sidebarWidthSynced = useStore(s => s.sidebarWidthSynced);
+  const syncTheme = useStore((s) => s.syncTheme);
+  const pipelineRunning = useStore((s) => s.pipelineRunning);
+  const activeTasks = useStore((s) => s.activeTasks);
+  const sidebarWidthSynced = useStore((s) => s.sidebarWidthSynced);
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => { syncTheme(); }, [syncTheme]);
+  useEffect(() => {
+    syncTheme();
+  }, [syncTheme]);
 
   // 同步进行中的任务到后端（PyWebView 关闭时由 Python 侧检查）
   useEffect(() => {
@@ -30,16 +32,32 @@ export default function Layout() {
   const showPipelineIndicator = pipelineRunning && location.pathname !== '/pipeline';
 
   return (
-    <div className={`flex h-screen overflow-hidden${isWin ? ' win32' : ''}`} style={{ background: 'var(--bg)' }}>
+    <div
+      className={`flex h-screen overflow-hidden${isWin ? ' win32' : ''}`}
+      style={{ background: 'var(--bg)' }}
+    >
       {sidebarWidthSynced && <Sidebar />}
-      <main style={{
-        flex: 1,
-        overflow: 'hidden',
-        background: 'linear-gradient(180deg, rgba(120,104,208,0.015) 0%, transparent 30%), var(--bg)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 32px', flex: 1, minHeight: 0, width: '100%', overflowY: 'auto' }}>
+      <main
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          background:
+            'linear-gradient(180deg, rgba(120,104,208,0.015) 0%, transparent 30%), var(--bg)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1280,
+            margin: '0 auto',
+            padding: '24px 32px',
+            flex: 1,
+            minHeight: 0,
+            width: '100%',
+            overflowY: 'auto',
+          }}
+        >
           <Outlet />
         </div>
       </main>

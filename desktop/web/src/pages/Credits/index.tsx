@@ -9,11 +9,11 @@ import TransactionList from './TransactionList';
 import type { CheckinResult } from '../../types';
 
 export default function Credits() {
-  const addToast = useStore(s => s.addToast);
-  const balance = useStore(s => s.creditsBalance);
-  const checkinStatus = useStore(s => s.checkinStatus);
-  const setBalance = useStore(s => s.setCreditsBalance);
-  const setCheckinStatus = useStore(s => s.setCheckinStatus);
+  const addToast = useStore((s) => s.addToast);
+  const balance = useStore((s) => s.creditsBalance);
+  const checkinStatus = useStore((s) => s.checkinStatus);
+  const setBalance = useStore((s) => s.setCreditsBalance);
+  const setCheckinStatus = useStore((s) => s.setCheckinStatus);
   const { loading, withLoading } = useLoading();
 
   const load = useCallback(async () => {
@@ -28,7 +28,9 @@ export default function Credits() {
     });
   }, [withLoading, setBalance, setCheckinStatus, addToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   function handleCheckin(result: CheckinResult) {
     setBalance(result.balance);

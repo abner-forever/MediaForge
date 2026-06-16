@@ -48,7 +48,9 @@ export default function ProgressView({
   stepProgress: { current: number; total: number } | null;
 }) {
   const steps = buildStepStates(events, currentStep, stepProgress);
-  const completedCount = Object.values(steps).filter(s => s.status === 'done' || s.status === 'error' || s.status === 'skipped').length;
+  const completedCount = Object.values(steps).filter(
+    (s) => s.status === 'done' || s.status === 'error' || s.status === 'skipped',
+  ).length;
   const totalSteps = STEP_ORDER.length;
   const overallPercent = Math.round((completedCount / totalSteps) * 100);
 
@@ -62,7 +64,9 @@ export default function ProgressView({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-text-muted">整体进度</span>
-          <span className="text-text-muted font-medium">{completedCount}/{totalSteps} 步骤</span>
+          <span className="text-text-muted font-medium">
+            {completedCount}/{totalSteps} 步骤
+          </span>
         </div>
         <div className="h-2 bg-bg-secondary rounded-full overflow-hidden">
           <div
@@ -89,17 +93,33 @@ export default function ProgressView({
             <div key={stepId} className="flex gap-4 group">
               {/* 时间线节点与连线 */}
               <div className="flex flex-col items-center shrink-0" style={{ width: 28 }}>
-                <div className={`
+                <div
+                  className={`
                   relative w-7 h-7 rounded-full flex items-center justify-center
                   transition-all duration-300
-                  ${isDone ? 'bg-green-500 text-white shadow-sm shadow-green-500/30' :
-                    isError ? 'bg-red-500 text-white shadow-sm shadow-red-500/30' :
-                    isActive ? 'bg-accent text-white shadow-sm shadow-accent/30' :
-                    isPending ? 'bg-bg-secondary text-text-muted border border-border' :
-                    'bg-bg-secondary text-text-muted border border-border'}
-                `}>
+                  ${
+                    isDone
+                      ? 'bg-green-500 text-white shadow-sm shadow-green-500/30'
+                      : isError
+                        ? 'bg-red-500 text-white shadow-sm shadow-red-500/30'
+                        : isActive
+                          ? 'bg-accent text-white shadow-sm shadow-accent/30'
+                          : isPending
+                            ? 'bg-bg-secondary text-text-muted border border-border'
+                            : 'bg-bg-secondary text-text-muted border border-border'
+                  }
+                `}
+                >
                   {isDone && (
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className="w-3.5 h-3.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
@@ -112,25 +132,41 @@ export default function ProgressView({
                   {isPending && <span className="text-xs font-medium">{idx + 1}</span>}
                 </div>
                 {!isLast && (
-                  <div className={`
+                  <div
+                    className={`
                     w-0.5 h-8 mt-1 rounded-full transition-colors duration-300
-                    ${isDone || isError ? 'bg-green-500/30' :
-                      isActive ? 'bg-accent/30' : 'bg-border'}
-                  `} />
+                    ${
+                      isDone || isError
+                        ? 'bg-green-500/30'
+                        : isActive
+                          ? 'bg-accent/30'
+                          : 'bg-border'
+                    }
+                  `}
+                  />
                 )}
               </div>
 
               {/* 步骤内容 */}
-              <div className={`flex-1 min-w-0 pb-5 ${isPending ? 'opacity-40' : ''} transition-opacity duration-300`}>
+              <div
+                className={`flex-1 min-w-0 pb-5 ${isPending ? 'opacity-40' : ''} transition-opacity duration-300`}
+              >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={`
+                    <span
+                      className={`
                       text-sm font-semibold
-                      ${isDone ? 'text-green-600' :
-                        isError ? 'text-red-500' :
-                        isActive ? 'text-accent' :
-                        'text-text-muted'}
-                    `}>
+                      ${
+                        isDone
+                          ? 'text-green-600'
+                          : isError
+                            ? 'text-red-500'
+                            : isActive
+                              ? 'text-accent'
+                              : 'text-text-muted'
+                      }
+                    `}
+                    >
                       {STEP_LABELS[stepId] || stepId}
                     </span>
                     {isActive && (
@@ -169,7 +205,9 @@ export default function ProgressView({
                     <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-accent to-accent-hover rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${Math.round((state.progress.current / state.progress.total) * 100)}%` }}
+                        style={{
+                          width: `${Math.round((state.progress.current / state.progress.total) * 100)}%`,
+                        }}
                       />
                     </div>
                     <span className="text-xs text-text-muted font-medium tabular-nums shrink-0">
@@ -181,7 +219,14 @@ export default function ProgressView({
                 {/* 决策摘要 */}
                 {state.decision && (
                   <div className="mt-1 text-xs text-text-muted/70 italic flex items-center gap-1">
-                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <svg
+                      className="w-3 h-3"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                     {state.decision}
@@ -226,13 +271,21 @@ function EventLog({ events }: { events: PipelineEvent[] }) {
         <div className="text-xs font-medium text-text-muted">事件日志</div>
         <span className="text-[10px] text-text-muted/60">{events.length} 条事件</span>
       </div>
-      <div ref={scrollRef} className="max-h-44 overflow-y-auto space-y-0.5 rounded-xl bg-bg-secondary/30 border border-border/30 p-2">
+      <div
+        ref={scrollRef}
+        className="max-h-44 overflow-y-auto space-y-0.5 rounded-xl bg-bg-secondary/30 border border-border/30 p-2"
+      >
         {events.map((evt, i) => {
           const time = evt.time ? new Date(evt.time as string).toLocaleTimeString() : '';
-          const text = String(evt.reasoning || evt.message || evt.decision || evt.detail || evt.error || evt.type);
+          const text = String(
+            evt.reasoning || evt.message || evt.decision || evt.detail || evt.error || evt.type,
+          );
           const fullLine = time ? `[${time}] ${evt.type}: ${text}` : `${evt.type}: ${text}`;
           return (
-            <div key={i} className="group flex items-start gap-1.5 text-[11px] text-text-muted font-mono leading-relaxed px-1.5 py-1 rounded-lg hover:bg-bg-secondary/50 transition-colors">
+            <div
+              key={i}
+              className="group flex items-start gap-1.5 text-[11px] text-text-muted font-mono leading-relaxed px-1.5 py-1 rounded-lg hover:bg-bg-secondary/50 transition-colors"
+            >
               {time && <span className="text-text-muted/40 shrink-0 tabular-nums">{time}</span>}
               <EventBadge type={evt.type} />
               <span className="flex-1 min-w-0 break-words">{text}</span>
@@ -241,8 +294,15 @@ function EventLog({ events }: { events: PipelineEvent[] }) {
                 className="shrink-0 opacity-0 group-hover:opacity-100 text-text-muted/30 hover:text-text-muted transition-opacity p-0.5"
                 title="复制"
               >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                <svg
+                  className="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
               </button>
             </div>
@@ -274,7 +334,9 @@ function EventBadge({ type }: { type: string }) {
     completed: '✓',
     cancelled: '⛔',
   };
-  return <span className={`${colors[type] || 'text-text-muted'} shrink-0`}>{labels[type] || '•'}</span>;
+  return (
+    <span className={`${colors[type] || 'text-text-muted'} shrink-0`}>{labels[type] || '•'}</span>
+  );
 }
 
 function buildStepStates(

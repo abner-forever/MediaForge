@@ -4,7 +4,11 @@ import { materialsApi } from '../../api/client';
 import type { MaterialMeta } from '../../api/client';
 
 export default function TagEditorModal({
-  path, meta, onClose, onSaved, addToast,
+  path,
+  meta,
+  onClose,
+  onSaved,
+  addToast,
 }: {
   path: string | null;
   meta: MaterialMeta | null;
@@ -34,7 +38,10 @@ export default function TagEditorModal({
     setSaving(true);
     try {
       await materialsApi.updateMeta(path, {
-        tags: tagsText.split(',').map(t => t.trim()).filter(Boolean),
+        tags: tagsText
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
         celebrity: celebrity.trim(),
         scene: scene.trim(),
       });
@@ -54,18 +61,33 @@ export default function TagEditorModal({
       <div className="space-y-3">
         <div>
           <label className="text-xs text-text-muted">标签（逗号分隔）</label>
-          <input type="text" className="w-full text-sm" value={tagsText} onChange={e => setTagsText(e.target.value)}
-            placeholder="例如：时尚, 街拍, 穿搭" />
+          <input
+            type="text"
+            className="w-full text-sm"
+            value={tagsText}
+            onChange={(e) => setTagsText(e.target.value)}
+            placeholder="例如：时尚, 街拍, 穿搭"
+          />
         </div>
         <div>
           <label className="text-xs text-text-muted">人物</label>
-          <input type="text" className="w-full text-sm" value={celebrity} onChange={e => setCelebrity(e.target.value)}
-            placeholder="艺人姓名" />
+          <input
+            type="text"
+            className="w-full text-sm"
+            value={celebrity}
+            onChange={(e) => setCelebrity(e.target.value)}
+            placeholder="艺人姓名"
+          />
         </div>
         <div>
           <label className="text-xs text-text-muted">场景</label>
-          <input type="text" className="w-full text-sm" value={scene} onChange={e => setScene(e.target.value)}
-            placeholder="例如：红毯, 机场, 活动" />
+          <input
+            type="text"
+            className="w-full text-sm"
+            value={scene}
+            onChange={(e) => setScene(e.target.value)}
+            placeholder="例如：红毯, 机场, 活动"
+          />
         </div>
       </div>
       {meta && (
@@ -75,9 +97,18 @@ export default function TagEditorModal({
         </div>
       )}
       <div className="flex gap-2 justify-end mt-5">
-        <button className="btn btn-sm" onClick={onClose}>取消</button>
+        <button className="btn btn-sm" onClick={onClose}>
+          取消
+        </button>
         <button className="btn btn-sm btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 保存中</> : '保存'}
+          {saving ? (
+            <>
+              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />{' '}
+              保存中
+            </>
+          ) : (
+            '保存'
+          )}
         </button>
       </div>
     </Modal>

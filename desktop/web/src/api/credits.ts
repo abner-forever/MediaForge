@@ -2,8 +2,13 @@
 
 import { get, post } from './base';
 import type {
-  CreditsInfo, CheckinResult, CreditsHistory, CheckinHistory,
-  WatchVideoResult, DailyTasksResult, VideoListResult,
+  CreditsInfo,
+  CheckinResult,
+  CreditsHistory,
+  CheckinHistory,
+  WatchVideoResult,
+  DailyTasksResult,
+  VideoListResult,
 } from '../types';
 
 export const creditsApi = {
@@ -29,7 +34,10 @@ export const creditsApi = {
 
   /** 观看视频领取积分 */
   watchVideo: (videoId: string, watchDuration: number) =>
-    post<WatchVideoResult>('/api/credits/watch-video', { video_id: videoId, watch_duration: watchDuration }),
+    post<WatchVideoResult>('/api/credits/watch-video', {
+      video_id: videoId,
+      watch_duration: watchDuration,
+    }),
 
   /** 获取今日任务列表 */
   getTasks: () => get<DailyTasksResult>('/api/credits/tasks'),

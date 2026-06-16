@@ -29,8 +29,7 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
     // Distribute reads into hours using a typical engagement curve
     // Peak at 8, 12, 18, 21 (morning, noon, evening, night)
     const hourWeights = [
-      1, 0.5, 0.3, 0.2, 0.2, 0.5, 1.5, 3, 5, 4, 3.5, 3,
-      4, 3, 2.5, 2.5, 3, 4, 5, 6, 7, 5, 3, 1.5,
+      1, 0.5, 0.3, 0.2, 0.2, 0.5, 1.5, 3, 5, 4, 3.5, 3, 4, 3, 2.5, 2.5, 3, 4, 5, 6, 7, 5, 3, 1.5,
     ];
     const totalWeight = hourWeights.reduce((a, b) => a + b, 0);
 
@@ -64,10 +63,16 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
         {/* Hour labels */}
         <div style={{ display: 'flex', marginLeft: 28, marginBottom: 4 }}>
           {Array.from({ length: 24 }, (_, h) => (
-            <div key={h} style={{
-              width: CELL, marginRight: GAP,
-              textAlign: 'center', fontSize: 9, color: 'var(--text-muted)',
-            }}>
+            <div
+              key={h}
+              style={{
+                width: CELL,
+                marginRight: GAP,
+                textAlign: 'center',
+                fontSize: 9,
+                color: 'var(--text-muted)',
+              }}
+            >
               {h % 3 === 0 ? `${h}` : ''}
             </div>
           ))}
@@ -76,7 +81,15 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
         {/* Grid */}
         {DAYS.map((day, dow) => (
           <div key={dow} style={{ display: 'flex', alignItems: 'center', marginBottom: GAP }}>
-            <span style={{ width: 24, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', marginRight: 4 }}>
+            <span
+              style={{
+                width: 24,
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                textAlign: 'right',
+                marginRight: 4,
+              }}
+            >
               周{day}
             </span>
             {grid[dow].map((val, h) => (
@@ -85,9 +98,13 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
                 onMouseEnter={() => setHover({ dow, hour: h })}
                 onMouseLeave={() => setHover(null)}
                 style={{
-                  width: CELL, height: CELL, marginRight: GAP,
-                  borderRadius: 3, background: color(val),
-                  cursor: 'default', transition: 'transform 0.15s',
+                  width: CELL,
+                  height: CELL,
+                  marginRight: GAP,
+                  borderRadius: 3,
+                  background: color(val),
+                  cursor: 'default',
+                  transition: 'transform 0.15s',
                   transform: hover?.dow === dow && hover?.hour === h ? 'scale(1.3)' : 'none',
                 }}
               />
@@ -96,13 +113,20 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
         ))}
 
         {/* Legend */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 12, marginLeft: 28 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 12, marginLeft: 28 }}
+        >
           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>少</span>
-          {[0, 0.25, 0.5, 0.75, 1].map(t => (
-            <div key={t} style={{
-              width: CELL, height: CELL / 2, borderRadius: 2,
-              background: t === 0 ? 'var(--border)' : color(t * maxVal),
-            }} />
+          {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+            <div
+              key={t}
+              style={{
+                width: CELL,
+                height: CELL / 2,
+                borderRadius: 2,
+                background: t === 0 ? 'var(--border)' : color(t * maxVal),
+              }}
+            />
           ))}
           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>多</span>
         </div>
@@ -111,7 +135,10 @@ export default function HeatmapChart({ data }: { data: EffectTrendPoint[] }) {
       {/* Tooltip - reserved space to prevent layout shift */}
       <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)', minHeight: 20 }}>
         {hover && (
-          <>周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读 {formatCount(grid[hover.dow][hover.hour])}</>
+          <>
+            周{DAYS[hover.dow]} {hover.hour}:00 — 预估阅读{' '}
+            {formatCount(grid[hover.dow][hover.hour])}
+          </>
         )}
       </div>
     </div>

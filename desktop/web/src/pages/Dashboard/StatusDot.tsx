@@ -21,7 +21,18 @@ export default function StatusDot({ ok }: { ok: boolean | undefined }) {
   return (
     <span style={{ position: 'relative', display: 'inline-flex', width: 8, height: 8 }}>
       <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: bg }} />
-      {ok && <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: bg, animation: 'pulse-ring 2s ease-out infinite', opacity: 0.5 }} />}
+      {ok && (
+        <span
+          style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '50%',
+            background: bg,
+            animation: 'pulse-ring 2s ease-out infinite',
+            opacity: 0.5,
+          }}
+        />
+      )}
     </span>
   );
 }

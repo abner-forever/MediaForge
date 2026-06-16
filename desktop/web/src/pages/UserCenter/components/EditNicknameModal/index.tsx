@@ -2,29 +2,34 @@
  * 编辑昵称弹窗
  */
 
-import { useState } from 'react'
-import Button from '@/components/ui/Button'
-import Modal from '@/components/ui/Modal'
+import { useState } from 'react';
+import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
 
 interface EditNicknameModalProps {
-  open: boolean
-  onClose: () => void
-  initialNickname: string
-  onSave: (nickname: string) => Promise<void>
+  open: boolean;
+  onClose: () => void;
+  initialNickname: string;
+  onSave: (nickname: string) => Promise<void>;
 }
 
-export default function EditNicknameModal({ open, onClose, initialNickname, onSave }: EditNicknameModalProps) {
-  const [nickname, setNickname] = useState(initialNickname)
-  const [saving, setSaving] = useState(false)
+export default function EditNicknameModal({
+  open,
+  onClose,
+  initialNickname,
+  onSave,
+}: EditNicknameModalProps) {
+  const [nickname, setNickname] = useState(initialNickname);
+  const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      await onSave(nickname)
+      await onSave(nickname);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -43,13 +48,14 @@ export default function EditNicknameModal({ open, onClose, initialNickname, onSa
           />
         </div>
         <div className="flex gap-2 justify-end">
-          <button
-            className="btn btn-sm"
-            onClick={onClose}
-          >取消</button>
-          <Button type="primary" size="sm" loading={saving} onClick={handleSave}>保存</Button>
+          <button className="btn btn-sm" onClick={onClose}>
+            取消
+          </button>
+          <Button type="primary" size="sm" loading={saving} onClick={handleSave}>
+            保存
+          </Button>
         </div>
       </div>
     </Modal>
-  )
+  );
 }

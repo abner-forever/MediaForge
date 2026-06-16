@@ -5,12 +5,18 @@ import { usePersistedState } from '../usePersistedState';
 const storage: Record<string, string> = {};
 
 beforeEach(() => {
-  Object.keys(storage).forEach(k => delete storage[k]);
+  Object.keys(storage).forEach((k) => delete storage[k]);
   vi.stubGlobal('localStorage', {
     getItem: (k: string) => storage[k] ?? null,
-    setItem: (k: string, v: string) => { storage[k] = v; },
-    removeItem: (k: string) => { delete storage[k]; },
-    clear: () => { Object.keys(storage).forEach(k => delete storage[k]); },
+    setItem: (k: string, v: string) => {
+      storage[k] = v;
+    },
+    removeItem: (k: string) => {
+      delete storage[k];
+    },
+    clear: () => {
+      Object.keys(storage).forEach((k) => delete storage[k]);
+    },
   });
 });
 

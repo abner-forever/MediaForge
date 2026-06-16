@@ -4,11 +4,14 @@ import { readSSEStream } from '../api/sse';
 /**
  * SSE 流消费 hook，含 AbortController 生命周期管理。
  */
-export function useSSE<T>(url: string, options?: {
-  autoStart?: boolean;
-  onComplete?: (events: T[]) => void;
-  onError?: (error: string) => void;
-}) {
+export function useSSE<T>(
+  url: string,
+  options?: {
+    autoStart?: boolean;
+    onComplete?: (events: T[]) => void;
+    onError?: (error: string) => void;
+  },
+) {
   const [events, setEvents] = useState<T[]>([]);
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -29,9 +32,11 @@ export function useSSE<T>(url: string, options?: {
     setEvents([]);
 
     fetch(url, { signal: controller.signal })
-      .then((res) => readSSEStream<T>(res.body!, (evt) => {
-        setEvents((prev) => [...prev, evt]);
-      }))
+      .then((res) =>
+        readSSEStream<T>(res.body!, (evt) => {
+          setEvents((prev) => [...prev, evt]);
+        }),
+      )
       .then(() => {
         if (!controller.signal.aborted) {
           setRunning(false);

@@ -52,7 +52,9 @@ const ACCENT_GRADIENTS: Record<string, string> = {
 
 function applyAccentVars(accentId: string, theme: string) {
   const preset = THEME_PRESETS.find((p) => p.id === accentId) || THEME_PRESETS[0];
-  const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const isDark =
+    theme === 'dark' ||
+    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const accent = isDark ? preset.dark : preset.light;
   const gradient = ACCENT_GRADIENTS[accentId] || ACCENT_GRADIENTS.purple;
   const root = document.documentElement;
@@ -64,7 +66,17 @@ function applyAccentVars(accentId: string, theme: string) {
   root.style.setProperty('--accent-softer', accent + '0a');
   root.style.setProperty('--accent-gradient', gradient);
   // 先清除行内侧边栏样式，避免深色→自动时旧值残留
-  ['--bg-sidebar', '--sidebar-hover', '--sidebar-text', '--sidebar-text-secondary', '--sidebar-text-muted', '--sidebar-text-logo', '--sidebar-border', '--status-ok', '--status-error'].forEach(v => root.style.removeProperty(v));
+  [
+    '--bg-sidebar',
+    '--sidebar-hover',
+    '--sidebar-text',
+    '--sidebar-text-secondary',
+    '--sidebar-text-muted',
+    '--sidebar-text-logo',
+    '--sidebar-border',
+    '--status-ok',
+    '--status-error',
+  ].forEach((v) => root.style.removeProperty(v));
 
   if (isDark) {
     root.style.setProperty('--bg-sidebar', '#12131c');
@@ -124,10 +136,18 @@ export const createThemeSlice: StateCreator<AppState, [], [], ThemeSlice> = (set
   syncTheme: async () => {
     try {
       const { theme, accent } = await settingsApi.getTheme();
-      if (theme) { applyThemeVars(theme); set({ theme }); }
-      if (accent) { applyAccentVars(accent, theme || get().theme); set({ accentId: accent }); }
+      if (theme) {
+        applyThemeVars(theme);
+        set({ theme });
+      }
+      if (accent) {
+        applyAccentVars(accent, theme || get().theme);
+        set({ accentId: accent });
+      }
       settingsApi.setWindowAppearance(theme || get().theme).catch(() => {});
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     // Sync sidebar state from backend
     try {
       const settings = await settingsApi.get();
@@ -143,7 +163,9 @@ export const createThemeSlice: StateCreator<AppState, [], [], ThemeSlice> = (set
           localStorage.setItem('w2w-sidebar-width', String(w));
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     set({ sidebarWidthSynced: true });
   },
 });

@@ -9,19 +9,26 @@ export default function ArticleDataTabs({ onCleared }: { onCleared?: () => void 
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{
-        display: 'flex', borderBottom: '1px solid var(--border)',
-      }}>
-        {([
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        {[
           { key: 'raw' as const, label: '原始数据' },
           { key: 'hot' as const, label: '爆款文章' },
-        ]).map(t => (
+        ].map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             style={{
-              padding: '10px 20px', fontSize: 13, fontWeight: tab === t.key ? 600 : 400,
-              border: 'none', cursor: 'pointer', position: 'relative',
+              padding: '10px 20px',
+              fontSize: 13,
+              fontWeight: tab === t.key ? 600 : 400,
+              border: 'none',
+              cursor: 'pointer',
+              position: 'relative',
               background: 'transparent',
               color: tab === t.key ? 'var(--accent)' : 'var(--text-muted)',
               transition: 'color 0.15s',
@@ -29,10 +36,17 @@ export default function ArticleDataTabs({ onCleared }: { onCleared?: () => void 
           >
             {t.label}
             {tab === t.key && (
-              <span style={{
-                position: 'absolute', bottom: 0, left: 16, right: 16,
-                height: 2, borderRadius: 1, background: 'var(--accent)',
-              }} />
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 16,
+                  right: 16,
+                  height: 2,
+                  borderRadius: 1,
+                  background: 'var(--accent)',
+                }}
+              />
             )}
           </button>
         ))}

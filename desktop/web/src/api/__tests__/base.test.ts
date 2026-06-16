@@ -12,7 +12,9 @@ describe('toUserError', () => {
   });
 
   it('API Key 未配置', () => {
-    expect(toUserError('未配置 api_key')).toBe('当前未配置大模型 API Key，请先在设置页配置大模型服务。');
+    expect(toUserError('未配置 api_key')).toBe(
+      '当前未配置大模型 API Key，请先在设置页配置大模型服务。',
+    );
   });
 
   it('API Key 不可用', () => {
@@ -25,12 +27,18 @@ describe('toUserError', () => {
   });
 
   it('AI 服务超时', () => {
-    expect(toUserError('AI 服务调用失败')).toBe('AI 服务响应超时，请检查网络连接或到设置页增大 AI 超时时间后重试。');
-    expect(toUserError('read timed out')).toBe('AI 服务响应超时，请检查网络连接或到设置页增大 AI 超时时间后重试。');
+    expect(toUserError('AI 服务调用失败')).toBe(
+      'AI 服务响应超时，请检查网络连接或到设置页增大 AI 超时时间后重试。',
+    );
+    expect(toUserError('read timed out')).toBe(
+      'AI 服务响应超时，请检查网络连接或到设置页增大 AI 超时时间后重试。',
+    );
   });
 
   it('Playwright 错误', () => {
-    expect(toUserError('playwright locator error')).toBe('微信后台页面结构可能已更新，请重试；若仍失败请保留日志排查。');
+    expect(toUserError('playwright locator error')).toBe(
+      '微信后台页面结构可能已更新，请重试；若仍失败请保留日志排查。',
+    );
   });
 
   it('超时', () => {
@@ -50,7 +58,7 @@ describe('request', () => {
   it('成功请求返回 JSON', async () => {
     const mockData = { ok: true };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(mockData), { status: 200 })
+      new Response(JSON.stringify(mockData), { status: 200 }),
     );
     const result = await request<{ ok: boolean }>('GET', '/api/test');
     expect(result).toEqual(mockData);
@@ -58,29 +66,30 @@ describe('request', () => {
 
   it('失败请求抛出用户友好错误', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ detail: 'api_key missing' }), { status: 400 })
+      new Response(JSON.stringify({ detail: 'api_key missing' }), { status: 400 }),
     );
     await expect(request('GET', '/api/test')).rejects.toThrow('API Key');
   });
 
   it('发送 body 时序列化为 JSON', async () => {
-    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
-    );
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200 }));
     await request('POST', '/api/test', { foo: 'bar' });
-    expect(spy).toHaveBeenCalledWith('/api/test', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ foo: 'bar' }),
-    }));
+    expect(spy).toHaveBeenCalledWith(
+      '/api/test',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ foo: 'bar' }),
+      }),
+    );
   });
 });
 
 describe('HTTP 方法快捷函数', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200 })
-    );
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
   });
 
   it('get 发送 GET 请求', async () => {

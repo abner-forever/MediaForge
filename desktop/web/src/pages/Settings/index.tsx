@@ -30,7 +30,7 @@ function getHash(): string {
 }
 
 export default function Settings() {
-  const addToast = useStore(s => s.addToast);
+  const addToast = useStore((s) => s.addToast);
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState('');
   const location = useLocation();
@@ -41,11 +41,17 @@ export default function Settings() {
 
   async function load() {
     await withRetry(async () => {
-      try { setData(await settingsApi.get()); setError(''); }
-      catch (err: any) { setError(err.message || '加载失败'); }
+      try {
+        setData(await settingsApi.get());
+        setError('');
+      } catch (err: any) {
+        setError(err.message || '加载失败');
+      }
     });
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   // 同步 hash → 状态：监听 useLocation 和原生 hashchange（双保险）
   useEffect(() => {
@@ -73,12 +79,30 @@ export default function Settings() {
     navigate({ hash: `${activeTab}-${sub}` }, { replace: true });
   }
 
-  if (error) return <div className="empty-state py-24 animate-in"><p className="text-sm text-danger">{error}</p><button className="btn btn-sm mt-3" onClick={load} disabled={retrying}>{retrying ? '重试中...' : '重试'}</button></div>;
-  if (!data) return <div className="empty-state py-24 animate-in"><Loading text="加载中" /></div>;
+  if (error)
+    return (
+      <div className="empty-state py-24 animate-in">
+        <p className="text-sm text-danger">{error}</p>
+        <button className="btn btn-sm mt-3" onClick={load} disabled={retrying}>
+          {retrying ? '重试中...' : '重试'}
+        </button>
+      </div>
+    );
+  if (!data)
+    return (
+      <div className="empty-state py-24 animate-in">
+        <Loading text="加载中" />
+      </div>
+    );
 
   async function save(updates: Record<string, string>) {
-    try { await settingsApi.save(updates); addToast('配置已保存', 'success'); settingsApi.get().then(setData); }
-    catch (err: any) { addToast(err.message, 'error'); }
+    try {
+      await settingsApi.save(updates);
+      addToast('配置已保存', 'success');
+      settingsApi.get().then(setData);
+    } catch (err: any) {
+      addToast(err.message, 'error');
+    }
   }
 
   return (
@@ -89,21 +113,34 @@ export default function Settings() {
       </div>
 
       <div className="flex gap-0 border-b border-border">
-        {TABS.map(tab => (
-          <button key={tab.id} onClick={() => switchTab(tab.id)}
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => switchTab(tab.id)}
             className={`relative px-5 py-3 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'text-accent'
-                : 'text-text-muted hover:text-text-secondary'
-            }`}>
+              activeTab === tab.id ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
             {tab.label}
-            {activeTab === tab.id && <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-accent rounded-full" />}
+            {activeTab === tab.id && (
+              <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-accent rounded-full" />
+            )}
           </button>
         ))}
       </div>
 
-      {activeTab === 'general' && <GeneralTab data={data} save={save} subTab={subTab} onSubTabChange={switchSubTab} />}
-      {activeTab === 'system' && <SystemTab data={data} save={save} onReload={load} subTab={subTab} onSubTabChange={switchSubTab} />}
+      {activeTab === 'general' && (
+        <GeneralTab data={data} save={save} subTab={subTab} onSubTabChange={switchSubTab} />
+      )}
+      {activeTab === 'system' && (
+        <SystemTab
+          data={data}
+          save={save}
+          onReload={load}
+          subTab={subTab}
+          onSubTabChange={switchSubTab}
+        />
+      )}
     </div>
   );
 }

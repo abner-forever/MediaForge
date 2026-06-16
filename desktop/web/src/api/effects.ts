@@ -1,6 +1,15 @@
 import { get, post, del } from './base';
 import { sseGet } from './sse';
-import type { PublishEffect, EffectSummary, EffectTrendPoint, EffectCompareData, MpArticlesResponse, TopArticle, ImageAnalysisItem, AiAnalysisEvent } from '../types';
+import type {
+  PublishEffect,
+  EffectSummary,
+  EffectTrendPoint,
+  EffectCompareData,
+  MpArticlesResponse,
+  TopArticle,
+  ImageAnalysisItem,
+  AiAnalysisEvent,
+} from '../types';
 
 export const effectsApi = {
   list: () => get<{ effects: Record<string, PublishEffect> }>('/api/effects'),
@@ -9,7 +18,8 @@ export const effectsApi = {
     post<{ success: boolean; effect: PublishEffect }>(`/api/effects/${itemId}`, data),
 
   summary: () => get<EffectSummary>('/api/effects/summary'),
-  trend: (days: number = 30) => get<{ trend: EffectTrendPoint[] }>(`/api/effects/trend?days=${days}`),
+  trend: (days: number = 30) =>
+    get<{ trend: EffectTrendPoint[] }>(`/api/effects/trend?days=${days}`),
   compare: () => get<EffectCompareData>('/api/effects/compare'),
 
   celebrityRank: (days: number = 0) =>
@@ -18,18 +28,24 @@ export const effectsApi = {
     ),
 
   funnel: (days: number = 0, itemId: string = '') =>
-    get<{ total_reads: number; total_likes: number; total_shares: number; total_favorites: number; total_comments: number; total_new_followers: number }>(
-      `/api/effects/funnel?days=${days}&item_id=${itemId}`,
-    ),
+    get<{
+      total_reads: number;
+      total_likes: number;
+      total_shares: number;
+      total_favorites: number;
+      total_comments: number;
+      total_new_followers: number;
+    }>(`/api/effects/funnel?days=${days}&item_id=${itemId}`),
 
   articleOptions: () =>
-    get<{ articles: Array<{ item_id: string; title: string; publish_time: string }> }>('/api/effects/article-options'),
+    get<{ articles: Array<{ item_id: string; title: string; publish_time: string }> }>(
+      '/api/effects/article-options',
+    ),
 
   topArticles: (limit: number = 10) =>
     get<{ articles: TopArticle[] }>(`/api/effects/top-articles?limit=${limit}`),
 
-  imageAnalysis: () =>
-    get<{ items: ImageAnalysisItem[] }>('/api/effects/image-analysis'),
+  imageAnalysis: () => get<{ items: ImageAnalysisItem[] }>('/api/effects/image-analysis'),
 
   mpArticles: (params?: {
     page?: number;
@@ -59,27 +75,46 @@ export const effectsApi = {
   exportCsv: async () => {
     const { effects } = await get<{ effects: Record<string, PublishEffect> }>('/api/effects');
     const fields = [
-      'item_id', 'title', 'account_id', 'publish_time',
-      'reads', 'likes', 'shares', 'favorites',
-      'comments', 'content_type',
-      'source_platform', 'celebrity', 'image_count', 'updated_at',
+      'item_id',
+      'title',
+      'account_id',
+      'publish_time',
+      'reads',
+      'likes',
+      'shares',
+      'favorites',
+      'comments',
+      'content_type',
+      'source_platform',
+      'celebrity',
+      'image_count',
+      'updated_at',
     ] as const;
     const headers = [
-      '文章ID', '标题', '账号ID', '发布时间',
-      '阅读量', '点赞数', '转发数', '收藏数',
-      '评论数', '内容类型',
-      '来源平台', '艺人', '图片数', '更新时间',
+      '文章ID',
+      '标题',
+      '账号ID',
+      '发布时间',
+      '阅读量',
+      '点赞数',
+      '转发数',
+      '收藏数',
+      '评论数',
+      '内容类型',
+      '来源平台',
+      '艺人',
+      '图片数',
+      '更新时间',
     ];
     const csvEscape = (v: unknown) => {
       const s = String(v ?? '');
       return s.includes(',') || s.includes('"') || s.includes('\n')
-        ? `"${s.replace(/"/g, '""')}"` : s;
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
     };
     const rows = [headers.map(csvEscape).join(',')];
     for (const [key, item] of Object.entries(effects)) {
-      rows.push(
-        [key, ...fields.slice(1).map(f => csvEscape(item[f]))].join(','),
-      );
+      rows.push([key, ...fields.slice(1).map((f) => csvEscape(item[f]))].join(','));
     }
     const bom = '﻿';
     const csvContent = bom + rows.join('\n');

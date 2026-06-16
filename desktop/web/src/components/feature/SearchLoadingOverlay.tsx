@@ -27,7 +27,9 @@ export default function SearchLoadingOverlay({ title, message, platformName, onC
                 </linearGradient>
               </defs>
               <circle
-                cx="40" cy="40" r="36"
+                cx="40"
+                cy="40"
+                r="36"
                 fill="none"
                 stroke="url(#outerGrad)"
                 strokeWidth="2"
@@ -51,7 +53,9 @@ export default function SearchLoadingOverlay({ title, message, platformName, onC
                 </linearGradient>
               </defs>
               <circle
-                cx="36" cy="36" r="32"
+                cx="36"
+                cy="36"
+                r="32"
                 fill="none"
                 stroke="url(#midGrad)"
                 strokeWidth="3"
@@ -75,7 +79,9 @@ export default function SearchLoadingOverlay({ title, message, platformName, onC
                 </linearGradient>
               </defs>
               <circle
-                cx="32" cy="32" r="28"
+                cx="32"
+                cy="32"
+                r="28"
                 fill="none"
                 stroke="url(#innerGrad)"
                 strokeWidth="3"

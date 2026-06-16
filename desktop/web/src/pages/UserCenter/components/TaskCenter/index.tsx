@@ -1,52 +1,52 @@
-import { useState, useEffect, useCallback } from 'react'
-import { creditsApi } from '@/api/client'
-import { useStore } from '@/stores'
-import type { VideoTask, DailyTask } from '@/types'
-import TaskCard from './TaskCard'
-import VideoPlayerModal from './VideoPlayerModal'
+import { useState, useEffect, useCallback } from 'react';
+import { creditsApi } from '@/api/client';
+import { useStore } from '@/stores';
+import type { VideoTask, DailyTask } from '@/types';
+import TaskCard from './TaskCard';
+import VideoPlayerModal from './VideoPlayerModal';
 
 export default function TaskCenter() {
-  const { dailyTasks, setDailyTasks, creditsBalance, setCreditsBalance } = useStore()
-  const [videos, setVideos] = useState<VideoTask[]>([])
-  const [playingVideo, setPlayingVideo] = useState<VideoTask | null>(null)
-  const [videoLoading, setVideoLoading] = useState(false)
-  const [tasksLoading, setTasksLoading] = useState(false)
+  const { dailyTasks, setDailyTasks, creditsBalance, setCreditsBalance } = useStore();
+  const [videos, setVideos] = useState<VideoTask[]>([]);
+  const [playingVideo, setPlayingVideo] = useState<VideoTask | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
-  const [todayEarned, setTodayEarned] = useState(0)
+  const [todayEarned, setTodayEarned] = useState(0);
 
   const loadTasks = useCallback(async () => {
-    setTasksLoading(true)
+    setTasksLoading(true);
     try {
-      const result = await creditsApi.getTasks()
-      setDailyTasks(result.tasks)
-      setTodayEarned(result.today_earned)
+      const result = await creditsApi.getTasks();
+      setDailyTasks(result.tasks);
+      setTodayEarned(result.today_earned);
     } catch {
       // silent
     } finally {
-      setTasksLoading(false)
+      setTasksLoading(false);
     }
-  }, [setDailyTasks])
+  }, [setDailyTasks]);
 
   const loadVideos = useCallback(async () => {
-    setVideoLoading(true)
+    setVideoLoading(true);
     try {
-      const result = await creditsApi.getVideoList()
-      setVideos(result.videos)
+      const result = await creditsApi.getVideoList();
+      setVideos(result.videos);
     } catch {
-      setVideos([])
+      setVideos([]);
     } finally {
-      setVideoLoading(false)
+      setVideoLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    loadTasks()
-    loadVideos()
-  }, [loadTasks, loadVideos])
+    loadTasks();
+    loadVideos();
+  }, [loadTasks, loadVideos]);
 
   const handleRewardClaimed = () => {
-    loadTasks()
-  }
+    loadTasks();
+  };
 
   // todayEarned is set from API response
 
@@ -57,9 +57,7 @@ export default function TaskCenter() {
         <div className="flex items-baseline justify-between mb-5">
           <div>
             <h2 className="text-xl font-bold text-text tracking-tight">今日任务</h2>
-            <p className="text-sm text-text-secondary mt-0.5">
-              完成任务赚取积分
-            </p>
+            <p className="text-sm text-text-secondary mt-0.5">完成任务赚取积分</p>
           </div>
           <div className="text-right">
             <div className="text-xs text-text-muted">今日已赚</div>
@@ -75,7 +73,9 @@ export default function TaskCenter() {
           <div className="py-12 text-center text-sm text-text-muted">暂无任务</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {dailyTasks.map(task => <TaskCard key={task.id} task={task} />)}
+            {dailyTasks.map((task) => (
+              <TaskCard key={task.id} task={task} />
+            ))}
           </div>
         )}
       </div>
@@ -94,9 +94,7 @@ export default function TaskCenter() {
       <div>
         <div className="mb-5">
           <h2 className="text-xl font-bold text-text tracking-tight">观看视频赚积分</h2>
-          <p className="text-sm text-text-secondary mt-0.5">
-            选择视频观看，看完后领取积分奖励
-          </p>
+          <p className="text-sm text-text-secondary mt-0.5">选择视频观看，看完后领取积分奖励</p>
         </div>
 
         {videoLoading ? (
@@ -109,7 +107,7 @@ export default function TaskCenter() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {videos.map(video => (
+            {videos.map((video) => (
               <button
                 key={video.id}
                 onClick={() => setPlayingVideo(video)}
@@ -120,7 +118,11 @@ export default function TaskCenter() {
                   {/* 播放图标 */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-white/30 group-hover:scale-110">
-                      <svg className="ml-0.5 h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className="ml-0.5 h-6 w-6 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </div>
@@ -164,8 +166,8 @@ export default function TaskCenter() {
           <div className="text-xs leading-relaxed text-text-secondary">
             <span className="font-medium text-text">小贴士：</span>
             每天观看最多可获得 <span className="text-accent font-medium">30</span> 积分，
-            连续签到奖励更丰厚。积分可用于 <span className="text-accent font-medium">AI 写作</span>、
-            <span className="text-accent font-medium">封面选取</span>、联网搜索等高级功能。
+            连续签到奖励更丰厚。积分可用于 <span className="text-accent font-medium">AI 写作</span>
+            、<span className="text-accent font-medium">封面选取</span>、联网搜索等高级功能。
           </div>
         </div>
       </div>
@@ -179,5 +181,5 @@ export default function TaskCenter() {
         />
       )}
     </div>
-  )
+  );
 }
